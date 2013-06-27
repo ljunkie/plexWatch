@@ -141,7 +141,7 @@ sub Notify() {
     my $type = shift;
     if ($notify_started && $type =~ /start/ ||	$notify_stopped && $type =~ /stop/) {
 	if ($notify->{'prowl'}->{'enabled'}) {	   &NotifyProwl($alert,$extra);}
-	if ($notify->{'prowl'}->{'enabled'}) {     &NotifyPushOver($alert,$extra); }
+	if ($notify->{'pushover'}->{'enabled'}) {     &NotifyPushOver($alert,$extra); }
     }
     
     my $console = "$date: $alert $extra";
