@@ -1,3 +1,6 @@
+# 0.0.4
+# * added data_dir in config. Defaults to /opt/plexWeb/ -- this way the script can be run from any location.
+	
 # 0.0.3
 # * new requirement: Time::ParseDate
 # * date ranges for -watched (-start, -stop)

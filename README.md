@@ -68,6 +68,56 @@ $notify = {...
 Idea, thanks to https://github.com/vwieczorek/plexMon. I initially had a really horrible script used to parse the log files...  http://IP:PORT/status/sessions is much more useful. This was whipped up in an hour or two.. I am sure it could use some more work. 
 
 
+### Getting a list of watched shows
+
+* This will only work for shows this has already notified on.
+
+
+#####  list all watched shows - no limit
+```
+/opt/git/plexWatch/plexWatch.pl --watched 
+
+======================================== Watched ========================================
+Date Range: Anytime through Now
+
+User: jimbo
+ Wed Jun 26 15:56:09 2013: jimbo watched: South Park - A Nightmare on FaceTime [duration: 22 minutes, and 15 seconds]
+ Wed Jun 26 20:18:34 2013: jimbo watched: The Following - Whips and Regret [duration: 46 minutes, and 45 seconds]
+ Wed Jun 26 20:55:02 2013: jimbo watched: The Following - The Curse [duration: 46 minutes, and 15 seconds]
+
+User: carrie
+ Wed Jun 24 08:55:02 2013: carrie watched: The Following - The Curse [duration: 46 minutes, and 25 seconds]
+ Wed Jun 26 20:19:48 2013: carrie watched: Dumb and Dumber [1994] [PG-13] [duration: 1 hour, 7 minutes, and 10 seconds]
+```
+
+##### list watched shows - limit by TODAY only
+```
+/opt/git/plexWatch/plexWatch.pl --watched --start=today --start=tomorrow
+
+======================================== Watched ========================================
+Date Range: Fri Jun 28 00:00:00 2013 through Sat Jun 29 00:00:00 2013
+
+User: jimbo
+ Fri Jun 28 09:18:22 2013: jimbo watched: Married ... with Children - Mr. Empty Pants [duration: 1 hour, 23 minutes, and 20 seconds]
+```
+
+##### list watched shows - limit by a start and stop date
+```
+/opt/git/plexWatch/plexWatch.pl --watched --start="2 days ago" --stop="1 day ago"
+
+======================================== Watched ========================================
+Date Range: Fri Jun 26 00:00:00 2013 through Thu Jun 27 00:00:00 2013
+
+User: Jimbo
+ Wed Jun 26 15:56:09 2013: rarflix watched: South Park - A Nightmare on FaceTime [duration: 22 minutes, and 15 seconds]
+ Wed Jun 26 20:18:34 2013: rarflix watched: The Following - Whips and Regret [duration: 46 minutes, and 45 seconds]
+ Wed Jun 26 20:55:02 2013: rarflix watched: The Following - The Curse [duration: 46 minutes, and 15 seconds]
+
+User: Carrie
+ Wed Jun 26 20:19:48 2013: Carrie watched: Dumb and Dumber [1994] [PG-13] [duration: 1 hour, 7 minutes, and 10 seconds]
+```
+
+
 ### Help
 ```
 /opt/plexWatch/plexWatch.pl --help

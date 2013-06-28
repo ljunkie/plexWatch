@@ -5,7 +5,7 @@
 #  Created: 2013-06-26
 # Modified: 2013-06-28
 #
-#  Version: 0.0.3
+#  Version: 0.0.4
 # https://github.com/ljunkie/plexWatch
 ##########################################
 
@@ -20,6 +20,8 @@ use Pod::Usage;
 use Fcntl qw(:flock);
 use Time::ParseDate;
 
+my $data_dir = '/opt/plexWatch/'; ## to store the DB, logfile - can be the same as this script
+
 my $server = 'localhost'; ## IP of PMS - or localhost
 my $port = 32400;         ## port of PMS
 
@@ -33,7 +35,7 @@ my $notify = {
 
     'file' => {
 	'enabled' => 1,  ## 0 or 1 - set to 1 to enable File Logging
-	'filename' => $appname . '.log', ## default is plexWatch.log
+	'filename' => "$data_dir/$appname.log", ## default is plexWatch.log
     },
     
     'prowl' => {
@@ -56,6 +58,10 @@ my $notify = {
 
 ########################################## END CONFIG #######################################################
 
+if (!-d $data_dir) {
+    print "\n** Sorry. Please create your datadir $data_dir\n\n";
+    exit;
+}
 
 &CheckLock();
 
@@ -448,7 +454,7 @@ sub initDB() {
     ## inital columns - id, session_id, time 
     
     my $dbtable = 'processed';
-    my $dbh = DBI->connect("dbi:SQLite:dbname=./plexWatch.db","","");
+    my $dbh = DBI->connect("dbi:SQLite:dbname=$data_dir/plexWatch.db","","");
     my $sth = $dbh->prepare("SELECT name FROM SQLITE_MASTER");
     $sth->execute or die("Unable to execute query: $dbh->errstr\n");
     #ALTER TABLE Name ADD COLUMN new_column INTEGER DEFAULT 0
@@ -546,14 +552,11 @@ sub initDBtable() {
     $sth->execute or die("Unable to execute query: $dbh->errstr\n");
     my %tables;
     while (my @tmp = $sth->fetchrow_array) {    foreach (@tmp) {        $tables{$_} = $_;    }}
-    if ($tables{$dbtable}) { }
+    if ($tables{$dbtable}) {    }
     else {
         my $cmd = "CREATE TABLE $dbtable (id INTEGER PRIMARY KEY, session_id text, time timestamp default (strftime('%s', 'now')) );";
         my $result_code = $dbh->do($cmd) or die("Unable to prepare execute $cmd: $dbh->errstr\n");
     }
-
-    ## update any old colums that just had 1 set for stopped
-    $dbh->do("update processed set stopped = time where stopped = 1");
     
     my %dbcol_exists = ();
     for ( @{ $dbh->selectall_arrayref( "PRAGMA TABLE_INFO($dbtable)") } ) { 	$dbcol_exists{$_->[1]} = $_->[2];     };
@@ -564,7 +567,9 @@ sub initDBtable() {
 	    $dbh->do("ALTER TABLE $dbtable ADD COLUMN $col->{'name'} $col->{'definition'}");
 	}
     }
-    
+    ## update any old colums that just had 1 set for stopped
+    $dbh->do("update processed set stopped = time where stopped = 1");
+
 }
 
 sub NotifyProwl() {
