@@ -1,0 +1,27 @@
+# 0.0.3
+# * new requirement: Time::ParseDate
+# * date ranges for -watched (-start, -stop)
+# * specify human date ranges -- Time::ParseDate -- today, yesterday, last week
+
+	
+# 0.0.2;
+# * new requirement: use Getopt::Long, Pod::Usage, Fcntl qw(:flock), Fcntl qw(:flock)
+# * modified DB insert - using Placeholders and Bind Values
+# * added 'xml column' to db - if any info is need later or for easier debuging
+# * changed stopped from a boolean to actual epoch - used for duration of watched
+# * changed sub InitialzeDB (now initDB) and added initDBtable - ability to add/modify column definitions when needed
+# * added use Time::Duration -- duration for watched status
+# * verify all content has been notified if nothing is playing
+# * added lock just in case via Fcntl qw(:flock)
+# * new options: added ability to use cli options via get::opt 
+#  - added --watched 
+#  - added --watching
+#  - added --help
+#  - added --show_xml
+#  - added --debug
+#  - added --notify
+
+
+
+# 0.0.1:
+# * initial release
