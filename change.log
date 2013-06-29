@@ -1,22 +1,25 @@
+# 0.0.7
+# * added 'on platform' to alert - i.e. user is watching: movie name on Roku'
+# * fixed alerts for prowl when movie has a colon. It was discarding anything after the first colon.
+
 # 0.0.6
 # * fixed pushover notifications -- actually include the alert!
-	
+
 # 0.0.5
 # info: little bugs, nothing major
 #
 # * updated perl doc
 # * fixed --show_xml to actually show url when no options are given
 # * README.md - Fix install instructions and supply yum/apt-get perl module howto
-	
+
 # 0.0.4
 # * added data_dir in config. Defaults to /opt/plexWeb/ -- this way the script can be run from any location.
-	
+
 # 0.0.3
 # * new requirement: Time::ParseDate
 # * date ranges for -watched (-start, -stop)
 # * specify human date ranges -- Time::ParseDate -- today, yesterday, last week
 
-	
 # 0.0.2;
 # * new requirement: use Getopt::Long, Pod::Usage, Fcntl qw(:flock), Fcntl qw(:flock)
 # * modified DB insert - using Placeholders and Bind Values
@@ -33,8 +36,6 @@
 #  - added --show_xml
 #  - added --debug
 #  - added --notify
-
-
 
 # 0.0.1:
 # * initial release

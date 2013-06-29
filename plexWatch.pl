@@ -3,9 +3,9 @@
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-06-29
+# Modified: 2013-06-29 16:56 PST
 #
-#  Version: 0.0.6
+#  Version: 0.0.7
 # https://github.com/ljunkie/plexWatch
 ##########################################
 
@@ -218,7 +218,7 @@ if (!%options || $options{'notify'}) {
 	foreach my $k (keys %{$info}) {
 	    if (!$playing->{$k}) {
 		my $time = localtime ($info->{$k}->{time} );
-		my $alert = sprintf('%s is watching: %s', $info->{$k}->{user}, $info->{$k}->{title});
+		my $alert = sprintf('%s is watching: %s on %s', $info->{$k}->{user}, $info->{$k}->{title}, $info->{$k}->{platform});
 		my $extra = sprintf("Missed Notification\nStarted: %s\n\nrated: %s\n year: %s\n user: %s\n platform: %s\n\n summary: %s", $time, $info->{$k}->{rating}, $info->{$k}->{year}, $info->{$k}->{user}, $info->{$k}->{platform}, $info->{$k}->{summary});
 		
 		&Notify($alert,$extra,'start');
@@ -245,7 +245,7 @@ if (!%options || $options{'notify'}) {
 		my $stop_epoch = time();
 		
 		my $duration = &getDuration($started->{$k}->{time},$stop_epoch);
-		my $alert = sprintf('%s stopped watching: %s', $started->{$k}->{user}, $started->{$k}->{title});
+		my $alert = sprintf('%s stopped watching: %s on %s', $started->{$k}->{user}, $started->{$k}->{title}, $started->{$k}->{platform});
 		my $extra = sprintf("\nDuration: %s\nplatform: %s\n started: %s", $duration,$started->{$k}->{platform}, $start_time);
 		
 		&Notify($alert,$extra,'stop');
@@ -293,7 +293,7 @@ if (!%options || $options{'notify'}) {
 	    #$summary = $vid->{$k}->{tagline};
 	}
 	
-	my $alert = sprintf('%s is watching: %s', $user, $title);
+	my $alert = sprintf('%s is watching: %s on %s', $user, $title, $platform);
 	my $extra = sprintf("%s\n rated: %s\n year: %s\n user: %s\n platform: %s\n\n summary: %s", $extra_title, $rating, $year, $user, $platform, $summary);
 	
 	if ($started->{$db_key}) {
@@ -577,8 +577,8 @@ sub NotifyProwl() {
     my %prowl = %{$notify->{prowl}};
     
     my @p = split(':',shift);
-    $prowl{'application'} .= ' - ' . $p[0];
-    $prowl{'event'} = $p[1];
+    $prowl{'application'} .= ' - ' . shift(@p);
+    $prowl{'event'} = join(':',@p);
     
     $prowl{'notification'} = shift;
     
