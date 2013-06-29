@@ -1,3 +1,6 @@
+# 0.0.6
+# * fixed pushover notifications -- actually include the alert!
+	
 # 0.0.5
 # info: little bugs, nothing major
 #
