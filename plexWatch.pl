@@ -623,12 +623,15 @@ sub NotifyProwl() {
 sub NotifyPushOver() {
     my %po = %{$notify->{pushover}};    
     my $ua      = LWP::UserAgent->new();
+    $po{'message'} = shift;
+    #my $extra  = shift; ## i need to test pushover myself before I can see what this looks like
+    
     my $response = $ua->post( "https://api.pushover.net/1/messages.json", [
 				  "token" => $po{'token'},
 				  "user" => $po{'user'},
 				  "sound" => $po{'sound'},
 				  "title" => $po{'title'},
-				  "message" => "hello world",
+				  "message" => $po{'message'},
 			      ]);
     my $content  = $response->decoded_content();
     if ($content !~ /\"status\":1/) {
