@@ -19,18 +19,18 @@ plexWatch
 * XML::Simple
 * DBI
 * Time::Duration;
-* Getopt::Long;
-* Pod::Usage;
-* Fcntl qw(:flock);
 * Time::ParseDate;
+* Pod::Usage;       (perl base on rhel/centos)
+* Fcntl qw(:flock); (perl base)
+* Getopt::Long;     (perl base)
 
 ### Install 
 
-1) save to **/opt/prowlWatch/prowlWatch.pl**
+1) sudo wget -P /opt/plexWatch/ https://raw.github.com/ljunkie/plexWatch/master/plexWatch.pl
 
-2) chmod 755 /opt/prowlWatch/prowlWatch.pl
+2) sudo chmod 755 /opt/plexWatch/plexWatch.pl
 
-3) **edit** /opt/prowlWatch/prowlWatch.pl
+3) sudo nano /opt/plexWatch/plexWatch.pl 
 
 
 Modify Variables as needed:
@@ -52,20 +52,52 @@ $notify = {...
 * PushOver: required to fill in 'token' and 'user'
 ```
 
-4) **run** the script manually to verify it work 
+4) Install Perl requirements
+
+* Debian/Ubuntu - apt-get
+
+```
+sudo apt-get install libwww-perl
+
+sudo apt-get install libwww-curl-perl
+
+sudo apt-get install libxml-simple-perl
+
+sudo apt-get install libtime-duration-perl
+
+sudo apt-get install libtime-modules-perl  
+
+sudo apt-get install libdbd-sqlite3-perl
+
+sudo apt-get install perl-doc
+```
+
+* RHEL/Centos - yum
+
+```
+yum -y install perl\(LWP::UserAgent\) perl\(WWW::Curl::Easy\) perl\(XML::Simple\) \
+               perl\(DBI\) perl\(Time::Duration\)  perl\(Time::ParseDate\)
+```
+
+
+5) **run** the script manually to verify it works: /opt/plexWatch/plexWatch.pl
   * start video(s)
-  * run the script
+  * /opt/plexWatch/plexWatch.pl
   * stop video(s)
-  * run the script
+  * /opt/plexWatch/plexWatch.pl
 
 
-5) setup cron - /etc/crontab
+6) setup cron - /etc/crontab
 ```
 * * * * * root cd /opt/plexWatch && /opt/plexWatch/plexWatch.pl
 ```
 
+## Using the script
 
-Idea, thanks to https://github.com/vwieczorek/plexMon. I initially had a really horrible script used to parse the log files...  http://IP:PORT/status/sessions is much more useful. This was whipped up in an hour or two.. I am sure it could use some more work. 
+
+### Sending Notifications 
+
+* Follow the install guide above, and refer to step #5 and #6
 
 
 ### Getting a list of watched shows
@@ -201,3 +233,4 @@ perl v5.10.1                      2013-06-28                      PLEXWATCH(1)
 ```
 
 
+Idea, thanks to https://github.com/vwieczorek/plexMon. I initially had a really horrible script used to parse the log files...  http://IP:PORT/status/sessions is much more useful. This was whipped up in an hour or two.. I am sure it could use some more work. 
