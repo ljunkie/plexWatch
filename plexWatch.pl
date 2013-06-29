@@ -3,9 +3,9 @@
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-06-28
+# Modified: 2013-06-29
 #
-#  Version: 0.0.4
+#  Version: 0.0.5
 # https://github.com/ljunkie/plexWatch
 ##########################################
 
@@ -198,8 +198,8 @@ if ($options{'watching'}) {
 }
 
 if (%options && !$options{'notify'}) {
-    if ($debug) {
-	print "\n* Skipping any Notifictions -- command line options set, use '--notify' or use supply no options to enable notifications\n";
+    if ($debug || $debug_xml) {
+	print "\n* Skipping any Notifictions -- command line options set, use '--notify' or supply no options to enable notifications\n";
     }
     exit;
 }
@@ -358,13 +358,13 @@ sub GetSessions() {
     $res = $curl->perform();
     my $msg = $curl->errbuf; # report any error message                           
     my $XML = $ret;
-    my $data = XMLin($XML,KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
     if ($debug_xml) {
 	print "URL: $url\n";
 	print "===================================XML CUT=================================================\n";
 	print $XML;
 	print "===================================XML END=================================================\n";
     }
+    my $data = XMLin($XML,KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
     return $data->{'Video'};
 }
 
@@ -702,8 +702,8 @@ plexWatch.pl [options]
 
    -watching=...      print content being watched
 
-   -show_xml=...      show xml result from api query
-   -debug=...         hit and miss - not very useful
+   -show_xml          show xml result from api query
+   -debug             hit and miss - not very useful
 
 =head1 OPTIONS
 

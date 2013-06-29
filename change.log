@@ -1,3 +1,10 @@
+# 0.0.5
+# info: little bugs, nothing major
+#
+# * updated perl doc
+# * fixed --show_xml to actually show url when no options are given
+# * README.md - Fix install instructions and supply yum/apt-get perl module howto
+	
 # 0.0.4
 # * added data_dir in config. Defaults to /opt/plexWeb/ -- this way the script can be run from any location.
 	
