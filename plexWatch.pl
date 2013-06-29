@@ -567,8 +567,8 @@ sub initDBtable() {
 	    $dbh->do("ALTER TABLE $dbtable ADD COLUMN $col->{'name'} $col->{'definition'}");
 	}
     }
-    ## update any old colums that just had 1 set for stopped
-    $dbh->do("update processed set stopped = time where stopped = 1");
+    ## update any old colums that just had 1 set for stopped -- no need for this
+    #$dbh->do("update processed set stopped = time where stopped = 1");
 
 }
 
