@@ -151,7 +151,7 @@ User: Carrie
 
 #### list watched shows: option -nogrouping vs default
 
-#####  with --nogroupoing
+#####  with --nogrouping
 ```
        Sun Jun 30 15:12:01 2013: exampleUser watched: Your Highness [2011] [R] [duration: 27 minutes and 54 seconds]
        Sun Jun 30 15:41:02 2013: exampleUser watched: Your Highness [2011] [R] [duration: 4 minutes and 59 seconds]
@@ -230,7 +230,7 @@ OPTIONS
 
                       will show same title multiple times if user has watched/resumed title on the same day
 
-                      with --nogroupoing
+                      with --nogrouping
                        Sun Jun 30 15:12:01 2013: exampleUser watched: Your Highness [2011] [R] [duration: 27 minutes and 54 seconds]
                        Sun Jun 30 15:41:02 2013: exampleUser watched: Your Highness [2011] [R] [duration: 4 minutes and 59 seconds]
                        Sun Jun 30 15:46:02 2013: exampleUser watched: Star Trek [2009] [PG-13] [duration: 24 minutes and 17 seconds]
