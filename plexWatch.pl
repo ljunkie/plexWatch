@@ -5,7 +5,7 @@
 #  Created: 2013-06-26
 # Modified: 2013-06-29 16:56 PST
 #
-#  Version: 0.0.7
+#  Version: 0.0.8
 # https://github.com/ljunkie/plexWatch
 ##########################################
 
