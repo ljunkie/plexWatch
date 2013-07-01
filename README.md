@@ -149,6 +149,22 @@ User: Carrie
  Wed Jun 26 20:19:48 2013: Carrie watched: Dumb and Dumber [1994] [PG-13] [duration: 1 hour, 7 minutes, and 10 seconds]
 ```
 
+#### list watched shows, -nogrouping vs default
+
+#####  with --nogroupoing
+```
+
+       Sun Jun 30 15:12:01 2013: exampleUser watched: Your Highness [2011] [R] [duration: 27 minutes and 54 seconds]
+       Sun Jun 30 15:41:02 2013: exampleUser watched: Your Highness [2011] [R] [duration: 4 minutes and 59 seconds]
+       Sun Jun 30 15:46:02 2013: exampleUser watched: Star Trek [2009] [PG-13] [duration: 24 minutes and 17 seconds]
+       Sun Jun 30 17:48:01 2013: exampleUser watched: Star Trek [2009] [PG-13] [duration: 1 hour, 44 minutes, and 1 second]
+       Sun Jun 30 19:45:01 2013: exampleUser watched: Your Highness [2011] [R] [duration: 1 hour and 24 minutes]
+
+#####  without --nogrouping [default]
+      Sun Jun 30 15:12:01 2013: exampleUser watched: Your Highness [2011] [R] [duration: 1 hour, 56 minutes, and 53 seconds]
+      Sun Jun 30 15:46:02 2013: exampleUser watched: Star Trek [2009] [PG-13] [duration: 2 hours, 8 minutes, and 18 seconds]
+```
+
 
 ### Help
 ```
@@ -159,8 +175,7 @@ PLEXWATCH(1)          User Contributed Perl Documentation         PLEXWATCH(1)
 
 
 NAME
-       plexWatch.pl - Notify and Log ’Now Playing’ content from a Plex Media
-       Server
+       plexWatch.pl - Notify and Log ’Now Playing’ content from a Plex Media Server
 
 SYNOPSIS
        plexWatch.pl [options]
@@ -169,8 +184,9 @@ SYNOPSIS
           -notify=...        Notify any content watched and or stopped [this is default with NO options given]
 
           -watched=...       print watched content
-          -start=...         limit watched status output to content started AFTER/ON said date/time
-          -stop=...          limit watched status output to content started BEFORE/ON said date/time
+               -start=...         limit watched status output to content started AFTER/ON said date/time
+               -stop=...          limit watched status output to content started BEFORE/ON said date/time
+               -nogrouping        will show same title multiple times if user has watched/resumed title on the same day
 
           -watching=...      print content being watched
 
@@ -178,18 +194,16 @@ SYNOPSIS
           -debug=...         hit and miss - not very useful
 
 OPTIONS
-       -notify        This will send you a notification through prowl and/or
-                      pushover. It will also log the event to a file and to
-                      the database.  This is the default if no options are
-                      given.
+       -notify        This will send you a notification through prowl and/or pushover. It will also log the event to a file and to the database.  
+                      This is the default if no options are given.
 
        -watched       Print a list of watched content from all users.
 
-       -start         limit watched status output to content started AFTER
-                      said date/time
+       -start         * only works with -watched
 
-                      Valid options: dates, times and even fuzzy human times.
-                      Make sure you quote an values with spaces.
+                      limit watched status output to content started AFTER said date/time
+
+                      Valid options: dates, times and even fuzzy human times. Make sure you quote an values with spaces.
 
                          -start=2013-06-29
                          -start="2013-06-29 8:00pm"
@@ -198,11 +212,11 @@ OPTIONS
                          -start="last week"
                          -start=... give it a try and see what you can use :)
 
-       -stop          limit watched status output to content started BEFORE
-                      said date/time
+       -stop          * only works with -watched
 
-                      Valid options: dates, times and even fuzzy human times.
-                      Make sure you quote an values with spaces.
+                      limit watched status output to content started BEFORE said date/time
+
+                      Valid options: dates, times and even fuzzy human times. Make sure you quote an values with spaces.
 
                          -stop=2013-06-29
                          -stop="2013-06-29 8:00pm"
@@ -211,14 +225,26 @@ OPTIONS
                          -stop="last week"
                          -stop=... give it a try and see what you can use :)
 
+       -nogrouping    * only works with -watched
+
+                      will show same title multiple times if user has watched/resumed title on the same day
+
+                      with --nogroupoing
+                       Sun Jun 30 15:12:01 2013: exampleUser watched: Your Highness [2011] [R] [duration: 27 minutes and 54 seconds]
+                       Sun Jun 30 15:41:02 2013: exampleUser watched: Your Highness [2011] [R] [duration: 4 minutes and 59 seconds]
+                       Sun Jun 30 15:46:02 2013: exampleUser watched: Star Trek [2009] [PG-13] [duration: 24 minutes and 17 seconds]
+                       Sun Jun 30 17:48:01 2013: exampleUser watched: Star Trek [2009] [PG-13] [duration: 1 hour, 44 minutes, and 1 second]
+                       Sun Jun 30 19:45:01 2013: exampleUser watched: Your Highness [2011] [R] [duration: 1 hour and 24 minutes]
+
+                      without --nogrouping [default]
+                       Sun Jun 30 15:12:01 2013: exampleUser watched: Your Highness [2011] [R] [duration: 1 hour, 56 minutes, and 53 seconds]
+                       Sun Jun 30 15:46:02 2013: exampleUser watched: Star Trek [2009] [PG-13] [duration: 2 hours, 8 minutes, and 18 seconds]
+
        -watching      Print a list of content currently being watched
 
-       -show_xml      Print the XML result from query to the PMS server in
-                      regards to what is being watched. Could be useful for
-                      troubleshooting..
+       -show_xml      Print the XML result from query to the PMS server in regards to what is being watched. Could be useful for troubleshooting..
 
-       -debug         This can be used. I have not fully set everything for
-                      debugging.. so it’s not very useful
+       -debug         This can be used. I have not fully set everything for debugging.. so it’s not very useful
 
 DESCRIPTION
        This program will Notify and Log ’Now Playing’ content from a Plex
