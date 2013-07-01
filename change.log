@@ -1,5 +1,11 @@
+# 0.0.8 
+# * file locking was broking - multiple copies could run at the same time 
+# * failed attempts to retrieve xml status could result in false stopped notifications and dupes
+# * timeout was way too long any possibly indefinite for sessions status. now 20 seconds.
+# -- this might fix the dupe stopped notifications.
+
 # 0.0.7
-# * added 'on platform' to alert - i.e. user is watching: movie name on Roku'
+# * added 'on platform' tto alert - i.e. user is watching: movie name on Roku'
 # * fixed alerts for prowl when movie has a colon. It was discarding anything after the first colon.
 
 # 0.0.6
