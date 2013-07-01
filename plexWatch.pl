@@ -3,9 +3,9 @@
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-06-29 16:56 PST
+# Modified: 2013-07-01 15:09 PST
 #
-#  Version: 0.0.8
+#  Version: 0.0.9
 # https://github.com/ljunkie/plexWatch
 ##########################################
 
@@ -70,6 +70,7 @@ if (!-d $data_dir) {
 my %options = ();
 GetOptions(\%options, 
            'watched',
+           'nogrouping',
            'watching',
 	   'notify',
            'debug',
@@ -136,34 +137,55 @@ if ($options{'watched'}) {
     
 
     my %seen = ();
-    my %seen_a = ();
+    my %seen_user = ();
     if (keys %{$is_watched}) {
 	print "\n";
-	#foreach my $k (keys %{$is_watched}) {
-	foreach my $k (sort { 
-	    $is_watched->{$a}->{user} cmp $is_watched->{$b}->{'user'} ||
-		$is_watched->{$a}->{time} cmp $is_watched->{$b}->{'time'} 
-		       } (keys %{$is_watched}) ) {
-	    if (!$seen{$is_watched->{$k}->{user}}) {
-		$seen{$is_watched->{$k}->{user}} = 1;
-		print "\nUser: " . $is_watched->{$k}->{user} . "\n";
-	    }
-	    ## only show one watched status on movie/show per day -- in case of restart/resumes..
+	foreach my $k (sort {$is_watched->{$a}->{user} cmp $is_watched->{$b}->{'user'} || $is_watched->{$a}->{time} cmp $is_watched->{$b}->{'time'} } (keys %{$is_watched}) ) {
+	    ## only show one watched status on movie/show per day (default) -- duration will be calculated from start/stop on each watch/resume
+	    ## --nogrouping will display movie as many times as it has been started on the same day.
 	    my ($sec, $min, $hour, $day,$month,$year) = (localtime($is_watched->{$k}->{time}))[0,1,2,3,4,5]; 
-	    my $skey = $year.$month.$day.$is_watched->{$k}->{title};
-	    if (!$seen{$skey}) {
-		$seen{$skey} = 1;
-		
+	    my $skey = $is_watched->{$k}->{user}.$year.$month.$day.$is_watched->{$k}->{title};
+	    
+	    if ($options{'nogrouping'}) {
+		if (!$seen_user{$is_watched->{$k}->{user}}) {
+		    $seen_user{$is_watched->{$k}->{user}} = 1;
+		    print "\nUser: " . $is_watched->{$k}->{user} . "\n";
+		}
+		## move to bottom
 		my $time = localtime ($is_watched->{$k}->{time} );
 		my $duration = &getDuration($is_watched->{$k}->{time},$is_watched->{$k}->{stopped});
 		my $alert = sprintf(' %s: %s watched: %s [duration: %s]', $time,$is_watched->{$k}->{user}, $is_watched->{$k}->{title}, $duration);
-		
-		#my $extra = sprintf("rated: %s\n year: %s\n user: %s\n platform: %s\n\n summary: %s",  $is_watched->{$k}->{rating}, $is_watched->{$k}->{year}, $is_watched->{$k}->{user}, $is_watched->{$k}->{platform}, $is_watched->{$k}->{summary});
 		print $alert . "\n";
-		#print $extra . "\n";
+	    } else {
+		if (!$seen{$skey}) {
+		    $seen{$skey}->{'time'} = $is_watched->{$k}->{time};
+		    $seen{$skey}->{'user'} = $is_watched->{$k}->{user};
+		    $seen{$skey}->{'title'} = $is_watched->{$k}->{title};
+		    $seen{$skey}->{'diff'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
+		} else {
+		    ## if same user/same movie/same day -- append duration -- must of been resumed
+		    $seen{$skey}->{'diff'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
+		}
 	    }
 	}
     } else {	    print "\n\n* nothing watched\n";	}
+    
+    ## Grouping Watched TITLE by day - default
+    if (!$options{'nogrouping'}) {
+	foreach my $k (sort { 
+	    $seen{$a}->{user} cmp $seen{$b}->{'user'} ||
+		$seen{$a}->{time} cmp $seen{$b}->{'time'} 
+		       } (keys %seen) ) {
+	    if (!$seen_user{$seen{$k}->{user}}) {
+		$seen_user{$seen{$k}->{user}} = 1;
+		print "\nUser: " . $seen{$k}->{user} . "\n";
+	    }
+	    my $time = localtime ($seen{$k}->{time} );
+	    my $duration = duration_exact($seen{$k}->{diff});
+	    my $alert = sprintf(' %s: %s watched: %s [duration: %s]', $time,$seen{$k}->{user}, $seen{$k}->{title}, $duration);
+	    print "$alert\n";
+	}
+    }
     print "\n";
 }
 
@@ -700,8 +722,9 @@ plexWatch.pl [options]
    -notify=...        Notify any content watched and or stopped [this is default with NO options given]
 
    -watched=...       print watched content
-   -start=...         limit watched status output to content started AFTER/ON said date/time
-   -stop=...          limit watched status output to content started BEFORE/ON said date/time
+        -start=...         limit watched status output to content started AFTER/ON said date/time
+        -stop=...          limit watched status output to content started BEFORE/ON said date/time
+        -nogrouping        will show same title multiple times if user has watched/resumed title on the same day
 
    -watching=...      print content being watched
 
@@ -723,6 +746,8 @@ Print a list of watched content from all users.
 
 =item B<-start>
 
+* only works with -watched
+
 limit watched status output to content started AFTER said date/time
 
 Valid options: dates, times and even fuzzy human times. Make sure you quote an values with spaces.
@@ -736,6 +761,8 @@ Valid options: dates, times and even fuzzy human times. Make sure you quote an v
 
 =item B<-stop>
 
+* only works with -watched
+
 limit watched status output to content started BEFORE said date/time
 
 Valid options: dates, times and even fuzzy human times. Make sure you quote an values with spaces.
@@ -746,6 +773,25 @@ Valid options: dates, times and even fuzzy human times. Make sure you quote an v
    -stop="today at 8:30pm"
    -stop="last week"
    -stop=... give it a try and see what you can use :)
+
+=item B<-nogrouping>
+
+* only works with -watched
+
+will show same title multiple times if user has watched/resumed title on the same day
+
+
+with --nogroupoing
+ Sun Jun 30 15:12:01 2013: exampleUser watched: Your Highness [2011] [R] [duration: 27 minutes and 54 seconds]
+ Sun Jun 30 15:41:02 2013: exampleUser watched: Your Highness [2011] [R] [duration: 4 minutes and 59 seconds]
+ Sun Jun 30 15:46:02 2013: exampleUser watched: Star Trek [2009] [PG-13] [duration: 24 minutes and 17 seconds]
+ Sun Jun 30 17:48:01 2013: exampleUser watched: Star Trek [2009] [PG-13] [duration: 1 hour, 44 minutes, and 1 second]
+ Sun Jun 30 19:45:01 2013: exampleUser watched: Your Highness [2011] [R] [duration: 1 hour and 24 minutes]
+
+without --nogrouping [default]
+ Sun Jun 30 15:12:01 2013: exampleUser watched: Your Highness [2011] [R] [duration: 1 hour, 56 minutes, and 53 seconds]
+ Sun Jun 30 15:46:02 2013: exampleUser watched: Star Trek [2009] [PG-13] [duration: 2 hours, 8 minutes, and 18 seconds]
+
 
 =item B<-watching>
 
