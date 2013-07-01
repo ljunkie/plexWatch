@@ -1,5 +1,9 @@
-# 0.0.8 
-# * file locking was broking - multiple copies could run at the same time 
+# 0.0.9
+# * -watched will now show the accumulated duration (if a video has been started/stopped multiple time on the same day)
+# * -nogrouping added as an option to -watched. It will show the same video multiple times if it has been started/stopped on the same day)
+
+# 0.0.8
+# * file locking was broking - multiple copies could run at the same time
 # * failed attempts to retrieve xml status could result in false stopped notifications and dupes
 # * timeout was way too long any possibly indefinite for sessions status. now 20 seconds.
 # -- this might fix the dupe stopped notifications.
