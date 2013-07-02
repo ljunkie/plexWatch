@@ -3,9 +3,9 @@
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-07-01 15:09 PST
+# Modified: 2013-07-01 17:56 PST
 #
-#  Version: 0.0.9
+#  Version: 0.0.10
 # https://github.com/ljunkie/plexWatch
 ##########################################
 
@@ -19,6 +19,7 @@ use Getopt::Long;
 use Pod::Usage;
 use Fcntl qw(:flock);
 use Time::ParseDate;
+use POSIX qw(strftime);
 
 my $data_dir = '/opt/plexWatch/'; ## to store the DB, logfile - can be the same as this script
 
@@ -30,20 +31,25 @@ my $notify_stopped = 1;   ## notify when a stream is stopped
 
 my $appname = 'plexWatch';
 
+## Give a user a more friendly name. I.E. REAL_USER will now be Frank
+my $user_display = {'REAL_USER' => 'Frank',
+		    'REAL_USER2' => 'Carrie',
+};
+
 ## Notification Options
 my $notify = {
 
     'file' => {
 	'enabled' => 1,  ## 0 or 1 - set to 1 to enable File Logging
-	'filename' => "$data_dir/$appname.log", ## default is plexWatch.log
+	'filename' => "$data_dir/plexWatch.log", ## default is plexWatch.log
     },
     
-    'prowl' => {
-	'enabled' => 0, ## 0 or 1 - set to 1 to enable PROWL
-	'apikey' => 'YOUR API KEY', ## your API key
-	'application' => $appname,
-	'priority' => 0,
-	'url' => '',
+   'prowl' => {
+       'enabled' => 0, ## 0 or 1 - set to 1 to enable PROWL
+       'apikey' => 'YOUR API KEY', ## your API key
+       'application' => $appname,
+       'priority' => 0,
+       'url' => '',
     },
     
     ## not tested but should work - want to gift the app for me to test?? -->> rob at rarforge.com
@@ -71,6 +77,8 @@ my %options = ();
 GetOptions(\%options, 
            'watched',
            'nogrouping',
+           'stats',
+           'user:s',
            'watching',
 	   'notify',
            'debug',
@@ -90,6 +98,18 @@ if ($options{debug}) {
 
 my $date = localtime;
 my $dbh = &initDB();    ## Initialize sqlite db
+
+## display the output is limited by user (display user)
+if ( ($options{'watched'} || $options{'watching'}) && $options{'user'}) {
+    my $extra = '';
+    $extra = $user_display->{$options{'user'}} if $user_display->{$options{'user'}};
+    foreach my $u (keys %{$user_display}) {
+	$extra = $u if $user_display->{$u} =~ /$options{'user'}/i;
+    }
+    $extra = '[' . $extra .']' if $extra;
+    printf("\n* Limiting results to %s %s\n", $options{'user'}, $extra);
+}
+
 
 ## print all watched content
 if ($options{'watched'}) {
@@ -119,11 +139,7 @@ if ($options{'watched'}) {
 	}
     }
     
-
     my $is_watched = &GetWatched($start,$stop);
-    
-
-
 
     ## already watched.
     printf ("\n======================================== %s ========================================\n",'Watched');
@@ -134,37 +150,63 @@ if ($options{'watched'}) {
 
     if ($limit_end) {	print $limit_end;    } 
     else {	print "Now";    }
-    
 
     my %seen = ();
     my %seen_user = ();
+    my %stats = ();
     if (keys %{$is_watched}) {
 	print "\n";
+
 	foreach my $k (sort {$is_watched->{$a}->{user} cmp $is_watched->{$b}->{'user'} || $is_watched->{$a}->{time} cmp $is_watched->{$b}->{'time'} } (keys %{$is_watched}) ) {
+	    ## clean this up at some point -- skip user if user and/or display user is not = to specified 
+	    my $skip =1;
+	    if ($options{'user'}) {
+	    	$skip = 0 if $options{'user'} &&  $options{'user'} =~ /$is_watched->{$k}->{user}/i; ## allow real user
+		$skip = 0 if $options{'user'} && $user_display->{$is_watched->{$k}->{user}} &&  $options{'user'} =~ /$user_display->{$is_watched->{$k}->{user}}/i; ## allow display_user
+	    }  else {	$skip = 0;    }
+	    next if $skip;
+	    
 	    ## only show one watched status on movie/show per day (default) -- duration will be calculated from start/stop on each watch/resume
 	    ## --nogrouping will display movie as many times as it has been started on the same day.
+	    
+
+	    ## to cleanup - maybe subroutine
 	    my ($sec, $min, $hour, $day,$month,$year) = (localtime($is_watched->{$k}->{time}))[0,1,2,3,4,5]; 
+	    $year += 1900;
+	    $month += 1;
+	    my $serial = parsedate("$year-$month-$day 00:00:00");
+	    ## end 
+	    
 	    my $skey = $is_watched->{$k}->{user}.$year.$month.$day.$is_watched->{$k}->{title};
 	    
+	    ## use display name 
+	    my $user = $is_watched->{$k}->{user};
+	    $user = $user_display->{$user} if $user_display->{$user};
+	    
+	    ## stat -- quick and dirty -- to clean up later
+	    $stats{$user}->{'total_duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
+	    $stats{$user}->{'duration'}->{$serial} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
+	    ## end
+	    
 	    if ($options{'nogrouping'}) {
-		if (!$seen_user{$is_watched->{$k}->{user}}) {
-		    $seen_user{$is_watched->{$k}->{user}} = 1;
-		    print "\nUser: " . $is_watched->{$k}->{user} . "\n";
+		if (!$seen_user{$user}) {
+		    $seen_user{$user} = 1;
+		    print "\nUser: " . $user . "\n";
 		}
 		## move to bottom
 		my $time = localtime ($is_watched->{$k}->{time} );
 		my $duration = &getDuration($is_watched->{$k}->{time},$is_watched->{$k}->{stopped});
-		my $alert = sprintf(' %s: %s watched: %s [duration: %s]', $time,$is_watched->{$k}->{user}, $is_watched->{$k}->{title}, $duration);
+		my $alert = sprintf(' %s: %s watched: %s [duration: %s]', $time,$user, $is_watched->{$k}->{title}, $duration);
 		print $alert . "\n";
 	    } else {
 		if (!$seen{$skey}) {
 		    $seen{$skey}->{'time'} = $is_watched->{$k}->{time};
-		    $seen{$skey}->{'user'} = $is_watched->{$k}->{user};
+		    $seen{$skey}->{'user'} = $user;
 		    $seen{$skey}->{'title'} = $is_watched->{$k}->{title};
-		    $seen{$skey}->{'diff'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
+		    $seen{$skey}->{'duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
 		} else {
 		    ## if same user/same movie/same day -- append duration -- must of been resumed
-		    $seen{$skey}->{'diff'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
+		    $seen{$skey}->{'duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
 		}
 	    }
 	}
@@ -181,17 +223,28 @@ if ($options{'watched'}) {
 		print "\nUser: " . $seen{$k}->{user} . "\n";
 	    }
 	    my $time = localtime ($seen{$k}->{time} );
-	    my $duration = duration_exact($seen{$k}->{diff});
+	    my $duration = duration_exact($seen{$k}->{duration});
 	    my $alert = sprintf(' %s: %s watched: %s [duration: %s]', $time,$seen{$k}->{user}, $seen{$k}->{title}, $duration);
 	    print "$alert\n";
 	}
     }
     print "\n";
+
+    if ($options{stats}) {
+	printf ("\n======================================== %s ========================================\n",'Stats');
+	foreach my $user (keys %stats) {
+	    printf ("user: %s's total duration %s \n", $user, duration_exact($stats{$user}->{total_duration}));
+	    foreach my $epoch (sort keys %{$stats{$user}->{duration}}) {
+		my $h_date = strftime "%a %b %e %Y", localtime($epoch);
+		printf (" %s: %s %s\n", $h_date, $user, duration_exact($stats{$user}->{duration}->{$epoch}));
+	    }
+	    print "\n";
+	}
+    }
 }
 
 ## print content being watched
 if ($options{'watching'}) {
-    
     my $in_progress = &GetInProgress();
     
     printf ("\n======================================= %s ========================================",'Watching');
@@ -199,17 +252,28 @@ if ($options{'watching'}) {
     my %seen = ();
     if (keys %{$in_progress}) {
 	print "\n";
-	foreach my $k (sort { 
-	    $in_progress->{$a}->{user} cmp $in_progress->{$b}->{'user'} ||
-		$in_progress->{$a}->{time} cmp $in_progress->{$b}->{'time'} 
-		       } (keys %{$in_progress}) ) {
-	    if (!$seen{$in_progress->{$k}->{user}}) {
-		$seen{$in_progress->{$k}->{user}} = 1;
-		print "\nUser: " . $in_progress->{$k}->{user} . "\n";
+	foreach my $k (sort { $in_progress->{$a}->{user} cmp $in_progress->{$b}->{'user'} || $in_progress->{$a}->{time} cmp $in_progress->{$b}->{'time'} } (keys %{$in_progress}) ) {
+	    ## clean this up at some point -- skip user if user and/or display user is not = to specified 
+	    my $skip =1;
+	    if ($options{'user'}) {
+	    	$skip = 0 if $options{'user'} &&  $options{'user'} =~ /$in_progress->{$k}->{user}/i; ## allow real user
+		$skip = 0 if $options{'user'} && $user_display->{$in_progress->{$k}->{user}} &&  $options{'user'} =~ /$user_display->{$in_progress->{$k}->{user}}/i; ## allow display_user
+	    }  else {	$skip = 0;    }
+	    next if $skip;
+
+	    ## use display name 
+	    my $user = $in_progress->{$k}->{user};
+	    $user = $in_progress->{$user} if $user_display->{$user};
+	    
+	    
+	    
+	    if (!$seen{$user}) {
+		$seen{$user} = 1;
+		print "\nUser: " . $user . "\n";
 	    }
 	    
 	    my $time = localtime ($in_progress->{$k}->{time} );
-	    my $alert = sprintf(' %s: %s is watching: %s', $time,$in_progress->{$k}->{user}, $in_progress->{$k}->{title});
+	    my $alert = sprintf(' %s: %s is watching: %s', $time,$user, $in_progress->{$k}->{title});
 	    #my $extra = sprintf("rated: %s\n year: %s\n user: %s\n platform: %s\n\n summary: %s",  $in_progress->{$k}->{rating}, $in_progress->{$k}->{year}, $in_progress->{$k}->{user}, $in_progress->{$k}->{platform}, $in_progress->{$k}->{summary});
 	    print $alert . "\n";
 	    #print $extra . "\n";
@@ -240,8 +304,13 @@ if (!%options || $options{'notify'}) {
 	foreach my $k (keys %{$info}) {
 	    if (!$playing->{$k}) {
 		my $time = localtime ($info->{$k}->{time} );
-		my $alert = sprintf('%s is watching: %s on %s', $info->{$k}->{user}, $info->{$k}->{title}, $info->{$k}->{platform});
-		my $extra = sprintf("Missed Notification\nStarted: %s\n\nrated: %s\n year: %s\n user: %s\n platform: %s\n\n summary: %s", $time, $info->{$k}->{rating}, $info->{$k}->{year}, $info->{$k}->{user}, $info->{$k}->{platform}, $info->{$k}->{summary});
+		
+		## use display name 
+		my $user = $info->{$k}->{user};
+		$user = $user_display->{$user} if $user_display->{$user};
+		
+		my $alert = sprintf('%s is watching: %s on %s', $user, $info->{$k}->{title}, $info->{$k}->{platform});
+		my $extra = sprintf("Missed Notification\nStarted: %s\n\nrated: %s\n year: %s\n user: %s\n platform: %s\n\n summary: %s", $time, $info->{$k}->{rating}, $info->{$k}->{year}, $user, $info->{$k}->{platform}, $info->{$k}->{summary});
 		
 		&Notify($alert,$extra,'start');
 		&SetNotified($info->{$k}->{id});
@@ -266,8 +335,12 @@ if (!%options || $options{'notify'}) {
 		my $start_time = localtime($started->{$k}->{time});
 		my $stop_epoch = time();
 		
+		## use display name 
+		my $user = $started->{$k}->{user};
+		$user = $user_display->{$user} if $user_display->{$user};
+		
 		my $duration = &getDuration($started->{$k}->{time},$stop_epoch);
-		my $alert = sprintf('%s stopped watching: %s on %s', $started->{$k}->{user}, $started->{$k}->{title}, $started->{$k}->{platform});
+		my $alert = sprintf('%s stopped watching: %s on %s', $user, $started->{$k}->{title}, $started->{$k}->{platform});
 		my $extra = sprintf("\nDuration: %s\nplatform: %s\n started: %s", $duration,$started->{$k}->{platform}, $start_time);
 		
 		&Notify($alert,$extra,'stop');
@@ -282,11 +355,18 @@ if (!%options || $options{'notify'}) {
 	$rating = $year = $summary = $extra_title = $genre = $platform = $title = $episode = $season = '';
 	
 	$title = $vid->{$k}->{title};
-	if ($vid->{$k}->{Player}->{platform}) {	$platform .= $vid->{$k}->{Player}->{platform};    }
-	if ($vid->{$k}->{Player}->{title}) {	$platform .= ' - ' . $vid->{$k}->{Player}->{title};    }
-	my $user = (split('\@',$vid->{$k}->{User}->{title}))[0];
-	if (!$user) {	$user = 'Local';    }
-	my $db_key = $k . '_' . $vid->{$k}->{key} . '_' . $user;
+	## prefer title over platform if exists ( seem to have the exact same info of platform with useful extras )
+	if ($vid->{$k}->{Player}->{title}) {	$platform =  $vid->{$k}->{Player}->{title};    }
+	elsif ($vid->{$k}->{Player}->{platform}) {	$platform = $vid->{$k}->{Player}->{platform};    }
+	
+	my $orig_user = (split('\@',$vid->{$k}->{User}->{title}))[0];
+	if (!$orig_user) {	$orig_user = 'Local';    }
+	
+	## use display name 
+	my $user = $orig_user;
+	$user = $user_display->{$user} if $user_display->{$user};
+	
+	my $db_key = $k . '_' . $vid->{$k}->{key} . '_' . $orig_user;
 	
 	$year = $vid->{$k}->{year} if $vid->{$k}->{year};
 	$rating .= $vid->{$k}->{contentRating} if ($vid->{$k}->{contentRating});
@@ -321,11 +401,11 @@ if (!%options || $options{'notify'}) {
 	if ($started->{$db_key}) {
 	    ##if (&CheckNotified($db_key)) { old -- we now have started container (streams already notified and not stopped)
 	    if ($debug) { 
-		my $insert_id = &ProcessStart($vid->{$k},$db_key,$title,$platform,$user,$orig_title,$orig_title_ep,$genre,$episode,$season,$summary,$rating,$year);
+		my $insert_id = &ProcessStart($vid->{$k},$db_key,$title,$platform,$orig_user,$orig_title,$orig_title_ep,$genre,$episode,$season,$summary,$rating,$year);
 		print &consoletxt("Already Notified - $alert $extra") . "\n"; 
 	    };
 	} else {
-	    my $insert_id = &ProcessStart($vid->{$k},$db_key,$title,$platform,$user,$orig_title,$orig_title_ep,$genre,$episode,$season,$summary,$rating,$year);
+	    my $insert_id = &ProcessStart($vid->{$k},$db_key,$title,$platform,$orig_user,$orig_title,$orig_title_ep,$genre,$episode,$season,$summary,$rating,$year);
 	    &Notify($alert,$extra,'start');
 	    &SetNotified($insert_id);
 	}
@@ -725,6 +805,8 @@ plexWatch.pl [options]
         -start=...         limit watched status output to content started AFTER/ON said date/time
         -stop=...          limit watched status output to content started BEFORE/ON said date/time
         -nogrouping        will show same title multiple times if user has watched/resumed title on the same day
+        -stats             show total watched time and show total watched time per day
+        -user=...          limit output to a specific user. Must be exact, case-insensitive
 
    -watching=...      print content being watched
 
@@ -792,6 +874,18 @@ without --nogrouping [default]
  Sun Jun 30 15:12:01 2013: exampleUser watched: Your Highness [2011] [R] [duration: 1 hour, 56 minutes, and 53 seconds]
  Sun Jun 30 15:46:02 2013: exampleUser watched: Star Trek [2009] [PG-13] [duration: 2 hours, 8 minutes, and 18 seconds]
 
+
+=item B<-stats>
+
+* only works with -watched
+
+show total watched time and show total watched time per day
+
+=item B<-user>
+
+* works with -watched and -watching
+
+limit output to a specific user. Must be exact, case-insensitive
 
 =item B<-watching>
 

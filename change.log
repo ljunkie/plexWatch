@@ -1,3 +1,10 @@
+# 0.0.10
+# * '-stats' option added to '-watched' - show total watched time per user -- total time and per day
+# * '-user' option added to '-watched' and '-watching' -- limit output to a specific user
+# * $user_display hashref added to config - you can now show a 'friendly' username instead of the users email address [excluding @domain.tld]
+# * platform title used if exists over platform. I.E. Chrome - Plex/Web (Chrome) will not show 'Plex/Web (Chrome)' -- it was redundant. Roku will still be Roku
+# * log file is now hard coded to $data_dir/plexWatch.log instead of $data_dir/$appname.log. Allows users to change $appname to anything or nothing for notification
+
 # 0.0.9
 # * -watched will now show the accumulated duration (if a video has been started/stopped multiple time on the same day)
 # * -nogrouping added as an option to -watched. It will show the same video multiple times if it has been started/stopped on the same day)
