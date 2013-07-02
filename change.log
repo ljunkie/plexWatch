@@ -1,3 +1,7 @@
+# 0.0.11
+# * Season/Episode appended to alert.
+# * fixed bug in '-watching' cli options. friendly name fixed.
+
 # 0.0.10
 # * '-stats' option added to '-watched' - show total watched time per user -- total time and per day
 # * '-user' option added to '-watched' and '-watching' -- limit output to a specific user

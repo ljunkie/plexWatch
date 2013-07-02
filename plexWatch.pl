@@ -3,9 +3,9 @@
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-07-01 17:56 PST
+# Modified: 2013-07-01 21:34 PST
 #
-#  Version: 0.0.10
+#  Version: 0.0.11
 # https://github.com/ljunkie/plexWatch
 ##########################################
 
@@ -32,7 +32,7 @@ my $notify_stopped = 1;   ## notify when a stream is stopped
 my $appname = 'plexWatch';
 
 ## Give a user a more friendly name. I.E. REAL_USER will now be Frank
-my $user_display = {'REAL_USER' => 'Frank',
+my $user_display = {'REAL_USER1' => 'Frank',
 		    'REAL_USER2' => 'Carrie',
 };
 
@@ -60,6 +60,7 @@ my $notify = {
 	'title' => $appname,
 	'sound' => 'intermission',
     },
+
 };
 
 ########################################## END CONFIG #######################################################
@@ -188,6 +189,16 @@ if ($options{'watched'}) {
 	    $stats{$user}->{'duration'}->{$serial} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
 	    ## end
 	    
+	    
+	    my $extra_title;
+	    if ($is_watched->{$k}->{season} && $is_watched->{$k}->{episode}) { 
+		my $episode = $is_watched->{$k}->{episode}; 
+		my $season = $is_watched->{$k}->{season};
+		if ($episode < 10) { $episode = 0 . $episode};
+		if ($season < 10) { $season = 0 . $season};
+		$extra_title = ' - s'.$season.'e'.$episode;
+	    }
+	    
 	    if ($options{'nogrouping'}) {
 		if (!$seen_user{$user}) {
 		    $seen_user{$user} = 1;
@@ -196,13 +207,16 @@ if ($options{'watched'}) {
 		## move to bottom
 		my $time = localtime ($is_watched->{$k}->{time} );
 		my $duration = &getDuration($is_watched->{$k}->{time},$is_watched->{$k}->{stopped});
-		my $alert = sprintf(' %s: %s watched: %s [duration: %s]', $time,$user, $is_watched->{$k}->{title}, $duration);
+		my $title = $is_watched->{$k}->{title};
+		$title .= $seen{$skey}->{'title'} = $extra_title if $extra_title;
+		my $alert = sprintf(' %s: %s watched: %s [duration: %s]', $time,$user, $title, $duration);
 		print $alert . "\n";
 	    } else {
 		if (!$seen{$skey}) {
 		    $seen{$skey}->{'time'} = $is_watched->{$k}->{time};
 		    $seen{$skey}->{'user'} = $user;
 		    $seen{$skey}->{'title'} = $is_watched->{$k}->{title};
+		    $seen{$skey}->{'title'} .= $extra_title if $extra_title;
 		    $seen{$skey}->{'duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
 		} else {
 		    ## if same user/same movie/same day -- append duration -- must of been resumed
@@ -260,12 +274,12 @@ if ($options{'watching'}) {
 		$skip = 0 if $options{'user'} && $user_display->{$in_progress->{$k}->{user}} &&  $options{'user'} =~ /$user_display->{$in_progress->{$k}->{user}}/i; ## allow display_user
 	    }  else {	$skip = 0;    }
 	    next if $skip;
-
+	    
 	    ## use display name 
 	    my $user = $in_progress->{$k}->{user};
-	    $user = $in_progress->{$user} if $user_display->{$user};
 	    
-	    
+	    #print Dumper($in_progress);
+	    $user = $user_display->{$user} if $user_display->{$user};
 	    
 	    if (!$seen{$user}) {
 		$seen{$user} = 1;
@@ -383,7 +397,8 @@ if (!%options || $options{'notify'}) {
 	    $season = $vid->{$k}->{parentIndex};
 	    if ($episode < 10) { $episode = 0 . $episode};
 	    if ($season < 10) { $season = 0 . $season};
-	    $extra_title .= ' episode: s'.$season.'e'.$episode;
+	    #$extra_title .= ' episode: s'.$season.'e'.$episode;
+	    $title .= ' - s'.$season.'e'.$episode;
 	}
 	
 	if ($vid->{$k}->{'type'} =~ /movie/) {
@@ -391,12 +406,12 @@ if (!%options || $options{'notify'}) {
 	    #if (defined($vid->{$k}->{Genre})) {	    $title .= ' ['.$vid->{$k}->{Genre}->{tag}.']';	}
 	    $title .= ' ['.$year.']';
 	    $title .= ' ['.$rating.']';
-	    $extra_title = '';
 	    #$summary = $vid->{$k}->{tagline};
 	}
 	
 	my $alert = sprintf('%s is watching: %s on %s', $user, $title, $platform);
-	my $extra = sprintf("%s\n rated: %s\n year: %s\n user: %s\n platform: %s\n\n summary: %s", $extra_title, $rating, $year, $user, $platform, $summary);
+	#my $extra = sprintf("%s\n rated: %s\n year: %s\n user: %s\n platform: %s\n\n summary: %s", $extra_title, $rating, $year, $user, $platform, $summary);
+	my $extra = sprintf("rated: %s\n year: %s\n user: %s\n platform: %s\n\n summary: %s", $rating, $year, $user, $platform, $summary);
 	
 	if ($started->{$db_key}) {
 	    ##if (&CheckNotified($db_key)) { old -- we now have started container (streams already notified and not stopped)
