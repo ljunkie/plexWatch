@@ -1,3 +1,10 @@
+# 0.0.12-dev
+# * code cleanup - merge same routines in sub (&FriendlyName)
+# *alert cleanup - easier to update alert format when needed (and more standardized)
+   -- $alert_format added to config options (unique for stop and start)
+   -- can override on cli with --format_stop="..." and --format_start="..."
+   -- list available format options with --format_options
+	
 # 0.0.11
 # * Season/Episode appended to alert.
 # * fixed bug in '-watching' cli options. friendly name fixed.

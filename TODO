@@ -1,4 +1,24 @@
-* merge growl changes from forum 
-* more info with --watching. I.E. durations, currently watching time out of total time, etc.. anything else useful?
+###### DONE 
+
 * code cleanup - merge same routines in sub
+    -- added &FriendlyName
+    -- still more to do
+
 * alert cleanup - easier to update alert format when needed
+   -- $alert_format added to config options
+   -- can also override on cli with --format_stop="..." and --format_start="..."
+   -- list available format options with --format_options
+
+######  Before 0.0.12
+* update alert format to be included in --cli options (--watching, --watched). Currently only works for notifcations
+
+
+
+
+######  Long Term
+
+* add more options to --format_options (will probably have to use XML in db going backwards -- maybe even forwards instead of messing with DB table)
+
+* merge growl changes from forum - http://forums.plexapp.com/index.php/topic/72552-plexwatch-plex-notify-script-send-push-alerts-on-new-sessions-and-stopped/?p=423033
+
+* display more info --watching. I.E. durations, 'user watching movie  (36 minutes / 120 minutes) anything else useful?
