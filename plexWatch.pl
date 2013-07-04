@@ -582,8 +582,6 @@ sub Notify() {
     
     if ($debug || $options{test_notify}) {	print $console ."\n";    }
     
-    exit;
-
     ## file logging
     if ($notify->{'file'}->{'enabled'}) {	
 	open FILE, ">>", $notify->{'file'}->{'filename'}  or die $!;
