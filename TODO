@@ -1,0 +1,4 @@
+* merge growl changes from forum 
+* more info with --watching. I.E. durations, currently watching time out of total time, etc.. anything else useful?
+* code cleanup - merge same routines in sub
+* alert cleanup - easier to update alert format when needed
