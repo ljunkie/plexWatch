@@ -23,7 +23,7 @@ $user_display = {'REAL_USER1' => 'Frank',
 $alert_format = {'start'    =>  '{user} watching {title} on {platform}',
 		 'stop'     =>  '{user} watched {title} on {platform} for {duration}',
 		 'watched'  =>  '{user} watched {title} on {platform} for {duration}',
-		 'watching' =>  '{user} watched {title} on {platform}'
+		 'watching' =>  '{user} watching {title} on {platform}'
 };
 
 $notify = {
