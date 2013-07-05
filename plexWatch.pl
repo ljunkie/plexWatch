@@ -3,9 +3,9 @@
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-07-01 21:34 PST
+# Modified: 2013-07-05 14:09 PST
 #
-#  Version: 0.0.11
+#  Version: 0.0.12
 # https://github.com/ljunkie/plexWatch
 ##########################################
 
@@ -21,49 +21,36 @@ use Fcntl qw(:flock);
 use Time::ParseDate;
 use POSIX qw(strftime);
 
-my $data_dir = '/opt/plexWatch/'; ## to store the DB, logfile - can be the same as this script
-
-my $server = 'localhost'; ## IP of PMS - or localhost
-my $port = 32400;         ## port of PMS
-
-my $notify_started = 1;   ## notify when a stream is started (first play)
-my $notify_stopped = 1;   ## notify when a stream is stopped
-
-my $appname = 'plexWatch';
-
-## Give a user a more friendly name. I.E. REAL_USER will now be Frank
-my $user_display = {'REAL_USER1' => 'Frank',
-		    'REAL_USER2' => 'Carrie',
-};
-
-## Notification Options
-my $notify = {
-
-    'file' => {
-	'enabled' => 1,  ## 0 or 1 - set to 1 to enable File Logging
-	'filename' => "$data_dir/plexWatch.log", ## default is plexWatch.log
-    },
-    
-   'prowl' => {
-       'enabled' => 0, ## 0 or 1 - set to 1 to enable PROWL
-       'apikey' => 'YOUR API KEY', ## your API key
-       'application' => $appname,
-       'priority' => 0,
-       'url' => '',
-    },
-    
-    ## not tested but should work - want to gift the app for me to test?? -->> rob at rarforge.com
-    'pushover' => {
-	'enabled' => 0, ## set to 1 to enable PushOver
-	'token' => 'YOUR APP TOKEN', ## your app token
-	'user' => 'YOUR USER TOKEN',  ## your user token
-	'title' => $appname,
-	'sound' => 'intermission',
-    },
-
-};
+## load config file
+use File::Basename;
+my $dirname = dirname(__FILE__);
+if (!-e $dirname .'/config.pl') {
+    print "\n** missing file $dirname/config.pl. Did you move edit config.pl-dist and copy to config.pl?\n\n";
+    exit;
+}
+do $dirname.'/config.pl';
+use vars qw/$data_dir $server $port $notify_started $notify_stopped $appname $user_display $alert_format $notify/; 
+if (!$data_dir || !$server || !$port || !$notify_started || !$notify_stopped || !$appname || !$user_display || !$alert_format || !$notify) {
+    print "config file missing data\n";
+    exit;
+}
+## end
 
 ########################################## END CONFIG #######################################################
+
+## used for later..
+my $format_options = {
+    'user' => 'user',
+    'orig_user' => 'orig_user',
+    'title' => 'title',
+    'start_start' => 'start_time',
+    'stop_time' => 'stop_time',
+    'rating' => 'rating',
+    'year' => 'year',
+    'platform' => 'platform',
+    'summary' => 'summary',
+    'duration' => 'duration',
+};
 
 if (!-d $data_dir) {
     print "\n** Sorry. Please create your datadir $data_dir\n\n";
@@ -85,6 +72,12 @@ GetOptions(\%options,
            'debug',
            'start:s',
            'stop:s',
+           'format_start:s',
+           'format_stop:s',
+           'format_watched:s',
+           'format_watching:s',
+           'format_options',
+	   'test_notify:s',
 	   'show_xml',
            'help|?'
     ) or pod2usage(2);
@@ -100,6 +93,35 @@ if ($options{debug}) {
 my $date = localtime;
 my $dbh = &initDB();    ## Initialize sqlite db
 
+if ($options{'format_options'}) {
+    print "\nFormat Options for alerts\n";
+    print "\n\t start: " . $alert_format->{'start'};
+    print "\n\t  stop: " . $alert_format->{'stop'};
+    print "\n\n";
+    
+    foreach my $k (keys %{$format_options}) {
+	printf("%15s %s\n", "{$k}", $format_options->{$k});
+    }
+    print "\n";
+    exit;
+}
+
+## reset format if specified
+$alert_format->{'start'} = $options{'format_start'} if $options{'format_start'};
+$alert_format->{'stop'} = $options{'format_stop'} if $options{'format_stop'};
+$alert_format->{'watched'} = $options{'format_watched'} if $options{'format_watched'};
+$alert_format->{'watching'} = $options{'format_watching'} if $options{'format_watching'};
+
+
+## show what the notify alerts will look like
+if  ($options{test_notify}) {
+    &RunTestNotify();
+    exit;
+}
+
+########################################## START MAIN #######################################################
+
+
 ## display the output is limited by user (display user)
 if ( ($options{'watched'} || $options{'watching'}) && $options{'user'}) {
     my $extra = '';
@@ -111,54 +133,47 @@ if ( ($options{'watched'} || $options{'watching'}) && $options{'user'}) {
     printf("\n* Limiting results to %s %s\n", $options{'user'}, $extra);
 }
 
-
+####################################################################
 ## print all watched content
 if ($options{'watched'}) {
-
-    my $start;
-    my $stop = time();
-    my $limit_start;
-    my $limit_end;
     
-
+    my $stop = time();
+    my ($start,$limit_start,$limit_end);
+    
     if ($options{start}) {
 	my $v = $options{start};
 	my $now = time();
 	$now = parsedate('today at midnight', FUZZY=>1) 	if ($v !~ /now/i);
-	
-	if ($start = parsedate($v, FUZZY=>1, NOW => $now)) {
-	    $limit_start = localtime($start);
-	}
+	if ($start = parsedate($v, FUZZY=>1, NOW => $now)) {	    $limit_start = localtime($start);	}
     }
     
     if ($options{stop}) {
 	my $v = $options{stop};
 	my $now = time();
 	$now = parsedate('today at midnight', FUZZY=>1) if ($v !~ /now/i);
-	if ($stop = parsedate($v, FUZZY=>1, NOW => $now)) {
-	    $limit_end = localtime($stop);
-	}
+	if ($stop = parsedate($v, FUZZY=>1, NOW => $now)) {	    $limit_end = localtime($stop);	}
     }
     
     my $is_watched = &GetWatched($start,$stop);
-
+    
     ## already watched.
     printf ("\n======================================== %s ========================================\n",'Watched');
     print "Date Range: ";
     if ($limit_start) {	print $limit_start;    } 
     else {	print "Anytime";    }
     print ' through ';
-
+    
     if ($limit_end) {	print $limit_end;    } 
     else {	print "Now";    }
-
+    
     my %seen = ();
     my %seen_user = ();
     my %stats = ();
+    my $ntype = 'watched';
     if (keys %{$is_watched}) {
 	print "\n";
-
-	foreach my $k (sort {$is_watched->{$a}->{user} cmp $is_watched->{$b}->{'user'} || $is_watched->{$a}->{time} cmp $is_watched->{$b}->{'time'} } (keys %{$is_watched}) ) {
+	foreach my $k (sort {$is_watched->{$a}->{user} cmp $is_watched->{$b}->{'user'} || 
+				 $is_watched->{$a}->{time} cmp $is_watched->{$b}->{'time'} } (keys %{$is_watched}) ) {
 	    ## clean this up at some point -- skip user if user and/or display user is not = to specified 
 	    my $skip =1;
 	    if ($options{'user'}) {
@@ -170,7 +185,6 @@ if ($options{'watched'}) {
 	    ## only show one watched status on movie/show per day (default) -- duration will be calculated from start/stop on each watch/resume
 	    ## --nogrouping will display movie as many times as it has been started on the same day.
 	    
-
 	    ## to cleanup - maybe subroutine
 	    my ($sec, $min, $hour, $day,$month,$year) = (localtime($is_watched->{$k}->{time}))[0,1,2,3,4,5]; 
 	    $year += 1900;
@@ -181,46 +195,35 @@ if ($options{'watched'}) {
 	    my $skey = $is_watched->{$k}->{user}.$year.$month.$day.$is_watched->{$k}->{title};
 	    
 	    ## use display name 
-	    my $user = $is_watched->{$k}->{user};
-	    $user = $user_display->{$user} if $user_display->{$user};
+	    my $user = &FriendlyName($is_watched->{$k}->{user});
 	    
 	    ## stat -- quick and dirty -- to clean up later
 	    $stats{$user}->{'total_duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
 	    $stats{$user}->{'duration'}->{$serial} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
 	    ## end
 	    
-	    
-	    my $extra_title;
-	    if ($is_watched->{$k}->{season} && $is_watched->{$k}->{episode}) { 
-		my $episode = $is_watched->{$k}->{episode}; 
-		my $season = $is_watched->{$k}->{season};
-		if ($episode < 10) { $episode = 0 . $episode};
-		if ($season < 10) { $season = 0 . $season};
-		$extra_title = ' - s'.$season.'e'.$episode;
-	    }
-	    
 	    if ($options{'nogrouping'}) {
 		if (!$seen_user{$user}) {
 		    $seen_user{$user} = 1;
 		    print "\nUser: " . $user . "\n";
 		}
-		## move to bottom
 		my $time = localtime ($is_watched->{$k}->{time} );
-		my $duration = &getDuration($is_watched->{$k}->{time},$is_watched->{$k}->{stopped});
-		my $title = $is_watched->{$k}->{title};
-		$title .= $seen{$skey}->{'title'} = $extra_title if $extra_title;
-		my $alert = sprintf(' %s: %s watched: %s [duration: %s]', $time,$user, $title, $duration);
-		print $alert . "\n";
+		my $info = &info_from_xml($is_watched->{$k}->{'xml'},$ntype,$is_watched->{$k}->{'time'},$is_watched->{$k}->{'stopped'});
+		my $alert = &Notify($info,1);
+		printf(" %s: %s\n",$time, $alert);
 	    } else {
 		if (!$seen{$skey}) {
 		    $seen{$skey}->{'time'} = $is_watched->{$k}->{time};
+		    $seen{$skey}->{'xml'} = $is_watched->{$k}->{xml};
 		    $seen{$skey}->{'user'} = $user;
-		    $seen{$skey}->{'title'} = $is_watched->{$k}->{title};
-		    $seen{$skey}->{'title'} .= $extra_title if $extra_title;
+		    $seen{$skey}->{'stopped'} = $is_watched->{$k}->{stopped};
 		    $seen{$skey}->{'duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
 		} else {
 		    ## if same user/same movie/same day -- append duration -- must of been resumed
 		    $seen{$skey}->{'duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
+		    if ($is_watched->{$k}->{stopped} > $seen{$skey}->{'stopped'}) {
+			$seen{$skey}->{'stopped'} = $is_watched->{$k}->{stopped}; ## include max stopped in case someone wants to display it
+		    }
 		}
 	    }
 	}
@@ -237,13 +240,14 @@ if ($options{'watched'}) {
 		print "\nUser: " . $seen{$k}->{user} . "\n";
 	    }
 	    my $time = localtime ($seen{$k}->{time} );
-	    my $duration = duration_exact($seen{$k}->{duration});
-	    my $alert = sprintf(' %s: %s watched: %s [duration: %s]', $time,$seen{$k}->{user}, $seen{$k}->{title}, $duration);
-	    print "$alert\n";
+	    my $info = &info_from_xml($seen{$k}->{xml},$ntype,$seen{$k}->{'time'},$seen{$k}->{'stopped'},$seen{$k}->{'duration'});
+	    my $alert = &Notify($info,1);
+	    printf(" %s: %s\n",$time, $alert);
 	}
     }
     print "\n";
 
+    ## show stats if --stats
     if ($options{stats}) {
 	printf ("\n======================================== %s ========================================\n",'Stats');
 	foreach my $user (keys %stats) {
@@ -257,6 +261,8 @@ if ($options{'watched'}) {
     }
 }
 
+
+#####################################################
 ## print content being watched
 if ($options{'watching'}) {
     my $in_progress = &GetInProgress();
@@ -287,10 +293,11 @@ if ($options{'watching'}) {
 	    }
 	    
 	    my $time = localtime ($in_progress->{$k}->{time} );
-	    my $alert = sprintf(' %s: %s is watching: %s', $time,$user, $in_progress->{$k}->{title});
-	    #my $extra = sprintf("rated: %s\n year: %s\n user: %s\n platform: %s\n\n summary: %s",  $in_progress->{$k}->{rating}, $in_progress->{$k}->{year}, $in_progress->{$k}->{user}, $in_progress->{$k}->{platform}, $in_progress->{$k}->{summary});
-	    print $alert . "\n";
-	    #print $extra . "\n";
+	    #my $alert = sprintf(' %s: %s is watching: %s', $time,$user, $in_progress->{$k}->{title});
+	    #print $alert . "\n";
+	    my $info = &info_from_xml($in_progress->{$k}->{'xml'},'watching',$in_progress->{$k}->{time});
+	    my $alert = &Notify($info,1);
+	    printf(" %s: %s\n",$time, $alert);
 	}
 	
     } else {	    print "\n * nothing in progress\n";	}
@@ -304,37 +311,37 @@ if (%options && !$options{'notify'}) {
     exit;
 }
 
-
+#################################################################
 ## Notify -notify || no options = notify on watch/stopped streams
 if (!%options || $options{'notify'}) {
     my $vid = &GetSessions();    ## query API for current streams
     my $started= &GetStarted(); ## query streams already started/not stopped
     my $playing = ();            ## container of now playing id's - used for stopped status/notification
     
+    
+    ###########################################################################
     ## nothing being watched.. verify all notification went out
-    ## this shouldn't happen --- just to be sure.
+    ## this shouldn't happen ( only happened during development when I was testing -- but just in case )
+    #### to fix
     if (!ref($vid)) {
-	my $info = &GetUnNotified();
-	foreach my $k (keys %{$info}) {
+	my $un = &GetUnNotified();
+	foreach my $k (keys %{$un}) {
 	    if (!$playing->{$k}) {
-		my $time = localtime ($info->{$k}->{time} );
-		
-		## use display name 
-		my $user = $info->{$k}->{user};
-		$user = $user_display->{$user} if $user_display->{$user};
-		
-		my $alert = sprintf('%s is watching: %s on %s', $user, $info->{$k}->{title}, $info->{$k}->{platform});
-		my $extra = sprintf("Missed Notification\nStarted: %s\n\nrated: %s\n year: %s\n user: %s\n platform: %s\n\n summary: %s", $time, $info->{$k}->{rating}, $info->{$k}->{year}, $user, $info->{$k}->{platform}, $info->{$k}->{summary});
-		
-		&Notify($alert,$extra,'start');
-		&SetNotified($info->{$k}->{id});
-		&SetStopped($info->{$k}->{id});
+		my $ntype = 'start';
+		my $start_epoch = $un->{$k}->{time} if $un->{$k}->{time};
+		my $stop_epoch = '';
+		my $info = &info_from_xml($un->{$k}->{'xml'},'start',$start_epoch,$stop_epoch);
+		&Notify($info);
+		&SetNotified($un->{$k}->{id});
 		## another notification will go out about being stopped..
+		## next run it will be marked as watched and notified
 	    }
 	}
     }
+    ## end unnotified
     
-    ## Quick hack to notify stopped content before start
+
+    ## Quick hack to notify stopped content before start -- get a list of playing content
     foreach my $k (keys %{$vid}) {
 	my $user = (split('\@',$vid->{$k}->{User}->{title}))[0];
 	if (!$user) {	$user = 'Local';    }
@@ -343,21 +350,14 @@ if (!%options || $options{'notify'}) {
     }
     
     ## Notify on any Stop
+    ## Iterate through all non-stopped content and notify if not playing
     if (ref($started)) {
 	foreach my $k (keys %{$started}) {
 	    if (!$playing->{$k}) {
-		my $start_time = localtime($started->{$k}->{time});
+		my $start_epoch = $started->{$k}->{time} if $started->{$k}->{time};
 		my $stop_epoch = time();
-		
-		## use display name 
-		my $user = $started->{$k}->{user};
-		$user = $user_display->{$user} if $user_display->{$user};
-		
-		my $duration = &getDuration($started->{$k}->{time},$stop_epoch);
-		my $alert = sprintf('%s stopped watching: %s on %s', $user, $started->{$k}->{title}, $started->{$k}->{platform});
-		my $extra = sprintf("\nDuration: %s\nplatform: %s\n started: %s", $duration,$started->{$k}->{platform}, $start_time);
-		
-		&Notify($alert,$extra,'stop');
+		my $info = &info_from_xml($started->{$k}->{'xml'},'stop',$start_epoch,$stop_epoch);
+		&Notify($info);
 		&SetStopped($started->{$k}->{id},$stop_epoch);
 	    }
 	}
@@ -365,63 +365,42 @@ if (!%options || $options{'notify'}) {
     
     ## Notify on start/now playing
     foreach my $k (keys %{$vid}) {
-	my ($rating,$year,$summary,$extra_title,$genre,$platform,$title,$episode,$season);
-	$rating = $year = $summary = $extra_title = $genre = $platform = $title = $episode = $season = '';
 	
-	$title = $vid->{$k}->{title};
-	## prefer title over platform if exists ( seem to have the exact same info of platform with useful extras )
-	if ($vid->{$k}->{Player}->{title}) {	$platform =  $vid->{$k}->{Player}->{title};    }
-	elsif ($vid->{$k}->{Player}->{platform}) {	$platform = $vid->{$k}->{Player}->{platform};    }
+	my $start_epoch = time();
+	my $stop_epoch = ''; ## not stopped yet
+	my $info = &info_from_xml(XMLout($vid->{$k}),'start',$start_epoch,$stop_epoch);
 	
-	my $orig_user = (split('\@',$vid->{$k}->{User}->{title}))[0];
-	if (!$orig_user) {	$orig_user = 'Local';    }
+	## for insert 
+	my $db_key = $k . '_' . $vid->{$k}->{key} . '_' . $info->{orig_user};
 	
-	## use display name 
-	my $user = $orig_user;
-	$user = $user_display->{$user} if $user_display->{$user};
-	
-	my $db_key = $k . '_' . $vid->{$k}->{key} . '_' . $orig_user;
-	
-	$year = $vid->{$k}->{year} if $vid->{$k}->{year};
-	$rating .= $vid->{$k}->{contentRating} if ($vid->{$k}->{contentRating});
-	$summary = $vid->{$k}->{summary} if $vid->{$k}->{summary};
-	
-	my $orig_title = $title;
-	my $orig_title_ep = '';
+	## these shouldn't be neede any more - to clean up as we now use XML data from DB
+	$info->{'orig_title'} = $vid->{$k}->{title};
+	$info->{'orig_title_ep'} = '';
+	$info->{'episode'} = '';
+	$info->{'season'} = '';
+	$info->{'genre'} = '';
 	if ($vid->{$k}->{grandparentTitle}) {
-	    $orig_title = $vid->{$k}->{grandparentTitle};
-	    $orig_title_ep = $title;
-	    
-	    $title = $vid->{$k}->{grandparentTitle} . ' - ' . $title;
-	    $episode = $vid->{$k}->{index};
-	    $season = $vid->{$k}->{parentIndex};
-	    if ($episode < 10) { $episode = 0 . $episode};
-	    if ($season < 10) { $season = 0 . $season};
-	    #$extra_title .= ' episode: s'.$season.'e'.$episode;
-	    $title .= ' - s'.$season.'e'.$episode;
+	    $info->{'orig_title'} = $vid->{$k}->{grandparentTitle};
+	    $info->{'orig_title_ep'} = $vid->{$k}->{title};
+	    $info->{'episode'} = $vid->{$k}->{index};
+	    $info->{'season'} = $vid->{$k}->{parentIndex};
+	    if ($info->{'episode'} < 10) { $info->{'episode'} = 0 . $info->{'episode'};}
+	    if ($info->{'season'} < 10) { $info->{'season'} = 0 . $info->{'season'}; }
 	}
+	## end unused data to clean up
 	
-	if ($vid->{$k}->{'type'} =~ /movie/) {
-	    ## to fix.. multiple genres
-	    #if (defined($vid->{$k}->{Genre})) {	    $title .= ' ['.$vid->{$k}->{Genre}->{tag}.']';	}
-	    $title .= ' ['.$year.']';
-	    $title .= ' ['.$rating.']';
-	    #$summary = $vid->{$k}->{tagline};
-	}
-	
-	my $alert = sprintf('%s is watching: %s on %s', $user, $title, $platform);
-	#my $extra = sprintf("%s\n rated: %s\n year: %s\n user: %s\n platform: %s\n\n summary: %s", $extra_title, $rating, $year, $user, $platform, $summary);
-	my $extra = sprintf("rated: %s\n year: %s\n user: %s\n platform: %s\n\n summary: %s", $rating, $year, $user, $platform, $summary);
-	
+	## ignore content that has already been notified
 	if ($started->{$db_key}) {
-	    ##if (&CheckNotified($db_key)) { old -- we now have started container (streams already notified and not stopped)
 	    if ($debug) { 
-		my $insert_id = &ProcessStart($vid->{$k},$db_key,$title,$platform,$orig_user,$orig_title,$orig_title_ep,$genre,$episode,$season,$summary,$rating,$year);
-		print &consoletxt("Already Notified - $alert $extra") . "\n"; 
+		## set notifcation again - start day will be off for now.
+		&Notify($info);
+		print &consoletxt("Already Notified") . "\n"; 
 	    };
-	} else {
-	    my $insert_id = &ProcessStart($vid->{$k},$db_key,$title,$platform,$orig_user,$orig_title,$orig_title_ep,$genre,$episode,$season,$summary,$rating,$year);
-	    &Notify($alert,$extra,'start');
+	} 
+	## unnotified - insert into DB and notify
+	else {
+	    my $insert_id = &ProcessStart($vid->{$k},$db_key,$info->{'title'},$info->{'platform'},$info->{'orig_user'},$info->{'orig_title'},$info->{'orig_title_ep'},$info->{'genre'},$info->{'episode'},$info->{'season'},$info->{'summary'},$info->{'rating'},$info->{'year'});
+	    &Notify($info);
 	    &SetNotified($insert_id);
 	}
     }
@@ -429,19 +408,54 @@ if (!%options || $options{'notify'}) {
 
 #############################################################################################################################
 
+sub formatAlert() {
+    my $info = shift;
+    my %alert = %{$info};
+    my $type = $alert{'ntype'};
+    my $format = $alert_format->{'start'};
+    ## to fix at some point -- allow users to custome event/collapse/etc... just more logic to work on later.
+    my $orig_start = '{user} watching {title} on {platform}'; # used for prowl 'EVENT' (if collapse is enabled)
+    my $orig_stop = '{user} watched {title} on {platform} for {duration}'; # used for prowl 'EVENT' (if collapse is enabled)
+    my $orig_watched = $orig_stop; # not really needed.. just keeping standards
+    my $orig_watching = $orig_start; # not really needed.. just keeping standards
+    my $orig = $orig_start;
+    if ($type =~ /stop/i) {
+	$format = $alert_format->{'stop'};
+	$orig = $orig_stop;
+    } elsif ($type =~ /watched/i) {
+	$format = $alert_format->{'watched'};
+	$orig = $orig_watched;
+    } elsif ($type =~ /watching/i) {
+	$format = $alert_format->{'watching'};
+	$orig = $orig_watching;
+    }
+    if ($debug) { print "format: $format\n";}
+    my $s = $format;
+    my $regex = join "|", keys %alert;
+    $regex = qr/$regex/;
+    $s =~ s/{($regex)}/$alert{$1}/g;
+    $orig =~ s/{($regex)}/$alert{$1}/g;
+    return ($s,$orig);
+}
 
 sub Notify() {
-    my $alert = shift;
-    my $extra = shift;
-    my $type = shift;
+    my $info = shift;
+    my $ret_alert = shift;
+    my $type = $info->{'ntype'};
+    my ($alert,$orig) = &formatAlert($info);
+    my $extra = ''; ## clean me
+    
+    ## only return the alert - do not notify -- used for CLI to keep formatting the same
+    return &consoletxt($alert) if $ret_alert;
+    
     if ($notify_started && $type =~ /start/ ||	$notify_stopped && $type =~ /stop/) {
-	if ($notify->{'prowl'}->{'enabled'}) {	   &NotifyProwl($alert,$extra);}
-	if ($notify->{'pushover'}->{'enabled'}) {     &NotifyPushOver($alert,$extra); }
+	if ($notify->{'prowl'}->{'enabled'}) {	    &NotifyProwl($alert,$type,$orig);	}
+	if ($notify->{'pushover'}->{'enabled'}) {     &NotifyPushOver($alert); }
     }
     
-    
     my $console = &consoletxt("$date: $alert $extra"); 
-    if ($debug) {	print $console ."\n";    }
+    
+    if ($debug || $options{test_notify}) {	print $console ."\n";    }
     
     ## file logging
     if ($notify->{'file'}->{'enabled'}) {	
@@ -507,6 +521,22 @@ sub GetUnNotified() {
     return $info;
 }
 
+
+sub GetTestNotify() {
+    my $option = shift;
+    my $info = ();
+    my $cmd = "select * from processed order by time desc limit 1";
+    if ($option !~ /start/i) {
+        $cmd = "select * from processed where stopped is not null order by time desc limit 1";
+    }
+    my $sth = $dbh->prepare($cmd);
+    $sth->execute or die("Unable to execute query: $dbh->errstr\n");
+    while (my $row_hash = $sth->fetchrow_hashref) {
+	$info->{$row_hash->{'session_id'}} = $row_hash;
+    }
+    return $info;
+}
+
 sub GetStarted() {
     my $info = ();
     my $cmd = "select * from processed where notified = 1 and stopped is null";
@@ -525,7 +555,8 @@ sub GetWatched() {
     my $where;
     $where .= " and time >= $start "     if $start;
     $where .= " and time <= $stop " if $stop;
-    my $cmd = "select * from processed where notified = 1 and stopped is not null";
+    ## going forward only include rows with xml -- mainly for my purposes as I didn't relase this to public before I included xml
+    my $cmd = "select * from processed where notified = 1 and stopped is not null and xml is not null";
     $cmd .= $where if $where;
     my $sth = $dbh->prepare($cmd);
     $sth->execute or die("Unable to execute query: $dbh->errstr\n");
@@ -693,11 +724,17 @@ sub NotifyProwl() {
     ## modified from: https://www.prowlapp.com/static/prowl.pl
     my %prowl = %{$notify->{prowl}};
     
-    my @p = split(':',shift);
-    $prowl{'application'} .= ' - ' . shift(@p);
-    $prowl{'event'} = join(':',@p);
-    
-    $prowl{'notification'} = shift;
+    $prowl{'event'} = '';
+    $prowl{'notification'} = shift;    
+    if ($prowl{'collapse'}) {
+	my $type = shift;
+	my $orig = shift;
+	#my @p = split(':',shift);
+	#$prowl{'application'} .= ' - ' . shift(@p);
+	$prowl{'event'} = $orig;
+    }
+
+
     
     $prowl{'priority'} ||= 0;
     $prowl{'application'} ||= $appname;
@@ -707,6 +744,9 @@ sub NotifyProwl() {
     $prowl{'application'} =~ s/([^A-Za-z0-9])/sprintf("%%%02X", ord($1))/seg;
     $prowl{'event'} =~ s/([^A-Za-z0-9])/sprintf("%%%02X", ord($1))/seg;
     $prowl{'notification'} =~ s/([^A-Za-z0-9])/sprintf("%%%02X", ord($1))/seg;
+    
+    # allow line breaks in message/notification
+    $prowl{'notification'} =~ s/\%5Cn/\%0d\%0a/g;
     
     my $providerKeyString = '';
     
@@ -794,6 +834,116 @@ sub CheckLock {
 	    print "CRITICAL: max wait of $max_wait seconds reached.. other running $0?\n";
 	    exit(2);
 	}
+    }
+}
+
+sub FriendlyName() {
+    my $user = shift;
+    $user = $user_display->{$user} if $user_display->{$user};
+    return $user;
+}
+
+sub info_from_xml() {
+    my $hash = shift;
+    my $ntype = shift;
+    my $start_epoch = shift;
+    my $stop_epoch = shift;
+    my $duration = shift; ## special case to group start/stops
+    ## start time is in xml
+    
+    my $vid = XMLin($hash,KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
+    
+    
+    my $start_time = '';
+    my $stop_time = '';
+    my $time = $start_epoch;
+    $start_time = localtime($start_epoch)  if $start_epoch;
+    $stop_time = localtime($stop_epoch)  if $stop_epoch;
+    
+    if (!$duration) {
+	if ($time && $stop_epoch) {
+	    $duration = $stop_epoch-$time;
+	    $duration = duration_exact($duration);
+	}    
+    } else {
+	$duration = duration_exact($duration);
+    }
+    my ($rating,$year,$summary,$extra_title,$genre,$platform,$title,$episode,$season);    
+    $rating = $year = $summary = $extra_title = $genre = $platform = $title = $episode = $season = '';
+    
+    $title = $vid->{title};
+    ## prefer title over platform if exists ( seem to have the exact same info of platform with useful extras )
+    if ($vid->{Player}->{title}) {	$platform =  $vid->{Player}->{title};    }
+    elsif ($vid->{Player}->{platform}) {	$platform = $vid->{Player}->{platform};    }
+    
+    my $orig_user = (split('\@',$vid->{User}->{title}))[0];
+    if (!$orig_user) {	$orig_user = 'Local';    }
+    
+    
+    $year = $vid->{year} if $vid->{year};
+    $rating .= $vid->{contentRating} if ($vid->{contentRating});
+    $summary = $vid->{summary} if $vid->{summary};
+    
+    my $orig_title = $title;
+    my $orig_title_ep = '';
+    ## user can modify format, but for now I am keeping 'show title - episode title - s##e##' as the default title
+    if ($vid->{grandparentTitle}) {
+	$orig_title = $vid->{grandparentTitle};
+	$orig_title_ep = $title;
+	
+	$title = $vid->{grandparentTitle} . ' - ' . $title;
+	$episode = $vid->{index};
+	$season = $vid->{parentIndex};
+	if ($episode < 10) { $episode = 0 . $episode};
+	if ($season < 10) { $season = 0 . $season};
+	$title .= ' - s'.$season.'e'.$episode;
+    }
+    
+    ## formatting now allows user to include year, rating, etc...
+    #if ($vid->{'type'} =~ /movie/) {
+    #	## to fix.. multiple genres
+    #	#if (defined($vid->{Genre})) {	    $title .= ' ['.$vid->{Genre}->{tag}.']';	}
+    #	$title .= ' ['.$year.']';
+    #	$title .= ' ['.$rating.']';
+    #   }
+    
+    my $user = &FriendlyName($orig_user);
+    
+    ## ADD keys here when needed for &Notify hash
+    my $info = {
+	'user' => $user,
+	'orig_user' => $orig_user,
+	'title' =>  $title,
+	'platform' => $platform,
+	'time' => $time,
+	'stop_time' => $stop_time,
+	'start_time' => $start_time,
+	'rating' => $rating, 
+	'year' => $year, 
+	'platform' => $platform, 
+	'summary' => $summary,
+	'duration' => $duration,
+	'ntype' => $ntype,
+    };
+    
+    return $info;
+}
+
+
+sub RunTestNotify() {
+    my $ntype = 'start'; ## default
+    $ntype = 'stop' if $options{test_notify} =~ /stop/;
+    $format_options->{'ntype'} = $ntype;
+    my $info = &GetTestNotify($ntype);
+    if ($info) {
+	foreach my $k (keys %{$info}) {
+	    my $start_epoch = $info->{$k}->{time} if $info->{$k}->{time}; ## DB only
+	    my $stop_epoch = $info->{$k}->{stopped} if $info->{$k}->{stopped}; ## DB only
+	    my $info = &info_from_xml($info->{$k}->{'xml'},$ntype,$start_epoch,$stop_epoch);
+	    &Notify($info);
+	}
+    } else {
+	&Notify($format_options);
     }
 }
 

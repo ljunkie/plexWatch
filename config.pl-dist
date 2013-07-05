@@ -1,0 +1,53 @@
+$data_dir = '/opt/plexWatch/'; ## to store the DB, logfile - can be the same as this script
+	
+$server = 'localhost'; ## IP of PMS - or localhost
+$port = 32400;         ## port of PMS
+
+$notify_started = 1;   ## notify when a stream is started
+$notify_stopped = 1;   ## notify when a stream is stopped
+
+$appname = 'plexWatch';
+
+## Give a user a more friendly name. I.E. REAL_USER will now be Frank
+$user_display = {'REAL_USER1' => 'Frank',
+		 'REAL_USER2' => 'Carrie',
+};
+
+## format of alert - default. You can also override this per provider  ($notify below)
+## run ./plexWatch.pl --format_options -- to see all
+#
+#       start = notificaion for start of video
+#       stop = notificaion for stop of video
+#       watched = cli output for watched content
+#       watching = cli output content being watched
+$alert_format = {'start'    =>  '{user} watching {title} on {platform}',
+		 'stop'     =>  '{user} watched {title} on {platform} for {duration}',
+		 'watched'  =>  '{user} watched {title} on {platform} for {duration}',
+		 'watching' =>  '{user} watched {title} on {platform}'
+};
+
+$notify = {
+
+    'file' => {
+    'enabled' => 1,  ## 0 or 1 - set to 1 to enable File Logging
+    'filename' => "$data_dir/plexWatch.log", ## default is plexWatch.log
+    },
+    
+   'prowl' => {
+       'enabled' => 0, ## 0 or 1 - set to 1 to enable PROWL
+       'apikey' => 'YOUR API KEY', ## your API key
+       'application' => $appname,
+       'priority' => 0,
+       'url' => '',
+       'collapse' => 0, ## will change formating if collapsed notification are set in prowl    
+    },
+    
+    'pushover' => {
+    'enabled' => 0, ## set to 1 to enable PushOver
+    'token' => 'YOUR APP TOKEN', ## your app token
+    'user' => 'YOUR USER TOKEN',  ## your user token
+    'title' => $appname,
+    'sound' => 'intermission',
+    },
+
+};

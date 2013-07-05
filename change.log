@@ -1,3 +1,14 @@
+# 0.0.12
+# * code cleanup - merge same routines in sub (&FriendlyName)
+# * alert cleanup - easier to update alert format when needed (and more standardized)
+   -- $alert_format added to config options (unique for stop and start)
+   -- can override on cli with --format_stop="..." and --format_start="..."
+   -- list available format options with --format_options
+# * cli --watching --watched format can now be edited by the user or specified on the cli
+# * config options moved into config.pl -- should be easier to upgrade version without having to edit the perl script each time
+# * config.pl-dist is included --- one must edit and copy it to config.pl
+# * File::Basename required -- to load config.pl
+
 # 0.0.11
 # * Season/Episode appended to alert.
 # * fixed bug in '-watching' cli options. friendly name fixed.
