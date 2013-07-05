@@ -32,7 +32,7 @@ plexWatch
 
 3) sudo cp /opt/plexWatch/config.pl-dist /opt/plexWatch/config.pl 
 
-3) sudo nano /opt/plexWatch/config.pl 
+3a) sudo nano /opt/plexWatch/config.pl 
 
 Modify Variables as needed:
 ```
