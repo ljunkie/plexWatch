@@ -3,9 +3,9 @@
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-07-05 14:09 PST
+# Modified: 2013-07-05 16:34 PST
 #
-#  Version: 0.0.12
+#  Version: 0.0.13-dev
 # https://github.com/ljunkie/plexWatch
 ##########################################
 
@@ -254,10 +254,10 @@ if ($options{'watched'}) {
     if ($options{stats}) {
 	printf ("\n======================================== %s ========================================\n",'Stats');
 	foreach my $user (keys %stats) {
-	    printf ("user: %s's total duration %s \n", $user, &durationrr($stats{$user}->{total_duration}));
+	    printf ("user: %s's total duration %s \n", $user, duration_exact($stats{$user}->{total_duration}));
 	    foreach my $epoch (sort keys %{$stats{$user}->{duration}}) {
 		my $h_date = strftime "%a %b %e %Y", localtime($epoch);
-		printf (" %s: %s %s\n", $h_date, $user, &durationrr($stats{$user}->{duration}->{$epoch}));
+		printf (" %s: %s %s\n", $h_date, $user, duration_exact($stats{$user}->{duration}->{$epoch}));
 	    }
 	    print "\n";
 	}
