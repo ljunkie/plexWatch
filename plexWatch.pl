@@ -45,11 +45,14 @@ my $format_options = {
     'title' => 'title',
     'start_start' => 'start_time',
     'stop_time' => 'stop_time',
-    'rating' => 'rating',
-    'year' => 'year',
-    'platform' => 'platform',
-    'summary' => 'summary',
-    'duration' => 'duration',
+    'rating' => 'rating of video - TV-MA, R, PG-13, etc',
+    'year' => 'year of video',
+    'platform' => 'client platform ',
+    'summary' => 'summary or video',
+    'duration' => 'duration watched',
+    'length' => 'length of video',
+    'progress' => 'progress of video [only available on --watching]',
+    'time_left' => 'progress of video [only available on --watching]',
 };
 
 if (!-d $data_dir) {
@@ -251,10 +254,10 @@ if ($options{'watched'}) {
     if ($options{stats}) {
 	printf ("\n======================================== %s ========================================\n",'Stats');
 	foreach my $user (keys %stats) {
-	    printf ("user: %s's total duration %s \n", $user, duration_exact($stats{$user}->{total_duration}));
+	    printf ("user: %s's total duration %s \n", $user, &durationrr($stats{$user}->{total_duration}));
 	    foreach my $epoch (sort keys %{$stats{$user}->{duration}}) {
 		my $h_date = strftime "%a %b %e %Y", localtime($epoch);
-		printf (" %s: %s %s\n", $h_date, $user, duration_exact($stats{$user}->{duration}->{$epoch}));
+		printf (" %s: %s %s\n", $h_date, $user, &durationrr($stats{$user}->{duration}->{$epoch}));
 	    }
 	    print "\n";
 	}
@@ -266,7 +269,8 @@ if ($options{'watched'}) {
 ## print content being watched
 if ($options{'watching'}) {
     my $in_progress = &GetInProgress();
-    
+    my $live = &GetSessions();    ## query API for current streams
+
     printf ("\n======================================= %s ========================================",'Watching');
     
     my %seen = ();
@@ -280,11 +284,11 @@ if ($options{'watching'}) {
 		$skip = 0 if $options{'user'} && $user_display->{$in_progress->{$k}->{user}} &&  $options{'user'} =~ /$user_display->{$in_progress->{$k}->{user}}/i; ## allow display_user
 	    }  else {	$skip = 0;    }
 	    next if $skip;
+	    my $live_key = (split("_",$k))[0];
 	    
 	    ## use display name 
 	    my $user = $in_progress->{$k}->{user};
 	    
-	    #print Dumper($in_progress);
 	    $user = $user_display->{$user} if $user_display->{$user};
 	    
 	    if (!$seen{$user}) {
@@ -293,9 +297,11 @@ if ($options{'watching'}) {
 	    }
 	    
 	    my $time = localtime ($in_progress->{$k}->{time} );
-	    #my $alert = sprintf(' %s: %s is watching: %s', $time,$user, $in_progress->{$k}->{title});
-	    #print $alert . "\n";
 	    my $info = &info_from_xml($in_progress->{$k}->{'xml'},'watching',$in_progress->{$k}->{time});
+	    
+	    $info->{'progress'} = &durationrr($live->{$live_key}->{viewOffset}/1000);
+	    $info->{'time_left'} = &durationrr(($info->{raw_length}/1000)-($live->{$live_key}->{viewOffset}/1000));
+	    
 	    my $alert = &Notify($info,1);
 	    printf(" %s: %s\n",$time, $alert);
 	}
@@ -814,7 +820,7 @@ sub getDuration() {
     
     #$diff = 0 if $diff < 0;  ## dirty.
     if ($diff > 0) {
-	return duration_exact($diff);
+	return &durationrr($diff);
     } else {
 	return 'unknown';
     }
@@ -843,6 +849,14 @@ sub FriendlyName() {
     return $user;
 }
 
+sub durationrr() {
+    my $sec = shift;
+    if ($sec < 3600) { 
+	return duration($sec,1);
+    }
+    return duration($sec,2);
+}
+
 sub info_from_xml() {
     my $hash = shift;
     my $ntype = shift;
@@ -863,10 +877,10 @@ sub info_from_xml() {
     if (!$duration) {
 	if ($time && $stop_epoch) {
 	    $duration = $stop_epoch-$time;
-	    $duration = duration_exact($duration);
+	    $duration = &durationrr($duration);
 	}    
     } else {
-	$duration = duration_exact($duration);
+	$duration = &durationrr($duration);
     }
     my ($rating,$year,$summary,$extra_title,$genre,$platform,$title,$episode,$season);    
     $rating = $year = $summary = $extra_title = $genre = $platform = $title = $episode = $season = '';
@@ -875,6 +889,16 @@ sub info_from_xml() {
     ## prefer title over platform if exists ( seem to have the exact same info of platform with useful extras )
     if ($vid->{Player}->{title}) {	$platform =  $vid->{Player}->{title};    }
     elsif ($vid->{Player}->{platform}) {	$platform = $vid->{Player}->{platform};    }
+
+    
+    my $length;
+    ## not sure which one is more valid.. {'TranscodeSession'}->{duration} or ->{duration}
+    if (!$vid->{duration}) {
+	$length = sprintf("%02d",$vid->{'TranscodeSession'}->{duration}/1000) if $vid->{'TranscodeSession'}->{duration};
+    } else {
+	$length = sprintf("%02d",$vid->{duration}/1000) if $vid->{duration};
+    }
+    $length = &durationrr($length);
     
     my $orig_user = (split('\@',$vid->{User}->{title}))[0];
     if (!$orig_user) {	$orig_user = 'Local';    }
@@ -923,6 +947,8 @@ sub info_from_xml() {
 	'platform' => $platform, 
 	'summary' => $summary,
 	'duration' => $duration,
+	'length' => $length,
+	'raw_length' =>  $vid->{duration},
 	'ntype' => $ntype,
     };
     
