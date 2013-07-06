@@ -30,7 +30,7 @@ if (!-e $dirname .'/config.pl') {
 }
 do $dirname.'/config.pl';
 use vars qw/$data_dir $server $port $notify_started $notify_stopped $appname $user_display $alert_format $notify/; 
-if (!$data_dir || !$server || !$port || !$notify_started || !$notify_stopped || !$appname || !$user_display || !$alert_format || !$notify) {
+if (!$data_dir || !$server || !$port || !$appname || !$alert_format || !$notify) {
     print "config file missing data\n";
     exit;
 }
