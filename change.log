@@ -1,3 +1,11 @@
+# 0.0.13-dev
+# * duation_exact change to durationrr (time precision will be in minutes)
+# * --stats time precision will still be seconds
+# * formatting options added
+#   {time_left}   :: time left until video is done. works only on --watching 
+#   - {length}    :: length of video (works for any)
+#   - {progress} :: current time watched in video
+
 # 0.0.12
 # * code cleanup - merge same routines in sub (&FriendlyName)
 # * alert cleanup - easier to update alert format when needed (and more standardized)
