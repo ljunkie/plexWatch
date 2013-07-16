@@ -3,7 +3,7 @@
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-07-15 17:32 PST
+# Modified: 2013-07-16 09:44 PST
 #
 #  Version: 0.0.13
 # https://github.com/ljunkie/plexWatch
@@ -98,8 +98,10 @@ my $dbh = &initDB();    ## Initialize sqlite db
 
 if ($options{'format_options'}) {
     print "\nFormat Options for alerts\n";
-    print "\n\t start: " . $alert_format->{'start'};
-    print "\n\t  stop: " . $alert_format->{'stop'};
+    print "\n\t    --start='" . $alert_format->{'start'} ."'";
+    print "\n\t     --stop='" . $alert_format->{'stop'} ."'";
+    print "\n\t  --watched='" . $alert_format->{'watched'} ."'";
+    print "\n\t --watching='" . $alert_format->{'watching'} ."'";
     print "\n\n";
     
     foreach my $k (keys %{$format_options}) {
