@@ -3,7 +3,7 @@
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-07-05 16:34 PST
+# Modified: 2013-07-15 17:05 PST
 #
 #  Version: 0.0.13-dev
 # https://github.com/ljunkie/plexWatch
@@ -126,7 +126,7 @@ if  ($options{test_notify}) {
 
 
 ## display the output is limited by user (display user)
-if ( ($options{'watched'} || $options{'watching'}) && $options{'user'}) {
+if ( ($options{'watched'} || $options{'watching'} || $options{'stats'}) && $options{'user'}) {
     my $extra = '';
     $extra = $user_display->{$options{'user'}} if $user_display->{$options{'user'}};
     foreach my $u (keys %{$user_display}) {
@@ -138,7 +138,7 @@ if ( ($options{'watched'} || $options{'watching'}) && $options{'user'}) {
 
 ####################################################################
 ## print all watched content
-if ($options{'watched'}) {
+if ($options{'watched'} || $options{'stats'}) {
     
     my $stop = time();
     my ($start,$limit_start,$limit_end);
@@ -160,8 +160,10 @@ if ($options{'watched'}) {
     my $is_watched = &GetWatched($start,$stop);
     
     ## already watched.
-    printf ("\n======================================== %s ========================================\n",'Watched');
-    print "Date Range: ";
+    if ($options{'watched'}) {
+	printf ("\n======================================== %s ========================================\n",'Watched');
+    }
+    print "\nDate Range: ";
     if ($limit_start) {	print $limit_start;    } 
     else {	print "Anytime";    }
     print ' through ';
@@ -205,6 +207,7 @@ if ($options{'watched'}) {
 	    $stats{$user}->{'duration'}->{$serial} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
 	    ## end
 	    
+	    next if !$options{'watched'};
 	    if ($options{'nogrouping'}) {
 		if (!$seen_user{$user}) {
 		    $seen_user{$user} = 1;
@@ -990,16 +993,33 @@ plexWatch.pl - Notify and Log 'Now Playing' content from a Plex Media Server
 plexWatch.pl [options]
 
   Options:
+
    -notify=...        Notify any content watched and or stopped [this is default with NO options given]
 
    -watched=...       print watched content
         -start=...         limit watched status output to content started AFTER/ON said date/time
         -stop=...          limit watched status output to content started BEFORE/ON said date/time
         -nogrouping        will show same title multiple times if user has watched/resumed title on the same day
-        -stats             show total watched time and show total watched time per day
         -user=...          limit output to a specific user. Must be exact, case-insensitive
 
    -watching=...      print content being watched
+
+   -stats             show total time watched / per day breakout included
+
+   ############################################################################################3
+ 
+   --format_options        : list all available formats for notifications and cli output
+
+   --format_start=".."     : modify start notification :: --format_start='{user} watching {title} on {platform}'
+ 
+   --format_stop=".."      : modify stop nottification :: --format_stop='{user} watched {title} on {platform} for {duration}'
+ 
+   --format_watched=".."   : modify cli output for --watched  :: --format_watched='{user} watched {title} on {platform} for {duration}'
+
+   --format_watching=".."  : modify cli output for --watching :: --format_watching='{user} watching {title} on {platform}'
+
+   ############################################################################################3
+   * Debug Options
 
    -show_xml          show xml result from api query
    -debug             hit and miss - not very useful
@@ -1066,12 +1086,6 @@ without --nogrouping [default]
  Sun Jun 30 15:46:02 2013: exampleUser watched: Star Trek [2009] [PG-13] [duration: 2 hours, 8 minutes, and 18 seconds]
 
 
-=item B<-stats>
-
-* only works with -watched
-
-show total watched time and show total watched time per day
-
 =item B<-user>
 
 * works with -watched and -watching
@@ -1081,6 +1095,10 @@ limit output to a specific user. Must be exact, case-insensitive
 =item B<-watching>
 
 Print a list of content currently being watched
+
+=item B<-stats>
+
+show total watched time and show total watched time per day
 
 =item B<-show_xml>
 

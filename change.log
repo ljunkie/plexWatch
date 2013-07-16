@@ -5,6 +5,7 @@
 #   {time_left}   :: time left until video is done. works only on --watching 
 #   - {length}    :: length of video (works for any)
 #   - {progress} :: current time watched in video
+# --stats can be used by itself now. No longer required to have --watched
 
 # 0.0.12
 # * code cleanup - merge same routines in sub (&FriendlyName)
