@@ -3,9 +3,9 @@
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-07-15 17:05 PST
+# Modified: 2013-07-15 17:32 PST
 #
-#  Version: 0.0.13-dev
+#  Version: 0.0.13
 # https://github.com/ljunkie/plexWatch
 ##########################################
 
@@ -458,8 +458,9 @@ sub Notify() {
     return &consoletxt($alert) if $ret_alert;
     
     if ($notify_started && $type =~ /start/ ||	$notify_stopped && $type =~ /stop/) {
-	if ($notify->{'prowl'}->{'enabled'}) {	    &NotifyProwl($alert,$type,$orig);	}
+	if ($notify->{'prowl'}->{'enabled'})    {     &NotifyProwl($alert,$type,$orig);	}
 	if ($notify->{'pushover'}->{'enabled'}) {     &NotifyPushOver($alert); }
+	if ($notify->{'growl'}->{'enabled'})    {     &NotifyGrowl($alert); }
     }
     
     my $console = &consoletxt("$date: $alert $extra"); 
@@ -807,6 +808,16 @@ sub NotifyPushOver() {
     }
 }
 
+sub NotifyGrowl() { 
+    my $alert = shift;
+    my %growl = %{$notify->{growl}};    
+    if (!-f  $growl{'script'} ) {
+	print STDERR "\nFailed to send GROWL notification -- $growl{'script'} does not exists\n";
+    } else {
+	system( $growl{'script'}, "-n", $growl{'appname'}, "--image", $growl{'icon'}, "-m", $alert); 
+    }
+}
+
 sub consoletxt() {
     ## remove line breaks and none ascii
     my $console = shift;
@@ -1021,8 +1032,9 @@ plexWatch.pl [options]
    ############################################################################################3
    * Debug Options
 
-   -show_xml          show xml result from api query
-   -debug             hit and miss - not very useful
+   -test_notify=start        send a test notifcation for a start event. To test a stop event use -test_notify=stop 
+   -show_xml                 show xml result from api query
+   -debug                    hit and miss - not very useful
 
 =head1 OPTIONS
 

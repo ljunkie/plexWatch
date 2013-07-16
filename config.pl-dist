@@ -50,4 +50,10 @@ $notify = {
     'sound' => 'intermission',
     },
 
+    'growl' => {
+        'enabled' => 0, ## set to 1 to enable local growl
+        'application' => $appname,
+	'script' => '/usr/local/bin/growlnotify',
+	'icon' => '/Applications/Plex Media Server.app/Contents/Resources/MyPlex.icns',
+    },
 };
