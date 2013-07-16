@@ -187,14 +187,14 @@ Date Range: Anytime through Now
 
 ======================================== Stats ========================================
 
-user: Tim & Meggan's total duration 3 hours and 56 seconds 
- Thu Jul 11 2013: Tim & Meggan 16 minutes and 58 seconds
- Fri Jul 12 2013: Tim & Meggan 1 hour, 41 minutes, and 59 seconds
- Sat Jul 13 2013: Tim & Meggan 1 hour, 1 minute, and 59 seconds
+user: Stans's total duration 3 hours and 56 seconds 
+ Thu Jul 11 2013: Stan 16 minutes and 58 seconds
+ Fri Jul 12 2013: Stan 1 hour, 41 minutes, and 59 seconds
+ Sat Jul 13 2013: Stan 1 hour, 1 minute, and 59 seconds
 
-user: Parents's total duration 2 hours, 43 minutes, and 2 seconds 
- Thu Jul  4 2013: Parents 57 minutes and 1 second
- Sun Jul 14 2013: Parents 1 hour, 46 minutes, and 1 second
+user: Franks's total duration 2 hours, 43 minutes, and 2 seconds 
+ Thu Jul  4 2013: Frank 57 minutes and 1 second
+ Sun Jul 14 2013: Frank 1 hour, 46 minutes, and 1 second
 ```
 
 

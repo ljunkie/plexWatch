@@ -1,4 +1,4 @@
-# 0.0.13-dev
+# 0.0.13
 # * duation_exact change to durationrr (time precision will be in minutes)
 # * --stats time precision will still be seconds
 # * formatting options added
