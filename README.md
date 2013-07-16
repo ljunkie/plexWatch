@@ -176,7 +176,7 @@ User: Carrie
 ```
 
 
-### Stats - showing a users total watched time and a breakout per day. 
+### Stats - users total watched time with total per day
 
 * --start, --stop, --user options can be supplied to limit the output
 
@@ -196,7 +196,6 @@ user: Parents's total duration 2 hours, 43 minutes, and 2 seconds
  Thu Jul  4 2013: Parents 57 minutes and 1 second
  Sun Jul 14 2013: Parents 1 hour, 46 minutes, and 1 second
 ```
-
 
 
 ### Notification format
