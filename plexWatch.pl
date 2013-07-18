@@ -3,9 +3,9 @@
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-07-16 09:44 PST
+# Modified: 2013-07-18 14:00 PST
 #
-#  Version: 0.0.13
+#  Version: 0.0.14-dev
 # https://github.com/ljunkie/plexWatch
 ##########################################
 
@@ -197,9 +197,14 @@ if ($options{'watched'} || $options{'stats'}) {
 	    $year += 1900;
 	    $month += 1;
 	    my $serial = parsedate("$year-$month-$day 00:00:00");
-	    ## end 
-	    
 	    my $skey = $is_watched->{$k}->{user}.$year.$month.$day.$is_watched->{$k}->{title};
+	    
+	    ## get previous day -- see if video same title was watched then -- if so -- group them together for display purposes. stats and --nogrouping will still show the break
+	    my ($sec2, $min2, $hour2, $day2,$month2,$year2) = (localtime($is_watched->{$k}->{time}-86400))[0,1,2,3,4,5]; 
+	    $year2 += 1900;
+	    $month2 += 1;
+	    my $skey2 = $is_watched->{$k}->{user}.$year2.$month2.$day2.$is_watched->{$k}->{title};
+	    if ($seen{$skey2}) {		$skey = $skey2;	    }
 	    
 	    ## use display name 
 	    my $user = &FriendlyName($is_watched->{$k}->{user});

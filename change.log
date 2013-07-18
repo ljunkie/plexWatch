@@ -1,3 +1,8 @@
+# 0.0.14-dev
+# * --watched -- join the same show title in one line if it was watched into the next day. 
+#	I.E. Movie1 watdched from 11pm - 1am:  would noramlly show two lines.. 1 from 11pm-11:59pm and 2 from 12am-1am. Now it will just show one
+#
+
 # 0.0.13
 # * duation_exact change to durationrr (time precision will be in minutes)
 # * --stats time precision will still be seconds
