@@ -4,13 +4,15 @@ plexWatch
 ***Notify*** and Log ***'Now Playing'*** content from a Plex Media Server
 
 **Suported Push Notifications** 
-* https://pushover.net (not fully tested - want to gift me the app for iOS/android?)
-* https://prowlapp.com (tested)
+* https://pushover.net
+* https://prowlapp.com
+* http://http://growl.info/ (via GrowlInotify @ http://growl.info/downloads#generaldownloads)
 
 **What it does**
 * Checks if a video has been started or stopped - log and notify
-* Notifies via prowl, pushover and/or a log file
+* Notifies via prowl, pushover, growl and/or a log file
 * backed by a sqlite DB (for state and history)
+* CLI to query watched videos, videos being watched and stats on time watched per user
 
 ###Perl Requirements
 
