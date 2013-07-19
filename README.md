@@ -6,7 +6,7 @@ plexWatch
 **Suported Push Notifications** 
 * https://pushover.net
 * https://prowlapp.com
-* http://http://growl.info/ (via GrowlInotify @ http://growl.info/downloads#generaldownloads)
+* http://growl.info/ (via GrowlInotify @ http://growl.info/downloads#generaldownloads)
 
 **What it does**
 * Checks if a video has been started or stopped - log and notify
