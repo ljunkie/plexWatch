@@ -189,7 +189,7 @@ if ($options{'recently_added'}) {
 	    $alert .= " [$media]" if $media;
 	    $alert .= " [$add_date]";
 	    #$twitter = $alert; ## movies are normally short enough.
-	    $alert_url .= ' http://www.imdb.com/find?s=tt&q=' . uri_escape($item->{'imdb_title'});
+	    $alert_url .= ' http://www.imdb.com/find?s=tt&q=' . uri_escape_utf8($item->{'imdb_title'});
 	}
 	
 	## tv show alert
@@ -207,7 +207,7 @@ if ($options{'recently_added'}) {
 	    #$twitter .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
 	    #$twitter .= " [$media]" if $media;
 	    #$twitter .= " [$add_date]";
-	    $alert_url .= ' http://www.imdb.com/find?s=tt&q=' . uri_escape($item->{'imdb_title'});
+	    $alert_url .= ' http://www.imdb.com/find?s=tt&q=' . uri_escape_utf8($item->{'imdb_title'});
 	}
 	
 	$alerts->{$item->{addedAt}.$k}->{'alert'} = 'NEW: '.$alert;
@@ -1107,6 +1107,10 @@ sub NotifyTwitter() {
     ## cleanup spaces
     $alert =~ s/\s+$//g;
     $alert =~ s/\s\s/ /g;
+
+    if ($debug) {
+	print "Twitter Alert: $alert\n";
+    }
     
     my %tw = %{$notify->{'twitter'}};        
     my $nt = Net::Twitter::Lite::WithAPIv1_1->new(
