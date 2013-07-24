@@ -3,9 +3,9 @@
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-07-18 14:00 PST
+# Modified: 2013-07-23 06:07 PST
 #
-#  Version: 0.0.14
+#  Version: 0.0.15-dev
 # https://github.com/ljunkie/plexWatch
 ##########################################
 
@@ -20,6 +20,7 @@ use Pod::Usage;
 use Fcntl qw(:flock);
 use Time::ParseDate;
 use POSIX qw(strftime);
+use URI::Escape;
 
 ## load config file
 use File::Basename;
@@ -35,6 +36,7 @@ if (!$data_dir || !$server || !$port || !$appname || !$alert_format || !$notify)
     exit;
 }
 ## end
+
 
 ########################################## END CONFIG #######################################################
 
@@ -70,6 +72,7 @@ GetOptions(\%options,
            'nogrouping',
            'stats',
            'user:s',
+           'exclude_user:s@',
            'watching',
 	   'notify',
            'debug',
@@ -81,11 +84,11 @@ GetOptions(\%options,
            'format_watching:s',
            'format_options',
 	   'test_notify:s',
+	   'recently_added:s',
 	   'show_xml',
            'help|?'
     ) or pod2usage(2);
 pod2usage(-verbose => 2) if (exists($options{'help'}));
-
 
 my $debug = $options{'debug'};
 my $debug_xml = $options{'show_xml'};
@@ -94,7 +97,7 @@ if ($options{debug}) {
 }
 
 my $date = localtime;
-my $dbh = &initDB();    ## Initialize sqlite db
+my $dbh = &initDB(); ## Initialize sqlite db
 
 if ($options{'format_options'}) {
     print "\nFormat Options for alerts\n";
@@ -127,6 +130,163 @@ if  ($options{test_notify}) {
 ########################################## START MAIN #######################################################
 
 
+
+
+
+####################################################################
+## RECENTLY ADDED 
+if ($options{'recently_added'}) {
+    my $ra_done = &GetRecentlyAddedDB();
+    my ($want,$hkey);
+    if ($options{'recently_added'} =~ /movie/i) {
+	$want = 'movie';
+	$hkey = 'Video';
+    } elsif ($options{'recently_added'} =~ /show|tv/i) {
+	$want = 'show';
+	$hkey = 'Video';
+    }
+    
+    ## maybe someday.. TODO
+    #}    elsif ($options{'recently_added'} =~ /artists|music/i) {
+    #	$want = 'artist';
+    #	$hkey = 'Directory';
+    
+    if (!$want) {
+	#print "\n 'recently_added' must be: movie, show or artist\n\n";
+	print "\n 'recently_added' must be: 'movie' or 'show' \n\n";
+	exit;
+    }
+    
+    my $plex_sections = &GetSectionsIDs();
+    my $info = &GetRecentlyAdded($plex_sections->{'types'}->{$want});
+    my $alerts = (); # containers to push alerts from oldest -> newest
+    foreach my $k (keys %{$info->{$hkey}}) {
+	## container for debug message
+	my $debug_done =  "already notified [$k]: ";
+	$debug_done .= $info->{$hkey}->{$k}->{'grandparentTitle'} . ' - ' if $info->{$hkey}->{$k}->{'grandparentTitle'};
+	$debug_done .= $info->{$hkey}->{$k}->{'title'} if $info->{$hkey}->{$k}->{'title'};
+	$debug_done .= "\n";
+	
+	my $item = &ParseDataItem($info->{$hkey}->{$k},$want);
+	my $alert = 'unknown type';
+	my ($alert_url,$alert_short);
+	my $add_date = &twittime($item->{addedAt});
+	
+	my $media;
+	$media .= $item->{'videoResolution'}.'p ' if $item->{'videoResolution'};
+	$media .= $item->{'audioChannels'}.'ch' if $item->{'audioChannels'};
+	#my $twitter; #twitter sucks... has to be short. --- might use this later.
+	
+	## movie alert
+	if ($want eq 'movie') {
+	    $alert = $item->{'title'};
+	    $alert_short = $item->{'title'};
+	    $alert .= " [$item->{'contentRating'}]" if $item->{'contentRating'};
+	    $alert .= " [$item->{'year'}]";
+	    $alert .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
+	    $alert .= " [$media]" if $media;
+	    $alert .= " [$add_date]";
+	    #$twitter = $alert; ## movies are normally short enough.
+	    $alert_url .= ' http://www.imdb.com/find?s=tt&q=' . uri_escape($item->{'imdb_title'});
+	}
+	
+	## tv show alert
+	if ($want eq 'show') {
+	    $alert = $item->{'title'};
+	    $alert_short = $item->{'title'};
+	    $alert .= " [$item->{'contentRating'}]" if $item->{'contentRating'};
+	    $alert .= " [$item->{'year'}]";
+	    $alert .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
+	    $alert .= " [$media]" if $media;
+	    $alert .= " [$add_date]";
+
+	    #$twitter = $item->{'title'};
+	    #$twitter .= " [$item->{'year'}]";
+	    #$twitter .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
+	    #$twitter .= " [$media]" if $media;
+	    #$twitter .= " [$add_date]";
+	    $alert_url .= ' http://www.imdb.com/find?s=tt&q=' . uri_escape($item->{'imdb_title'});
+	}
+	
+	$alerts->{$item->{addedAt}.$k}->{'alert'} = 'NEW: '.$alert;
+	$alerts->{$item->{addedAt}.$k}->{'alert_short'} = 'NEW: '.$alert_short;
+	$alerts->{$item->{addedAt}.$k}->{'item_id'} = $k;
+	$alerts->{$item->{addedAt}.$k}->{'debug_done'} = $debug_done;
+	$alerts->{$item->{addedAt}.$k}->{'alert_url'} = $alert_url;
+	#$alerts->{$item->{addedAt}.$k}->{'alert_tag'} = 'new'.ucfirst($want); ## twitter msg too long
+    }
+    
+    my $count = 0;
+    foreach my $k ( sort keys %{$alerts}) {
+	$count++;
+	my $item_id = $alerts->{$k}->{'item_id'};
+	my $debug_done = $alerts->{$k}->{'debug_done'};
+	&ProcessRecentlyAdded($item_id);  ## add item to DB -- will ignore insert if already inserte.. wish sqlite has upsert
+	
+	my $push_type = 'push_recentlyadded';
+	my $provider;
+	
+	## 'recently_added' table has columns for each provider -- we will notify and verify each provider has success. 
+	## TODO - extend this logic into the normal notifications
+	$provider = 'prowl';
+	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
+	    if ($ra_done->{$item_id}->{$provider}) {
+		print $provider . ' ' . $debug_done if $debug;
+	    } 
+	    elsif (&NotifyProwl($alerts->{$k}->{'alert'},'',$alerts->{$k}->{'alert_short'})) {
+		&SetNotified_RA($provider,$item_id);
+	    } 
+	    else {
+		print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
+	    }
+	}
+	
+	$provider = 'pushover';
+	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
+	    if ($ra_done->{$item_id}->{$provider}) {
+		print $provider . ' ' . $debug_done if $debug;
+	    } 
+	    elsif (&NotifyPushOver($alerts->{$k}->{'alert'})) {
+		&SetNotified_RA($provider,$item_id);
+	    } 
+	    else {
+		print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
+	    }
+	}
+	
+	$provider = 'growl';
+	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
+	    if ($ra_done->{$item_id}->{$provider}) {
+		print $provider . ' ' . $debug_done if $debug;
+	    } 
+	    elsif (&NotifyGrowl($alerts->{$k}->{'alert'})) {
+		&SetNotified_RA($provider,$item_id);
+	    } 
+	    else {
+		print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
+	    }
+	}
+	
+	$provider = 'twitter';
+	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
+	    if ($ra_done->{$item_id}->{$provider}) {
+		print $provider . ' ' . $debug_done if $debug;
+	    } 
+	    elsif (&NotifyTwitter($alerts->{$k}->{'alert'},$alerts->{$k}->{'alert_tag'},$alerts->{$k}->{'alert_url'})) {
+		&SetNotified_RA($provider,$item_id);
+	    } 
+	    else {
+		print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
+	    }
+	}
+    }
+}
+
+
+###############################################################################################################3
+## --watched, --watching, --stats
+
+####################################################################
 ## display the output is limited by user (display user)
 if ( ($options{'watched'} || $options{'watching'} || $options{'stats'}) && $options{'user'}) {
     my $extra = '';
@@ -138,8 +298,10 @@ if ( ($options{'watched'} || $options{'watching'} || $options{'stats'}) && $opti
     printf("\n* Limiting results to %s %s\n", $options{'user'}, $extra);
 }
 
+
 ####################################################################
-## print all watched content
+## print all watched content 
+##--watched
 if ($options{'watched'} || $options{'stats'}) {
     
     my $stop = time();
@@ -183,6 +345,10 @@ if ($options{'watched'} || $options{'stats'}) {
 				 $is_watched->{$a}->{time} cmp $is_watched->{$b}->{'time'} } (keys %{$is_watched}) ) {
 	    ## clean this up at some point -- skip user if user and/or display user is not = to specified 
 	    my $skip =1;
+	    ## --exclude_user array ref
+	    next if ( grep { $_ =~ /$is_watched->{$k}->{'user'}/i } @{$options{'exclude_user'}});
+	    next if ( $user_display->{$is_watched->{$k}->{user}}  && grep { $_ =~ /$user_display->{$is_watched->{$k}->{user}}/i } @{$options{'exclude_user'}});
+	    
 	    if ($options{'user'}) {
 	    	$skip = 0 if $options{'user'} &&  $options{'user'} =~ /$is_watched->{$k}->{user}/i; ## allow real user
 		$skip = 0 if $options{'user'} && $user_display->{$is_watched->{$k}->{user}} &&  $options{'user'} =~ /$user_display->{$is_watched->{$k}->{user}}/i; ## allow display_user
@@ -207,7 +373,7 @@ if ($options{'watched'} || $options{'stats'}) {
 	    if ($seen{$skey2}) {		$skey = $skey2;	    }
 	    
 	    ## use display name 
-	    my $user = &FriendlyName($is_watched->{$k}->{user});
+	    my ($user,$orig_user) = &FriendlyName($is_watched->{$k}->{user});
 	    
 	    ## stat -- quick and dirty -- to clean up later
 	    $stats{$user}->{'total_duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
@@ -218,7 +384,9 @@ if ($options{'watched'} || $options{'stats'}) {
 	    if ($options{'nogrouping'}) {
 		if (!$seen_user{$user}) {
 		    $seen_user{$user} = 1;
-		    print "\nUser: " . $user . "\n";
+		    print "\nUser: " . $user;
+		    print ' ['. $orig_user .']' if $user ne $orig_user;
+		    print "\n";
 		}
 		my $time = localtime ($is_watched->{$k}->{time} );
 		my $info = &info_from_xml($is_watched->{$k}->{'xml'},$ntype,$is_watched->{$k}->{'time'},$is_watched->{$k}->{'stopped'});
@@ -229,6 +397,7 @@ if ($options{'watched'} || $options{'stats'}) {
 		    $seen{$skey}->{'time'} = $is_watched->{$k}->{time};
 		    $seen{$skey}->{'xml'} = $is_watched->{$k}->{xml};
 		    $seen{$skey}->{'user'} = $user;
+		    $seen{$skey}->{'orig_user'} = $orig_user;
 		    $seen{$skey}->{'stopped'} = $is_watched->{$k}->{stopped};
 		    $seen{$skey}->{'duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
 		} else {
@@ -250,7 +419,9 @@ if ($options{'watched'} || $options{'stats'}) {
 		       } (keys %seen) ) {
 	    if (!$seen_user{$seen{$k}->{user}}) {
 		$seen_user{$seen{$k}->{user}} = 1;
-		print "\nUser: " . $seen{$k}->{user} . "\n";
+		print "\nUser: " . $seen{$k}->{user};
+		print ' ['. $seen{$k}->{orig_user} .']' if $seen{$k}->{user} ne $seen{$k}->{orig_user};
+		print "\n";
 	    }
 	    my $time = localtime ($seen{$k}->{time} );
 	    my $info = &info_from_xml($seen{$k}->{xml},$ntype,$seen{$k}->{'time'},$seen{$k}->{'stopped'},$seen{$k}->{'duration'});
@@ -259,7 +430,7 @@ if ($options{'watched'} || $options{'stats'}) {
 	}
     }
     print "\n";
-
+    
     ## show stats if --stats
     if ($options{stats}) {
 	printf ("\n======================================== %s ========================================\n",'Stats');
@@ -275,12 +446,14 @@ if ($options{'watched'} || $options{'stats'}) {
 }
 
 
+
 #####################################################
 ## print content being watched
+##--watching
 if ($options{'watching'}) {
     my $in_progress = &GetInProgress();
     my $live = &GetSessions();    ## query API for current streams
-
+    
     printf ("\n======================================= %s ========================================",'Watching');
     
     my %seen = ();
@@ -289,6 +462,11 @@ if ($options{'watching'}) {
 	foreach my $k (sort { $in_progress->{$a}->{user} cmp $in_progress->{$b}->{'user'} || $in_progress->{$a}->{time} cmp $in_progress->{$b}->{'time'} } (keys %{$in_progress}) ) {
 	    ## clean this up at some point -- skip user if user and/or display user is not = to specified 
 	    my $skip =1;
+	    
+	    ## --exclude_user array ref
+	    next if ( grep { $_ =~ /$in_progress->{$k}->{'user'}/i } @{$options{'exclude_user'}});
+	    next if ( $user_display->{$in_progress->{$k}->{user}}  && grep { $_ =~ /$user_display->{$in_progress->{$k}->{user}}/i } @{$options{'exclude_user'}});
+	    
 	    if ($options{'user'}) {
 	    	$skip = 0 if $options{'user'} &&  $options{'user'} =~ /$in_progress->{$k}->{user}/i; ## allow real user
 		$skip = 0 if $options{'user'} && $user_display->{$in_progress->{$k}->{user}} &&  $options{'user'} =~ /$user_display->{$in_progress->{$k}->{user}}/i; ## allow display_user
@@ -297,13 +475,13 @@ if ($options{'watching'}) {
 	    my $live_key = (split("_",$k))[0];
 	    
 	    ## use display name 
-	    my $user = $in_progress->{$k}->{user};
-	    
-	    $user = $user_display->{$user} if $user_display->{$user};
+	    my ($user,$orig_user) = &FriendlyName($in_progress->{$k}->{user});
 	    
 	    if (!$seen{$user}) {
 		$seen{$user} = 1;
-		print "\nUser: " . $user . "\n";
+		print "\nUser: " . $user;
+		print ' ['. $orig_user .']' if $user ne $orig_user;
+		print "\n";
 	    }
 	    
 	    my $time = localtime ($in_progress->{$k}->{time} );
@@ -320,20 +498,19 @@ if ($options{'watching'}) {
     print " \n";
 }
 
-if (%options && !$options{'notify'}) {
-    if ($debug || $debug_xml) {
-	print "\n* Skipping any Notifictions -- command line options set, use '--notify' or supply no options to enable notifications\n";
-    }
+## no options -- we can continue.. otherwise --stats, --watched, --watching or --notify MUST be specified
+if (%options && !$options{'notify'} && !$options{'stats'} && !$options{'watched'} && !$options{'watching'} && !$options{'recently_added'} ) {
+    print "\n* Skipping any Notifictions -- command line options set, use '--notify' or supply no options to enable notifications\n";
     exit;
 }
 
 #################################################################
 ## Notify -notify || no options = notify on watch/stopped streams
+##--notify
 if (!%options || $options{'notify'}) {
     my $vid = &GetSessions();    ## query API for current streams
     my $started= &GetStarted(); ## query streams already started/not stopped
     my $playing = ();            ## container of now playing id's - used for stopped status/notification
-    
     
     ###########################################################################
     ## nothing being watched.. verify all notification went out
@@ -356,7 +533,6 @@ if (!%options || $options{'notify'}) {
     }
     ## end unnotified
     
-
     ## Quick hack to notify stopped content before start -- get a list of playing content
     foreach my $k (keys %{$vid}) {
 	my $user = (split('\@',$vid->{$k}->{User}->{title}))[0];
@@ -408,9 +584,8 @@ if (!%options || $options{'notify'}) {
 	## ignore content that has already been notified
 	if ($started->{$db_key}) {
 	    if ($debug) { 
-		## set notifcation again - start day will be off for now.
 		&Notify($info);
-		print &consoletxt("Already Notified") . "\n"; 
+		print &consoletxt("Already Notified -- Sent again due to --debug") . "\n"; 
 	    };
 	} 
 	## unnotified - insert into DB and notify
@@ -445,7 +620,7 @@ sub formatAlert() {
 	$format = $alert_format->{'watching'};
 	$orig = $orig_watching;
     }
-    if ($debug) { print "format: $format\n";}
+    if ($debug) { print "\nformat: $format\n";}
     my $s = $format;
     my $regex = join "|", keys %alert;
     $regex = qr/$regex/;
@@ -461,18 +636,9 @@ sub Notify() {
     my ($alert,$orig) = &formatAlert($info);
     my $extra = ''; ## clean me
     
-    ## only return the alert - do not notify -- used for CLI to keep formatting the same
-    return &consoletxt($alert) if $ret_alert;
-    
-    if ($notify_started && $type =~ /start/ ||	$notify_stopped && $type =~ /stop/) {
-	if ($notify->{'prowl'}->{'enabled'})    {     &NotifyProwl($alert,$type,$orig);	}
-	if ($notify->{'pushover'}->{'enabled'}) {     &NotifyPushOver($alert); }
-	if ($notify->{'growl'}->{'enabled'})    {     &NotifyGrowl($alert); }
-    }
-    
     my $console = &consoletxt("$date: $alert $extra"); 
     
-    if ($debug || $options{test_notify}) {	print $console ."\n";    }
+    if ($debug || $options{test_notify}) {	print   $console ."\n";    }
     
     ## file logging
     if ($notify->{'file'}->{'enabled'}) {	
@@ -481,6 +647,56 @@ sub Notify() {
 	close(FILE);
     }
     
+    ## --exclude_user array ref -- do not notify if user is excluded.. however continue processing -- logging to DB - logging to file still happens.
+    return 1 if ( grep { $_ =~ /$info->{'orig_user'}/i } @{$options{'exclude_user'}});
+    return 1 if ( grep { $_ =~ /$info->{'user'}/i } @{$options{'exclude_user'}});
+    
+    ## only return the alert - do not notify -- used for CLI to keep formatting the same
+    return &consoletxt($alert) if $ret_alert;
+    
+    ## started :: watching
+    if ($notify_started && $type =~ /start/) {
+	if ($notify->{'prowl'}->{'enabled'} && $notify->{'prowl'}->{'push_watching'})       { &NotifyProwl($alert,$type,$orig); }
+	if ($notify->{'pushover'}->{'enabled'} && $notify->{'pushover'}->{'push_watching'}) { &NotifyPushOver($alert);          }
+	if ($notify->{'growl'}->{'enabled'} && $notify->{'growl'}->{'push_watching'})       { &NotifyGrowl($alert);             }
+	if ($notify->{'twitter'}->{'enabled'} && $notify->{'twitter'}->{'push_watching'})   { &NotifyTwitter($alert);             }
+    }
+    
+    ## stopped :: watched
+    if ($notify_stopped && $type =~ /stop/) {    
+	if ($notify->{'prowl'}->{'enabled'} && $notify->{'prowl'}->{'push_watched'})       { &NotifyProwl($alert,$type,$orig); }
+	if ($notify->{'pushover'}->{'enabled'} && $notify->{'pushover'}->{'push_watched'}) { &NotifyPushOver($alert);          }
+	if ($notify->{'growl'}->{'enabled'} && $notify->{'growl'}->{'push_watched'})       { &NotifyGrowl($alert);             }
+	if ($notify->{'twitter'}->{'enabled'} && $notify->{'twitter'}->{'push_watched'})   { &NotifyTwitter($alert);             }
+    }
+}
+
+
+sub RawNotify() {
+    ### not used yet... probably never will be. -- to remove later
+    my $alert = shift;
+    my $push_type = shift; #[push_watched, push_watching or push_recently_added]
+    
+    my $ret_alert = shift;
+    
+    ## only return the alert - do not notify -- used for CLI to keep formatting the same
+    return &consoletxt($alert) if $ret_alert;
+    
+    if ($notify->{'prowl'}->{'enabled'} && $notify->{'prowl'}->{$push_type})       { &NotifyProwl($alert);    }
+    if ($notify->{'pushover'}->{'enabled'} && $notify->{'pushover'}->{$push_type}) { &NotifyPushOver($alert); }
+    if ($notify->{'growl'}->{'enabled'} && $notify->{'growl'}->{$push_type})       { &NotifyGrowl($alert);    }
+    if ($notify->{'twitter'}->{'enabled'} && $notify->{'twitter'}->{$push_type})   { &NotifyTwitter($alert);  }
+    
+    
+    my $console = &consoletxt("$date: raw[$push_type] $alert"); 
+    if ($debug || $options{test_notify}) {	print $console ."\n";    }
+    
+    ## file logging
+    if ($notify->{'file'}->{'enabled'}) {	
+	open FILE, ">>", $notify->{'file'}->{'filename'}  or die $!;
+	print FILE "$console\n";
+	close(FILE);
+    }
 }
 
 sub ProcessStart() {
@@ -491,6 +707,21 @@ sub ProcessStart() {
     $sth->execute($db_key,$title,$platform,$user,$orig_title,$orig_title_ep,$genre,$episode,$season,$summary,$rating,$year,$xml) or die("Unable to execute query: $dbh->errstr\n");
     
     return  $dbh->sqlite_last_insert_rowid();
+}
+
+
+sub ProcessRecentlyAdded() {
+    my ($db_key) = @_;
+    my $cmd = "select item_id from recently_added where item_id = '$db_key'";
+    my $sth = $dbh->prepare($cmd);
+    $sth->execute or die("Unable to execute query: $dbh->errstr\n");
+    my @row = $sth->fetchrow_array;
+    
+    if (!$row[0]) {
+	$sth = $dbh->prepare("insert into recently_added (item_id) values (?)");
+	$sth->execute($db_key) or die("Unable to execute query: $dbh->errstr\n");
+    }
+    
 }
 
 sub GetSessions() {
@@ -565,6 +796,16 @@ sub GetStarted() {
     return $info;
 }
 
+sub GetRecentlyAddedDB() {
+    my $info = ();
+    my $cmd = "select * from recently_added";
+    my $sth = $dbh->prepare($cmd);
+    $sth->execute or die("Unable to execute query: $dbh->errstr\n");
+    while (my $row_hash = $sth->fetchrow_hashref) {
+	$info->{$row_hash->{'item_id'}} = $row_hash;
+    }
+    return $info;
+}
 
 sub GetWatched() {
     my $info = ();
@@ -603,7 +844,16 @@ sub SetNotified() {
     }
 }
 
-
+sub SetNotified_RA() {
+    my $provider = shift;
+    my $id = shift;
+    if ($id) {
+	my $cmd = "update recently_added set $provider = 1 where item_id = '$id'";
+	print $cmd . "\n" if ($debug);
+	my $sth = $dbh->prepare($cmd);
+	$sth->execute or die("Unable to execute query: $dbh->errstr\n");
+    }
+}
 
 sub SetStopped() {
     my $db_key = shift;
@@ -704,6 +954,87 @@ sub initDB() {
 	    unless ( $dbidx_exists{$idx->{'name'}} );
     }
     
+    ## future tables..
+    
+    &DB_ra_table($dbh);  ## verify/create RecentlyAdded table
+    
+    return $dbh;
+}
+
+sub DB_ra_table() {
+    ## verify Recnetly Added table
+    my $dbh = shift;
+    my $dbtable = 'recently_added';
+    my $sth = $dbh->prepare("SELECT name FROM SQLITE_MASTER");
+    $sth->execute or die("Unable to execute query: $dbh->errstr\n");
+    #ALTER TABLE Name ADD COLUMN new_column INTEGER DEFAULT 0
+    my %tables;
+    while (my @tmp = $sth->fetchrow_array) {    foreach (@tmp) {        $tables{$_} = $_;    }}
+    if ($tables{$dbtable}) { }
+    else {
+        my $cmd = "CREATE TABLE $dbtable (item_id text primary key, time timestamp default (strftime('%s', 'now')) );";
+        my $result_code = $dbh->do($cmd) or die("Unable to prepare execute $cmd: $dbh->errstr\n");
+    }
+    
+    ## Add new columns/indexes on the fly  -- and change definitions
+    my @dbcol = (
+	{ 'name' => 'debug', 'definition' => 'text',},
+	{ 'name' => 'twitter', 'definition' => 'INTEGER',},
+	{ 'name' => 'growl', 'definition' => 'INTEGER',},
+	{ 'name' => 'prowl', 'definition' => 'INTEGER',},
+	{ 'name' => 'pushover', 'definition' => 'INTEGER',},
+	
+	);
+    
+    my @dbidx = (
+	{ 'name' => 'itemIds', 'table' => 'item_id', },
+	); 
+    
+    &initDBtable($dbh,$dbtable,\@dbcol);
+    
+    
+    ## check definitions
+    my %dbcol_exists = ();
+    
+    for ( @{ $dbh->selectall_arrayref( "PRAGMA TABLE_INFO($dbtable)") } ) { 
+	$dbcol_exists{$_->[1]} = $_->[2]; 
+    };
+    
+    ## alter table defintions if needed
+    my $alter_def = 0;
+    for my $col ( @dbcol ) {
+	if ($dbcol_exists{$col->{'name'}} && $dbcol_exists{$col->{'name'}} ne $col->{'definition'}) {	    $alter_def =1;	}
+    }
+    
+    if ($alter_def) {
+	print "New Table definitions.. upgrading DB\n";
+	$dbh->begin_work;
+	
+	eval {
+	    local $dbh->{RaiseError} = 1;
+	    my $tmp_table = 'tmp_update_table';
+	    &initDBtable($dbh,$tmp_table,\@dbcol); ## create DB table with new sturction
+	    $dbh->do("INSERT INTO $tmp_table SELECT * FROM $dbtable");
+	    $dbh->do("DROP TABLE $dbtable");
+	    $dbh->do("ALTER TABLE $tmp_table RENAME TO $dbtable");
+	    $dbh->commit; 
+	};
+	if ($@) {
+	    print "Could not upgrade table defintions - Transaction aborted because $@\n";
+	    eval { $dbh->rollback };
+	}
+	print "DB update DONE\n";
+    }
+    
+    ## now verify indexes
+    my %dbidx_exists = ();
+    for ( @{ $dbh->selectall_arrayref( "PRAGMA INDEX_LIST($dbtable)") } ) { 
+	$dbidx_exists{$_->[1]} = 1; };
+    for my $idx ( @dbidx ) {
+	if ($debug) { print "CREATE INDEX $idx->{'name'} ON $dbtable ($idx->{'table'})\n" unless ( $dbidx_exists{$idx->{'name'}} ); }
+	$dbh->do("CREATE INDEX $idx->{'name'} ON $dbtable ($idx->{'table'})")
+	    unless ( $dbidx_exists{$idx->{'name'}} );
+    }
     return $dbh;
 }
 
@@ -732,9 +1063,50 @@ sub initDBtable() {
 	    $dbh->do("ALTER TABLE $dbtable ADD COLUMN $col->{'name'} $col->{'definition'}");
 	}
     }
-    ## update any old colums that just had 1 set for stopped -- no need for this
-    #$dbh->do("update processed set stopped = time where stopped = 1");
+}
 
+sub NotifyTwitter() {
+    use Net::Twitter::Lite::WithAPIv1_1;
+    use Scalar::Util 'blessed';
+    my $alert = shift;
+    my $tag = shift;
+    my $url = shift;
+    
+    if ($tag) {	$alert .= ' #'.$appname.'_'.$tag;    }
+    
+    ## trim down alert..
+    if (length($alert) > 139) {	$alert = substr($alert,0,140);    }
+    
+    ## url can be appended - twitter allows it even if the alert is 140 chars -- well it looks like 115 is max if URL is included..
+    if ($url) {
+	if (length($alert) > 114) {	$alert = substr($alert,0,114);    }
+	$alert .= ' '. $url;   
+    }
+    
+    ## cleanup spaces
+    $alert =~ s/\s+$//g;
+    $alert =~ s/\s\s/ /g;
+    
+    my %tw = %{$notify->{'twitter'}};        
+    my $nt = Net::Twitter::Lite::WithAPIv1_1->new(
+	consumer_key        => $tw{'consumer_key'},
+	consumer_secret     => $tw{'consumer_secret'},
+	access_token        => $tw{'access_token'},
+	access_token_secret => $tw{'access_token_secret'},
+	);
+    my $result = eval { $nt->update($alert); };
+    
+    if ( my $err = $@ ) {
+	#die $@ unless blessed $err && $err->isa('Net::Twitter::Lite::Error');
+	if ($debug) {
+	    warn "HTTP Response Code: ", $err->code, "\n",
+	    "HTTP Message......: ", $err->message, "\n",
+	    "Twitter error.....: ", $err->error, "\n";
+	}
+	return 0;
+    }
+    
+    return 1;
 }
 
 sub NotifyProwl() {
@@ -750,8 +1122,6 @@ sub NotifyProwl() {
 	#$prowl{'application'} .= ' - ' . shift(@p);
 	$prowl{'event'} = $orig;
     }
-
-
     
     $prowl{'priority'} ||= 0;
     $prowl{'application'} ||= $appname;
@@ -786,12 +1156,14 @@ sub NotifyProwl() {
     $response = $userAgent->request($request);
     
     if ($response->is_success) {
-	if ($debug) { print "PROWL - Notification successfully posted.\n";}
+	if ($debug) { 	    print "PROWL - Notification successfully posted.\n";}
+	return 1;
     } elsif ($response->code == 401) {
 	print STDERR "PROWL - Notification not posted: incorrect API key.\n";
     } else {
 	print STDERR "PROWL - Notification not posted: " . $response->content . "\n";
     }
+    return 0; # failed
 }
 
 sub NotifyPushOver() {
@@ -809,9 +1181,11 @@ sub NotifyPushOver() {
 			      ]);
     my $content  = $response->decoded_content();
     if ($content !~ /\"status\":1/) {
+	return 0;
 	print "Failed to post PushOver notification -- $content\n";
     } else {
 	if ($debug) { print "PushOver - Notification successfully posted. $content\n";}
+	return 1;
     }
 }
 
@@ -820,8 +1194,10 @@ sub NotifyGrowl() {
     my %growl = %{$notify->{growl}};    
     if (!-f  $growl{'script'} ) {
 	print STDERR "\nFailed to send GROWL notification -- $growl{'script'} does not exists\n";
+	return 0;
     } else {
 	system( $growl{'script'}, "-n", $growl{'appname'}, "--image", $growl{'icon'}, "-m", $alert); 
+	return 1; ## need better error checking here -- no mac, so I can't test it.
     }
 }
 
@@ -866,8 +1242,9 @@ sub CheckLock {
 
 sub FriendlyName() {
     my $user = shift;
+    my $orig_user = $user;
     $user = $user_display->{$user} if $user_display->{$user};
-    return $user;
+    return ($user,$orig_user);
 }
 
 sub durationrr() {
@@ -910,7 +1287,7 @@ sub info_from_xml() {
     ## prefer title over platform if exists ( seem to have the exact same info of platform with useful extras )
     if ($vid->{Player}->{title}) {	$platform =  $vid->{Player}->{title};    }
     elsif ($vid->{Player}->{platform}) {	$platform = $vid->{Player}->{platform};    }
-
+    
     
     my $length;
     ## not sure which one is more valid.. {'TranscodeSession'}->{duration} or ->{duration}
@@ -952,7 +1329,7 @@ sub info_from_xml() {
     #	$title .= ' ['.$rating.']';
     #   }
     
-    my $user = &FriendlyName($orig_user);
+    my ($user,$tmp) = &FriendlyName($orig_user);
     
     ## ADD keys here when needed for &Notify hash
     my $info = {
@@ -976,10 +1353,10 @@ sub info_from_xml() {
     return $info;
 }
 
-
 sub RunTestNotify() {
     my $ntype = 'start'; ## default
     $ntype = 'stop' if $options{test_notify} =~ /stop/;
+    $ntype = 'stop' if $options{test_notify} =~ /watched/;
     $format_options->{'ntype'} = $ntype;
     my $info = &GetTestNotify($ntype);
     if ($info) {
@@ -995,6 +1372,112 @@ sub RunTestNotify() {
 }
 
 
+sub twittime() {
+    my $epoch = shift;
+    my $date = (strftime "%I:%M%P %d %b %y", localtime($epoch));
+    $date =~ s/^0//;
+    return $date;
+}
+
+sub rrtime() {
+    my $epoch = shift;
+    my $date = (strftime "%I:%M%P - %a %b ", localtime($epoch)) . suffer(strftime "%e", localtime($epoch)) . (strftime " %Y", localtime($epoch));
+    $date =~ s/^0//;
+    return $date;
+}
+
+sub suffer {
+    local $_ = shift;
+    return $_ . (/(?<!1)([123])$/ ? (qw(- st nd rd))[$1] : 'th');
+}
+
+sub ParseDataItem() {
+    my $data = shift;
+    my $type = shift;
+    my $info = $data; ## fallback
+    if ($type =~ /movie/i || $type=~/show/) {
+	$info = ();    	
+	$info->{'originallyAvailableAt'} = $data->{'originallyAvailableAt'};
+	$info->{'titleSort'} = $data->{'titleSort'};
+	$info->{'contentRating'} = $data->{'contentRating'};
+	$info->{'thumb'} = $data->{'thumb'};
+	$info->{'art'} = $data->{'art'};
+	$info->{'videoResolution'} = $data->{'Media'}->{'videoResolution'};
+	$info->{'videoCodec'} = $data->{'Media'}->{'videoCodec'};
+	$info->{'audioCodec'} = $data->{'Media'}->{'audioCodec'};
+	$info->{'aspectRatio'} = $data->{'Media'}->{'aspectRatio'};
+	$info->{'audioChannels'} = $data->{'Media'}->{'audioChannels'};
+	$info->{'summary'} = $data->{'summary'};
+	$info->{'addedAt'} = $data->{'addedAt'};
+	$info->{'updatedAt'} = $data->{'updatedAt'};
+	$info->{'duration'} = $data->{'duration'};
+	$info->{'tagline'} = $data->{'tagline'};
+	$info->{'title'} = $data->{'title'};
+	$info->{'year'} = $data->{'year'};
+	
+	$info->{'imdb_title'} = $data->{'title'} . ' ' . $data->{'year'};
+    }
+    if ($type =~ /show/) {
+	$info->{'episode'} = $data->{index};
+	$info->{'season'} = $data->{parentIndex};
+	if ($info->{'episode'} < 10) { $info->{'episode'} = 0 . $info->{'episode'};}
+	if ($info->{'season'} < 10) { $info->{'season'} = 0 . $info->{'season'}; }
+	$info->{'title'} = $data->{'grandparentTitle'} . ': '.  $data->{'title'} . ' s'.$info->{'season'} .'e'. $info->{'episode'};
+	$info->{'imdb_title'} = $data->{'grandparentTitle'} . ': '.  $data->{'title'};
+	
+    }
+    return $info;
+}
+
+sub GetSectionsIDs() {
+    my $ua      = LWP::UserAgent->new();
+    my $host = "http://$server:$port";
+    my $sections = ();
+    #  /library/sections -- get sections
+    my $url = $host . '/library/sections';
+    my $response = $ua->get( $url );
+    if ( ! $response->is_success ) {
+	print "Failed to get Library Sections from $url\n";
+	exit(2);
+    } else {
+	my $content  = $response->decoded_content();
+	my $data = XMLin($content);
+	foreach  my $k (keys %{$data->{'Directory'}}) {
+	    $sections->{'raw'}->{$k} = $data->{'Directory'}->{$k};
+	    push @{$sections->{'types'}->{$data->{'Directory'}->{$k}->{'type'}}}, $k;
+	}
+    }
+    return $sections;
+}
+
+sub GetRecentlyAdded() {
+    my $section = shift; ## array ref &GetRecentlyAdded([5,6,7]);
+    
+    my $ua      = LWP::UserAgent->new();
+    my $host = "http://$server:$port";
+    my $info = ();
+    
+    # /library/recentlyAdded <-- all sections
+    # /library/sections/6/recentlyAdded <-- specific sectoin
+    
+    foreach my $section (@$section) {
+	my $url = $host . '/library/sections/'.$section.'/recentlyAdded';
+	my $response = $ua->get( $url );
+	if ( ! $response->is_success ) {
+	    print "Failed to get Library Sections from $url\n";
+	    exit(2);
+	} else {
+	    my $content  = $response->decoded_content();
+	    my $data = XMLin($content);
+	    if (ref($info)) {
+		$info = {%$data, %$info};
+	    } else {
+		$info = {%$data};
+	    }
+	}
+    }
+    return $info;
+}
 
 
 __DATA__
@@ -1012,20 +1495,22 @@ plexWatch.pl [options]
 
   Options:
 
-   -notify=...        Notify any content watched and or stopped [this is default with NO options given]
+   -notify=...                    Notify any content watched and or stopped [this is default with NO options given]
 
-   -watched=...       print watched content
-        -start=...         limit watched status output to content started AFTER/ON said date/time
-        -stop=...          limit watched status output to content started BEFORE/ON said date/time
-        -nogrouping        will show same title multiple times if user has watched/resumed title on the same day
-        -user=...          limit output to a specific user. Must be exact, case-insensitive
+   -watched=...                   print watched content
+        -start=...                    limit watched status output to content started AFTER/ON said date/time
+        -stop=...                     limit watched status output to content started BEFORE/ON said date/time
+        -nogrouping                   will show same title multiple times if user has watched/resumed title on the same day
+        -user=...                     limit output to a specific user. Must be exact, case-insensitive
 
-   -watching=...      print content being watched
+   -watching=...                  print content being watched
 
-   -stats             show total time watched / per day breakout included
+   -stats                         show total time watched / per day breakout included
 
-   ############################################################################################3
- 
+   -recently_added=[show,movie]   notify when new movies or shows are added to the plex media server (required: config.pl: push_recentlyadded => 1) 
+
+   #############################################################################################
+    
    --format_options        : list all available formats for notifications and cli output
 
    --format_start=".."     : modify start notification :: --format_start='{user} watching {title} on {platform}'
@@ -1036,7 +1521,7 @@ plexWatch.pl [options]
 
    --format_watching=".."  : modify cli output for --watching :: --format_watching='{user} watching {title} on {platform}'
 
-   ############################################################################################3
+   #############################################################################################
    * Debug Options
 
    -test_notify=start        send a test notifcation for a start event. To test a stop event use -test_notify=stop 
@@ -1118,6 +1603,13 @@ Print a list of content currently being watched
 =item B<-stats>
 
 show total watched time and show total watched time per day
+
+=item B<-recently_added>
+
+notify when new movies or shows are added to the plex media server (required: config.pl: push_recentlyadded => 1) 
+
+ --recently_added=movie :: for movies
+ --recently_added=show  :: for tv show/episodes
 
 =item B<-show_xml>
 

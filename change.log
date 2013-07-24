@@ -1,4 +1,14 @@
-# 0.0.14-dev
+# 0.0.15-dev
+# * added recently_added=[movie,show]  -- notify on recently added items to PMS
+# * Twitter added as a provider
+    -  requires Net::Twitter::Lite::WithAPIv1_1  ( install with: 'cpan Net::Twitter::Lite::WithAPIv1_1' )
+    -  requires Net::OAuth >= 0.28  ( install with: 'cpan Net::OAuth' )
+    -  twitter OAUTH required - create a new app @ https://dev.twitter.com/apps
+     -- make sure to set set ApplicationType to read/write
+# *  config.pl: added  push_watched => 1, push_watching => 1, push_recently_added => 1 to all providers. Enable to disable specific notify types
+# * --exclude_user added to all functions. You can specifiy --exclude_user multiple times.. i.e --exclude_user=user1 --exclude_user=otherUsername
+
+# 0.0.14
 # * --watched -- join the same show title in one line if it was watched into the next day. 
 #	I.E. Movie1 watdched from 11pm - 1am:  would noramlly show two lines.. 1 from 11pm-11:59pm and 2 from 12am-1am. Now it will just show one
 #
