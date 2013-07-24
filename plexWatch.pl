@@ -3,9 +3,9 @@
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-07-24 13:53 PST
+# Modified: 2013-07-24 14:03 PST
 #
-#  Version: 0.0.15-1-dev
+#  Version: 0.0.15-2-dev
 # https://github.com/ljunkie/plexWatch
 ##########################################
 
@@ -189,7 +189,7 @@ if ($options{'recently_added'}) {
 	    $alert .= " [$media]" if $media;
 	    $alert .= " [$add_date]";
 	    #$twitter = $alert; ## movies are normally short enough.
-	    $alert_url .= ' http://www.imdb.com/find?s=tt&q=' . uri_escape_utf8($item->{'imdb_title'});
+	    $alert_url .= ' http://www.imdb.com/find?s=tt&q=' . urlencode($item->{'imdb_title'});
 	}
 	
 	## tv show alert
@@ -207,7 +207,7 @@ if ($options{'recently_added'}) {
 	    #$twitter .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
 	    #$twitter .= " [$media]" if $media;
 	    #$twitter .= " [$add_date]";
-	    $alert_url .= ' http://www.imdb.com/find?s=tt&q=' . uri_escape_utf8($item->{'imdb_title'});
+	    $alert_url .= ' http://www.imdb.com/find?s=tt&q=' . urlencode($item->{'imdb_title'});
 	}
 	
 	$alerts->{$item->{addedAt}.$k}->{'alert'} = 'NEW: '.$alert;
@@ -1508,6 +1508,21 @@ sub GetRecentlyAdded() {
 	}
     }
     return $info;
+}
+
+
+sub urlencode {
+    my $s = shift;
+    $s =~ s/ /+/g;
+    $s =~ s/([^A-Za-z0-9\+-])/sprintf("%%%02X", ord($1))/seg;
+    return $s;
+}
+
+sub urldecode {
+    my $s = shift;
+    $s =~ s/\%([A-Fa-f0-9]{2})/pack('C', hex($1))/seg;
+    $s =~ s/\+/ /g;
+    return $s;
 }
 
 
