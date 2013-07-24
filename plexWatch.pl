@@ -230,6 +230,24 @@ if ($options{'recently_added'}) {
 	
 	## 'recently_added' table has columns for each provider -- we will notify and verify each provider has success. 
 	## TODO - extend this logic into the normal notifications
+
+	## logging to file
+	$provider = 'file';
+	my $console = &consoletxt("$date: $alerts->{$k}->{'alert'}"); 
+	if ($debug || $options{test_notify}) {	print $console ."\n";    }
+	## file logging
+	if ($notify->{'file'}->{'enabled'}) {	
+	    if ($ra_done->{$item_id}->{$provider}) {
+		print $provider . ' ' . $debug_done if $debug;
+	    } else {
+		open FILE, ">>", $notify->{'file'}->{'filename'}  or die $!;
+		print FILE "$console\n";
+		close(FILE);
+		&SetNotified_RA($provider,$item_id);
+	    }
+	}
+	####
+
 	$provider = 'prowl';
 	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
 	    if ($ra_done->{$item_id}->{$provider}) {
@@ -981,6 +999,7 @@ sub DB_ra_table() {
     ## Add new columns/indexes on the fly  -- and change definitions
     my @dbcol = (
 	{ 'name' => 'debug', 'definition' => 'text',},
+	{ 'name' => 'file', 'definition' => 'INTEGER',},
 	{ 'name' => 'twitter', 'definition' => 'INTEGER',},
 	{ 'name' => 'growl', 'definition' => 'INTEGER',},
 	{ 'name' => 'prowl', 'definition' => 'INTEGER',},
