@@ -158,16 +158,18 @@ if ($options{'recently_added'}) {
     }
     
     my $plex_sections = &GetSectionsIDs();
-    my $info = &GetRecentlyAdded($plex_sections->{'types'}->{$want});
+    
+    my $info = &GetRecentlyAdded($plex_sections->{'types'}->{$want},$hkey);
     my $alerts = (); # containers to push alerts from oldest -> newest
-    foreach my $k (keys %{$info->{$hkey}}) {
+    #foreach my $k (keys %{$info->{$hkey}}) {
+    foreach my $k (keys %{$info}) {
 	## container for debug message
 	my $debug_done =  "already notified [$k]: ";
-	$debug_done .= $info->{$hkey}->{$k}->{'grandparentTitle'} . ' - ' if $info->{$hkey}->{$k}->{'grandparentTitle'};
-	$debug_done .= $info->{$hkey}->{$k}->{'title'} if $info->{$hkey}->{$k}->{'title'};
+	$debug_done .= $info->{$k}->{'grandparentTitle'} . ' - ' if $info->{$k}->{'grandparentTitle'};
+	$debug_done .= $info->{$k}->{'title'} if $info->{$k}->{'title'};
 	$debug_done .= "\n";
-	
-	my $item = &ParseDataItem($info->{$hkey}->{$k},$want);
+
+	my $item = &ParseDataItem($info->{$k},$want);
 	my $alert = 'unknown type';
 	my ($alert_url,$alert_short);
 	my $add_date = &twittime($item->{addedAt});
@@ -182,7 +184,7 @@ if ($options{'recently_added'}) {
 	    $alert = $item->{'title'};
 	    $alert_short = $item->{'title'};
 	    $alert .= " [$item->{'contentRating'}]" if $item->{'contentRating'};
-	    $alert .= " [$item->{'year'}]";
+	    $alert .= " [$item->{'year'}]" if $item->{'year'};
 	    $alert .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
 	    $alert .= " [$media]" if $media;
 	    $alert .= " [$add_date]";
@@ -195,11 +197,11 @@ if ($options{'recently_added'}) {
 	    $alert = $item->{'title'};
 	    $alert_short = $item->{'title'};
 	    $alert .= " [$item->{'contentRating'}]" if $item->{'contentRating'};
-	    $alert .= " [$item->{'year'}]";
+	    $alert .= " [$item->{'year'}]" if $item->{'year'};
 	    $alert .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
 	    $alert .= " [$media]" if $media;
 	    $alert .= " [$add_date]";
-
+	    
 	    #$twitter = $item->{'title'};
 	    #$twitter .= " [$item->{'year'}]";
 	    #$twitter .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
@@ -1415,7 +1417,8 @@ sub ParseDataItem() {
 	$info->{'title'} = $data->{'title'};
 	$info->{'year'} = $data->{'year'};
 	
-	$info->{'imdb_title'} = $data->{'title'} . ' ' . $data->{'year'};
+	$info->{'imdb_title'} = $data->{'title'};
+	$info->{'imdb_title'} .= ' ' . $data->{'year'} if $data->{'year'};
     }
     if ($type =~ /show/) {
 	$info->{'episode'} = $data->{index};
@@ -1452,11 +1455,12 @@ sub GetSectionsIDs() {
 
 sub GetRecentlyAdded() {
     my $section = shift; ## array ref &GetRecentlyAdded([5,6,7]);
+    my $hkey = shift; ## array ref &GetRecentlyAdded([5,6,7]);
     
     my $ua      = LWP::UserAgent->new();
     my $host = "http://$server:$port";
     my $info = ();
-    
+    my %result;
     # /library/recentlyAdded <-- all sections
     # /library/sections/6/recentlyAdded <-- specific sectoin
     
@@ -1470,9 +1474,13 @@ sub GetRecentlyAdded() {
 	    my $content  = $response->decoded_content();
 	    my $data = XMLin($content);
 	    if (ref($info)) {
-		$info = {%$data, %$info};
+		my $tmp = $data->{$hkey};
+		#$tmp = $data;
+		%result = (%$info, %$tmp);
+		$info = \%result;
 	    } else {
-		$info = {%$data};
+		$info = $data->{$hkey};
+		#$info = $data;
 	    }
 	}
     }
