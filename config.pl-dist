@@ -78,4 +78,17 @@ $notify = {
         'access_token'        => '',
         'access_token_secret' => '',
     },
+
+    'boxcar' => {
+        'enabled' => 0, ## set to 1 to enable local growl
+	'push_recentlyadded'  => 0,
+	'push_watched'        => 0,
+	'push_watching'       => 0,
+        'application' => $appname,
+	'email' => '',                          ## YOUR email address registered ot boxcar
+	'from' => 'You From Name',              ## From Name displayed on boxcar
+	'provider_key' => 'o2eI7rcwya5XFETaXdlh',                        ## plexWatch app is 'o2eI7rcwya5XFETaXdlh'. You may supply your own.
+	'provider_secret' => 'h4pJjyBoEMk1rwK2EH3NLemO4fQ0ql9HnRgVfwg4', ## plexWatch app is 'h4pJjyBoEMk1rwK2EH3NLemO4fQ0ql9HnRgVfwg4'. You may supply your own.
+	'icon_url' => '', # Leave empty ('') for plexWatch icon. You may supply your own (57x57)
+    },
 };

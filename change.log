@@ -7,6 +7,9 @@
      -- make sure to set set ApplicationType to read/write
 # *  config.pl: added  push_watched => 1, push_watching => 1, push_recently_added => 1 to all providers. Enable to disable specific notify types
 # * --exclude_user added to all functions. You can specifiy --exclude_user multiple times.. i.e --exclude_user=user1 --exclude_user=otherUsername
+# * Boxcar added as provider
+#   - All you need is a registered account on boxcar (valid email)
+#   - If enable, this script with register your boxcar account to the plexWatch service -- simple right?
 
 # 0.0.14
 # * --watched -- join the same show title in one line if it was watched into the next day. 

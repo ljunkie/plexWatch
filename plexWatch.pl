@@ -3,9 +3,9 @@
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-07-24 14:03 PST
+# Modified: 2013-07-25 15:03 PST
 #
-#  Version: 0.0.15-2-dev
+#  Version: 0.0.15-3-dev
 # https://github.com/ljunkie/plexWatch
 ##########################################
 
@@ -233,16 +233,12 @@ if ($options{'recently_added'}) {
 
 	## logging to file
 	$provider = 'file';
-	my $console = &consoletxt("$date: $alerts->{$k}->{'alert'}"); 
-	if ($debug || $options{test_notify}) {	print $console ."\n";    }
 	## file logging
 	if ($notify->{'file'}->{'enabled'}) {	
 	    if ($ra_done->{$item_id}->{$provider}) {
 		print $provider . ' ' . $debug_done if $debug;
 	    } else {
-		open FILE, ">>", $notify->{'file'}->{'filename'}  or die $!;
-		print FILE "$console\n";
-		close(FILE);
+		&ConsoleLog($alerts->{$k}->{'alert'});
 		&SetNotified_RA($provider,$item_id);
 	    }
 	}
@@ -273,7 +269,7 @@ if ($options{'recently_added'}) {
 		print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
 	    }
 	}
-	
+
 	$provider = 'growl';
 	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
 	    if ($ra_done->{$item_id}->{$provider}) {
@@ -299,6 +295,22 @@ if ($options{'recently_added'}) {
 		print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
 	    }
 	}
+
+
+	$provider = 'boxcar';
+	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
+	    if ($ra_done->{$item_id}->{$provider}) {
+		print $provider . ' ' . $debug_done if $debug;
+	    } 
+	    elsif (&NotifyBoxcar($alerts->{$k}->{'alert'})) {
+		&SetNotified_RA($provider,$item_id);
+	    } 
+	    else {
+		print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
+	    }
+	}
+
+
     }
 }
 
@@ -649,16 +661,17 @@ sub formatAlert() {
     return ($s,$orig);
 }
 
-sub Notify() {
-    my $info = shift;
-    my $ret_alert = shift;
-    my $type = $info->{'ntype'};
-    my ($alert,$orig) = &formatAlert($info);
-    my $extra = ''; ## clean me
-    
-    my $console = &consoletxt("$date: $alert $extra"); 
-    
-    if ($debug || $options{test_notify}) {	print   $console ."\n";    }
+sub ConsoleLog() {
+    my $msg = shift;
+    my $console;
+    if ($debug) {
+	$console = &consoletxt("$date: DEBUG: $msg"); 
+    } elsif ($options{test_notify}) {
+	$console = &consoletxt("$date: DEBUG test_notify: $msg"); 
+	print   $console ."\n";   
+    } else {
+	$console = &consoletxt("$date: $msg"); 
+    }
     
     ## file logging
     if ($notify->{'file'}->{'enabled'}) {	
@@ -666,6 +679,17 @@ sub Notify() {
 	print FILE "$console\n";
 	close(FILE);
     }
+}
+
+sub Notify() {
+    my $info = shift;
+    my $ret_alert = shift;
+    my $type = $info->{'ntype'};
+    my ($alert,$orig) = &formatAlert($info);
+    my $extra = ''; ## clean me
+    
+    ## file logging
+    &ConsoleLog($alert);
     
     ## --exclude_user array ref -- do not notify if user is excluded.. however continue processing -- logging to DB - logging to file still happens.
     return 1 if ( grep { $_ =~ /$info->{'orig_user'}/i } @{$options{'exclude_user'}});
@@ -676,18 +700,22 @@ sub Notify() {
     
     ## started :: watching
     if ($notify_started && $type =~ /start/) {
-	if ($notify->{'prowl'}->{'enabled'} && $notify->{'prowl'}->{'push_watching'})       { &NotifyProwl($alert,$type,$orig); }
-	if ($notify->{'pushover'}->{'enabled'} && $notify->{'pushover'}->{'push_watching'}) { &NotifyPushOver($alert);          }
-	if ($notify->{'growl'}->{'enabled'} && $notify->{'growl'}->{'push_watching'})       { &NotifyGrowl($alert);             }
-	if ($notify->{'twitter'}->{'enabled'} && $notify->{'twitter'}->{'push_watching'})   { &NotifyTwitter($alert);             }
+	my $push_type = 'push_watching';
+	if ($notify->{'prowl'}->{'enabled'} && $notify->{'prowl'}->{$push_type})       { &NotifyProwl($alert,$type,$orig); }
+	if ($notify->{'pushover'}->{'enabled'} && $notify->{'pushover'}->{$push_type}) { &NotifyPushOver($alert);          }
+	if ($notify->{'growl'}->{'enabled'} && $notify->{'growl'}->{$push_type})       { &NotifyGrowl($alert);             }
+	if ($notify->{'twitter'}->{'enabled'} && $notify->{'twitter'}->{$push_type})   { &NotifyTwitter($alert);             }
+	if ($notify->{'boxcar'}->{'enabled'} && $notify->{'boxcar'}->{$push_type})     { &NotifyBoxcar($alert);             }
     }
     
     ## stopped :: watched
     if ($notify_stopped && $type =~ /stop/) {    
-	if ($notify->{'prowl'}->{'enabled'} && $notify->{'prowl'}->{'push_watched'})       { &NotifyProwl($alert,$type,$orig); }
-	if ($notify->{'pushover'}->{'enabled'} && $notify->{'pushover'}->{'push_watched'}) { &NotifyPushOver($alert);          }
-	if ($notify->{'growl'}->{'enabled'} && $notify->{'growl'}->{'push_watched'})       { &NotifyGrowl($alert);             }
-	if ($notify->{'twitter'}->{'enabled'} && $notify->{'twitter'}->{'push_watched'})   { &NotifyTwitter($alert);             }
+	my $push_type = 'push_watched';
+	if ($notify->{'prowl'}->{'enabled'} && $notify->{'prowl'}->{$push_type})       { &NotifyProwl($alert,$type,$orig); }
+	if ($notify->{'pushover'}->{'enabled'} && $notify->{'pushover'}->{$push_type}) { &NotifyPushOver($alert);          }
+	if ($notify->{'growl'}->{'enabled'} && $notify->{'growl'}->{$push_type})       { &NotifyGrowl($alert);             }
+	if ($notify->{'twitter'}->{'enabled'} && $notify->{'twitter'}->{$push_type})   { &NotifyTwitter($alert);             }
+	if ($notify->{'boxcar'}->{'enabled'} && $notify->{'boxcar'}->{$push_type})     { &NotifyBoxcar($alert);             }
     }
 }
 
@@ -706,17 +734,11 @@ sub RawNotify() {
     if ($notify->{'pushover'}->{'enabled'} && $notify->{'pushover'}->{$push_type}) { &NotifyPushOver($alert); }
     if ($notify->{'growl'}->{'enabled'} && $notify->{'growl'}->{$push_type})       { &NotifyGrowl($alert);    }
     if ($notify->{'twitter'}->{'enabled'} && $notify->{'twitter'}->{$push_type})   { &NotifyTwitter($alert);  }
-    
-    
-    my $console = &consoletxt("$date: raw[$push_type] $alert"); 
-    if ($debug || $options{test_notify}) {	print $console ."\n";    }
+    if ($notify->{'boxcar'}->{'enabled'} && $notify->{'boxcar'}->{$push_type})     { &NotifyBoxcar($alert);             }
     
     ## file logging
-    if ($notify->{'file'}->{'enabled'}) {	
-	open FILE, ">>", $notify->{'file'}->{'filename'}  or die $!;
-	print FILE "$console\n";
-	close(FILE);
-    }
+    &ConsoleLog($alert);
+
 }
 
 sub ProcessStart() {
@@ -1004,6 +1026,7 @@ sub DB_ra_table() {
 	{ 'name' => 'growl', 'definition' => 'INTEGER',},
 	{ 'name' => 'prowl', 'definition' => 'INTEGER',},
 	{ 'name' => 'pushover', 'definition' => 'INTEGER',},
+	{ 'name' => 'boxcar', 'definition' => 'INTEGER',},
 	
 	);
     
@@ -1131,7 +1154,7 @@ sub NotifyTwitter() {
 	return 0;
     }
     
-    return 1;
+    return 1;     ## success
 }
 
 sub NotifyProwl() {
@@ -1182,11 +1205,11 @@ sub NotifyProwl() {
     
     if ($response->is_success) {
 	if ($debug) { 	    print "PROWL - Notification successfully posted.\n";}
-	return 1;
+	return 1;     ## success
     } elsif ($response->code == 401) {
 	print STDERR "PROWL - Notification not posted: incorrect API key.\n";
     } else {
-	print STDERR "PROWL - Notification not posted: " . $response->content . "\n";
+	print STDERR "PROWL - Notification not posted: $prowl{'notification'} " . $response->content . "\n";
     }
     return 0; # failed
 }
@@ -1195,7 +1218,6 @@ sub NotifyPushOver() {
     my %po = %{$notify->{pushover}};    
     my $ua      = LWP::UserAgent->new();
     $po{'message'} = shift;
-    #my $extra  = shift; ## i need to test pushover myself before I can see what this looks like
     
     my $response = $ua->post( "https://api.pushover.net/1/messages.json", [
 				  "token" => $po{'token'},
@@ -1205,13 +1227,70 @@ sub NotifyPushOver() {
 				  "message" => $po{'message'},
 			      ]);
     my $content  = $response->decoded_content();
+
     if ($content !~ /\"status\":1/) {
+	print STDERR "Failed to post PushOver notification -- $po{'message'} result:$content\n";
 	return 0;
-	print "Failed to post PushOver notification -- $content\n";
+    } 
+    
+    if ($debug) { print "PushOver - Notification successfully posted. $content\n";}
+    return 1;     ## success
+}
+
+sub NotifyBoxcar() {
+    ## this will try to notifiy via box car 
+    # It will try to subscribe to the plexWatch service on boxcar if we get a 401 and resend the notification
+    
+    my %bc = %{$notify->{boxcar}};    
+    $bc{'message'} = shift;
+    
+    if (!$bc{'email'}) {
+	my $msg = "Please specify and email address for boxcar in config.pl";
+	&ConsoleLog($msg);
     } else {
-	if ($debug) { print "PushOver - Notification successfully posted. $content\n";}
-	return 1;
+        my $response = &NotifyBoxcarPOST(\%bc);
+	
+	return 1 if $response->is_success;
+	if ($response->{'_rc'} == 401) {
+	    my $ua      = LWP::UserAgent->new();
+	    my $msg = "$bc{'email'} is not subscribed to plexWatch service... trying to subscribe now";
+	    &ConsoleLog($msg);
+	    my $url = 'http://boxcar.io/devices/providers/'. $bc{'provider_key'} .'/notifications/subscribe';
+	    my $response = $ua->post( $url, [
+					  "email" => $bc{'email'},#
+				      ]);
+	    if (!$response->is_success) {
+		my $msg = "$bc{'email'} subscription to plexWatch service failed. Is $bc{'email'} email registerd to your boxcar account?";
+		&ConsoleLog($msg);
+	    } else {
+		## try notification again now that we are subscribed
+		my $msg = "$bc{'email'} is now subscribed to plexWatch service. Trying to send notification again.";
+		&ConsoleLog($msg);
+		$response = &NotifyBoxcarPOST(\%bc);
+		return 1 if $response->is_success;    
+	    }
+	}
     }
+        
+    print STDERR "Failed to post Boxcar notification - $bc{'message'}\n";
+    return 0;
+}
+
+sub NotifyBoxcarPOST() {
+    ## the actual post to boxcar
+    my %bc = %{$_[0]};
+    
+    my $ua      = LWP::UserAgent->new();
+    my $url = 'http://boxcar.io/devices/providers/'. $bc{'provider_key'} .'/notifications';
+    my $response = $ua->post( $url, [
+				  'secret'  => $bc{'provider_secret'},
+				  "email" => $bc{'email'},
+				  'notification[from_remote_service_id]' => time, # Just a unique placeholder
+				  "notification[from_screen_name]" => $bc{'from'},
+				  "notification[message]" => $bc{'message'},
+				  'notification[icon_url]' => $bc{'icon_url'},
+			      ]);
+    return $response;
 }
 
 sub NotifyGrowl() { 
