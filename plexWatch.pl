@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 
-my $version = '0.0.15-4-dev';
+my $version = '0.0.15-rc1';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed

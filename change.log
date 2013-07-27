@@ -1,4 +1,4 @@
-# 0.0.15-dev
+# 0.0.15-rc1
 # * added recently_added=[movie,show]  -- notify on recently added items to PMS
 # * Twitter added as a provider
     -  requires Net::Twitter::Lite::WithAPIv1_1  ( install with: 'cpan Net::Twitter::Lite::WithAPIv1_1' )
