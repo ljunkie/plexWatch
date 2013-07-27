@@ -1,17 +1,19 @@
 #!/usr/bin/perl -w
 
+my $version = '0.0.15-4-dev';
+my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-07-25 15:03 PST
+# Modified: 2013-07-26 15:46 PST
 #
-#  Version: 0.0.15-3-dev
+#  Version: $version
 # https://github.com/ljunkie/plexWatch
 ##########################################
+EOF
 
 use strict;
 use LWP::UserAgent;
-use WWW::Curl::Easy; ## might change this back to LWP
 use XML::Simple;
 use DBI;
 use Time::Duration;
@@ -20,10 +22,13 @@ use Pod::Usage;
 use Fcntl qw(:flock);
 use Time::ParseDate;
 use POSIX qw(strftime);
-use URI::Escape;
+use File::Basename;
+
+## removed modules
+#use WWW::Curl::Easy; #removed -- using LWP
+#use URI::Escape; ## now using subroutine
 
 ## load config file
-use File::Basename;
 my $dirname = dirname(__FILE__);
 if (!-e $dirname .'/config.pl') {
     print "\n** missing file $dirname/config.pl. Did you move edit config.pl-dist and copy to config.pl?\n\n";
@@ -37,8 +42,16 @@ if (!$data_dir || !$server || !$port || !$appname || !$alert_format || !$notify)
 }
 ## end
 
+## ONLY Load modules if used
+if ($notify->{'twitter'}->{'enabled'}) {
+    require Net::Twitter::Lite::WithAPIv1_1;
+    require Net::OAuth;
+    require Scalar::Util;
+    Net::Twitter::Lite::WithAPIv1_1->import(); 
+    Net::OAuth->import();
+    Scalar::Util->import('blessed');
 
-########################################## END CONFIG #######################################################
+}
 
 ## used for later..
 my $format_options = {
@@ -62,8 +75,7 @@ if (!-d $data_dir) {
     exit;
 }
 
-&CheckLock();
-
+&CheckLock(); # just make sure we only run one at a time
 
 # Grab our options.
 my %options = ();
@@ -85,15 +97,25 @@ GetOptions(\%options,
            'format_options',
 	   'test_notify:s',
 	   'recently_added:s',
+	   'version',
 	   'show_xml',
            'help|?'
     ) or pod2usage(2);
 pod2usage(-verbose => 2) if (exists($options{'help'}));
 
+if ($options{version}) {
+    print "\n\tVersion: $version\n\n";
+    print "$author_info\n";
+    exit;
+}
+
 my $debug = $options{'debug'};
 my $debug_xml = $options{'show_xml'};
+
+## ONLY load modules if used
 if ($options{debug}) {
-    use Data::Dumper;
+    require Data::Dumper;
+    Data::Dumper->import(); 
 }
 
 my $date = localtime;
@@ -120,7 +142,6 @@ $alert_format->{'stop'} = $options{'format_stop'} if $options{'format_stop'};
 $alert_format->{'watched'} = $options{'format_watched'} if $options{'format_watched'};
 $alert_format->{'watching'} = $options{'format_watching'} if $options{'format_watching'};
 
-
 ## show what the notify alerts will look like
 if  ($options{test_notify}) {
     &RunTestNotify();
@@ -128,8 +149,6 @@ if  ($options{test_notify}) {
 }
 
 ########################################## START MAIN #######################################################
-
-
 
 
 
@@ -161,7 +180,6 @@ if ($options{'recently_added'}) {
     
     my $info = &GetRecentlyAdded($plex_sections->{'types'}->{$want},$hkey);
     my $alerts = (); # containers to push alerts from oldest -> newest
-    #foreach my $k (keys %{$info->{$hkey}}) {
     foreach my $k (keys %{$info}) {
 	## container for debug message
 	my $debug_done =  "already notified [$k]: ";
@@ -201,7 +219,6 @@ if ($options{'recently_added'}) {
 	    $alert .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
 	    $alert .= " [$media]" if $media;
 	    $alert .= " [$add_date]";
-	    
 	    #$twitter = $item->{'title'};
 	    #$twitter .= " [$item->{'year'}]";
 	    #$twitter .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
@@ -295,8 +312,7 @@ if ($options{'recently_added'}) {
 		print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
 	    }
 	}
-
-
+	
 	$provider = 'boxcar';
 	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
 	    if ($ra_done->{$item_id}->{$provider}) {
@@ -309,8 +325,6 @@ if ($options{'recently_added'}) {
 		print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
 	    }
 	}
-
-
     }
 }
 
@@ -478,7 +492,6 @@ if ($options{'watched'} || $options{'stats'}) {
 }
 
 
-
 #####################################################
 ## print content being watched
 ##--watching
@@ -589,7 +602,6 @@ if (!%options || $options{'notify'}) {
     
     ## Notify on start/now playing
     foreach my $k (keys %{$vid}) {
-	
 	my $start_epoch = time();
 	my $stop_epoch = ''; ## not stopped yet
 	my $info = &info_from_xml(XMLout($vid->{$k}),'start',$start_epoch,$stop_epoch);
@@ -629,7 +641,7 @@ if (!%options || $options{'notify'}) {
     }
 }
 
-#############################################################################################################################
+#################################################### SUB #########################################################################
 
 sub formatAlert() {
     my $info = shift;
@@ -719,7 +731,6 @@ sub Notify() {
     }
 }
 
-
 sub RawNotify() {
     ### not used yet... probably never will be. -- to remove later
     my $alert = shift;
@@ -738,7 +749,6 @@ sub RawNotify() {
     
     ## file logging
     &ConsoleLog($alert);
-
 }
 
 sub ProcessStart() {
@@ -751,7 +761,6 @@ sub ProcessStart() {
     return  $dbh->sqlite_last_insert_rowid();
 }
 
-
 sub ProcessRecentlyAdded() {
     my ($db_key) = @_;
     my $cmd = "select item_id from recently_added where item_id = '$db_key'";
@@ -763,30 +772,41 @@ sub ProcessRecentlyAdded() {
 	$sth = $dbh->prepare("insert into recently_added (item_id) values (?)");
 	$sth->execute($db_key) or die("Unable to execute query: $dbh->errstr\n");
     }
-    
 }
 
 sub GetSessions() {
     my $url = "http://$server:$port/status/sessions";
-    my $ret = '';
-    sub chunk { my ($data,$pointer)=@_; ${$pointer}.=$data; return length($data) }
-    my $curl = WWW::Curl::Easy->new();
-    my $res = $curl->setopt(CURLOPT_URL, $url);
-    $res = $curl->setopt(CURLOPT_VERBOSE, 0);
-    $res = $curl->setopt(CURLOPT_NOPROGRESS, 1);
-    $res = $curl->setopt(CURLOPT_WRITEFUNCTION, \&chunk );
-    $res = $curl->setopt(CURLOPT_FILE, \$ret );
-    $res = $curl->perform();
-    my $msg = $curl->errbuf; # report any error message                           
-    my $XML = $ret;
-    if ($debug_xml) {
-	print "URL: $url\n";
-	print "===================================XML CUT=================================================\n";
-	print $XML;
-	print "===================================XML END=================================================\n";
+
+    # Generate our HTTP request.
+    my ($userAgent, $request, $response, $requestURL);
+    $userAgent = LWP::UserAgent->new;
+    $userAgent->agent($appname);
+    $userAgent->env_proxy();
+    $requestURL = $url;
+    $request = HTTP::Request->new(GET => $requestURL);
+    $response = $userAgent->request($request);
+    
+    if ($response->is_success) {
+	my $XML  = $response->decoded_content();
+	
+	if ($debug_xml) {
+	    print "URL: $url\n";
+	    print "===================================XML CUT=================================================\n";
+	    print $XML;
+	    print "===================================XML END=================================================\n";
+	}
+	my $data = XMLin($XML,KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
+	return $data->{'Video'};
+    } else {
+	print "\nFailed to get request $url - The result: \n\n";
+	print $response->decoded_content() . "\n\n";
+	if ($options{debug}) {	 	
+	    print "\n-----------------------------------DEBUG output----------------------------------\n\n";
+	    print Dumper($response);
+	    print "\n---------------------------------END DEBUG output---------------------------------\n\n";
+	}
+    	exit(2);	
     }
-    my $data = XMLin($XML,KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
-    return $data->{'Video'};
 }
 
 sub CheckNotified() {
@@ -810,7 +830,6 @@ sub GetUnNotified() {
     }
     return $info;
 }
-
 
 sub GetTestNotify() {
     my $option = shift;
@@ -1110,8 +1129,8 @@ sub initDBtable() {
 }
 
 sub NotifyTwitter() {
-    use Net::Twitter::Lite::WithAPIv1_1;
-    use Scalar::Util 'blessed';
+    #use Net::Twitter::Lite::WithAPIv1_1;
+    #use Scalar::Util 'blessed';
     my $alert = shift;
     my $tag = shift;
     my $url = shift;
@@ -1188,7 +1207,7 @@ sub NotifyProwl() {
     # Generate our HTTP request.
     my ($userAgent, $request, $response, $requestURL);
     $userAgent = LWP::UserAgent->new;
-    $userAgent->agent("ProwlScript/1.2");
+    $userAgent->agent($appname);
     $userAgent->env_proxy();
     
     $requestURL = sprintf("https://prowlapp.com/publicapi/add?apikey=%s&application=%s&event=%s&description=%s&priority=%d&url=%s%s",
@@ -1461,6 +1480,7 @@ sub RunTestNotify() {
     my $ntype = 'start'; ## default
     $ntype = 'stop' if $options{test_notify} =~ /stop/;
     $ntype = 'stop' if $options{test_notify} =~ /watched/;
+
     $format_options->{'ntype'} = $ntype;
     my $info = &GetTestNotify($ntype);
     if ($info) {
@@ -1477,6 +1497,7 @@ sub RunTestNotify() {
 
 
 sub twittime() {
+    ## twitters way of showing the date/time
     my $epoch = shift;
     my $date = (strftime "%I:%M%P %d %b %y", localtime($epoch));
     $date =~ s/^0//;
@@ -1484,6 +1505,7 @@ sub twittime() {
 }
 
 sub rrtime() {
+    ## my way of showing the date/time
     my $epoch = shift;
     my $date = (strftime "%I:%M%P - %a %b ", localtime($epoch)) . suffer(strftime "%e", localtime($epoch)) . (strftime " %Y", localtime($epoch));
     $date =~ s/^0//;
@@ -1491,6 +1513,7 @@ sub rrtime() {
 }
 
 sub suffer {
+    ## day suffix (st, nd, rd, th)
     local $_ = shift;
     return $_ . (/(?<!1)([123])$/ ? (qw(- st nd rd))[$1] : 'th');
 }
@@ -1538,7 +1561,6 @@ sub GetSectionsIDs() {
     my $ua      = LWP::UserAgent->new();
     my $host = "http://$server:$port";
     my $sections = ();
-    #  /library/sections -- get sections
     my $url = $host . '/library/sections';
     my $response = $ua->get( $url );
     if ( ! $response->is_success ) {
@@ -1557,7 +1579,7 @@ sub GetSectionsIDs() {
 
 sub GetRecentlyAdded() {
     my $section = shift; ## array ref &GetRecentlyAdded([5,6,7]);
-    my $hkey = shift; ## array ref &GetRecentlyAdded([5,6,7]);
+    my $hkey = shift;    ## array ref &GetRecentlyAdded([5,6,7]);
     
     my $ua      = LWP::UserAgent->new();
     my $host = "http://$server:$port";
@@ -1577,18 +1599,15 @@ sub GetRecentlyAdded() {
 	    my $data = XMLin($content);
 	    if (ref($info)) {
 		my $tmp = $data->{$hkey};
-		#$tmp = $data;
 		%result = (%$info, %$tmp);
 		$info = \%result;
 	    } else {
 		$info = $data->{$hkey};
-		#$info = $data;
 	    }
 	}
     }
     return $info;
 }
-
 
 sub urlencode {
     my $s = shift;
@@ -1659,7 +1678,7 @@ plexWatch.pl [options]
 
 =item B<-notify>
 
-This will send you a notification through prowl and/or pushover. It will also log the event to a file and to the database.
+This will send you a notification through prowl, pushover, boxcar, growl and/or twitter. It will also log the event to a file and to the database.
 This is the default if no options are given.
 
 =item B<-watched>

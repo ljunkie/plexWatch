@@ -9,8 +9,12 @@
 # * --exclude_user added to all functions. You can specifiy --exclude_user multiple times.. i.e --exclude_user=user1 --exclude_user=otherUsername
 # * Boxcar added as provider
 #   - All you need is a registered account on boxcar (valid email)
-#   - If enable, this script with register your boxcar account to the plexWatch service -- simple right?
-
+#   - If enabled, this script with register your boxcar account to the plexWatch service -- simple right?
+# * Twitter/OAuth modules ONLY required if you enable twitter (Net::Twitter::Lite::WithAPIv1_1 , Net::OAuth)
+# * removed module WWW::Curl::Easy (replaced with LWP which is more standard)
+# * removed module URI::Escape (using my own subroutine)
+# * --version added -- easier to debug
+	
 # 0.0.14
 # * --watched -- join the same show title in one line if it was watched into the next day. 
 #	I.E. Movie1 watdched from 11pm - 1am:  would noramlly show two lines.. 1 from 11pm-11:59pm and 2 from 12am-1am. Now it will just show one
