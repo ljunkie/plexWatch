@@ -7,24 +7,40 @@ plexWatch
 * https://pushover.net
 * https://prowlapp.com
 * http://growl.info/ (via GrowlInotify @ http://growl.info/downloads#generaldownloads)
+* https://twitter.com/ (create a new app @ https://dev.twitter.com/apps)
+* https://boxcar.io/ 
 
 **What it does**
-* Checks if a video has been started or stopped - log and notify
-* Notifies via prowl, pushover, growl and/or a log file
+* notify when a user starts watching a video
+* notify when a user stop watching a video
+* notify on recently added content to a PMS server
+* notifies via prowl, pushover, growl, twitter, boxcar and/or a log file
+* notifications per provider enabled/disabled per notifiation type (watching, watched, recently added)
 * backed by a sqlite DB (for state and history)
 * CLI to query watched videos, videos being watched and stats on time watched per user
+* Limit output per user or exclude users
+* ...more to come
 
 ###Perl Requirements
 
 * LWP::UserAgent
-* WWW::Curl::Easy
 * XML::Simple
 * DBI
 * Time::Duration;
 * Time::ParseDate;
-* Pod::Usage;       (perl base on rhel/centos)
-* Fcntl qw(:flock); (perl base)
-* Getopt::Long;     (perl base)
+
+#### These should be part of the bast perl install
+
+* Pod::Usage;        (perl base on rhel/centos)
+* Fcntl qw(:flock);  (perl base)
+* Getopt::Long;      (perl base)
+* POSIX qw(strftime) (perl base)
+* File::Basename     (perl base)
+
+#### Required ONLY if you use twitter
+
+* Net::Twitter::Lite::WithAPIv1_1
+* Net::OAuth
 
 ### Install 
 
@@ -51,9 +67,11 @@ $notify = {...
 * to enable a provider, i.e. file, prowl, pushover 
    set 'enabled' => 1, under selected provider
 
-* Prow     : 'apikey' required
-* PushOver : 'token' and 'user' required
-* Growl    : 'script' required :: GrowlNotify from http://growl.info/downloads
+* Prowl     : 'apikey' required
+* PushOver  : 'token' and 'user' required
+* Growl     : 'script' required :: GrowlNotify from http://growl.info/downloads
+* twitter   : 'consumer_key', 'consumer_secret', 'access_token', 'access_token_secret' required
+* boxcar    : 'email' required
 ```
 
 4) Install Perl requirements
@@ -62,8 +80,6 @@ $notify = {...
 
 ```
 sudo apt-get install libwww-perl
-
-sudo apt-get install libwww-curl-perl
 
 sudo apt-get install libxml-simple-perl
 
@@ -79,7 +95,7 @@ sudo apt-get install perl-doc
 * RHEL/Centos - yum
 
 ```
-yum -y install perl\(LWP::UserAgent\) perl\(WWW::Curl::Easy\) perl\(XML::Simple\) \
+yum -y install perl\(LWP::UserAgent\) perl\(XML::Simple\) \
                perl\(DBI\) perl\(Time::Duration\)  perl\(Time::ParseDate\)
 ```
 
@@ -95,6 +111,26 @@ yum -y install perl\(LWP::UserAgent\) perl\(WWW::Curl::Easy\) perl\(XML::Simple\
 ```
 * * * * * root cd /opt/plexWatch && /opt/plexWatch/plexWatch.pl
 ```
+
+### Twitter integration 
+If you want to use twitter, you will need to install two more perl modules
+
+*  requires Net::Twitter::Lite::WithAPIv1_1  
+```
+cpan Net::Twitter::Lite::WithAPIv1_1
+```
+
+*  requires Net::OAuth >= 0.28
+```
+cpan Net::OAuth
+```
+
+
+#### Twitter setup
+* create a new app @ https://dev.twitter.com/apps
+* make sure to set set ApplicationType to read/write
+* enable notification for twitter in config.pl
+
 
 ## Using the script
 
