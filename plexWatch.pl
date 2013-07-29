@@ -75,6 +75,9 @@ if (!-d $data_dir) {
     exit;
 }
 
+## place holder to back off notifications per provider
+my $provider_452 = ();
+
 &CheckLock(); # just make sure we only run one at a time
 
 # Grab our options.
@@ -155,7 +158,6 @@ if  ($options{test_notify}) {
 ####################################################################
 ## RECENTLY ADDED 
 if ($options{'recently_added'}) {
-    my $ra_done = &GetRecentlyAddedDB();
     my ($want,$hkey);
     if ($options{'recently_added'} =~ /movie/i) {
 	$want = 'movie';
@@ -180,6 +182,7 @@ if ($options{'recently_added'}) {
     
     my $info = &GetRecentlyAdded($plex_sections->{'types'}->{$want},$hkey);
     my $alerts = (); # containers to push alerts from oldest -> newest
+
     foreach my $k (keys %{$info}) {
 	## container for debug message
 	my $debug_done =  "already notified [$k]: ";
@@ -234,98 +237,8 @@ if ($options{'recently_added'}) {
 	$alerts->{$item->{addedAt}.$k}->{'alert_url'} = $alert_url;
 	#$alerts->{$item->{addedAt}.$k}->{'alert_tag'} = 'new'.ucfirst($want); ## twitter msg too long
     }
-    
-    my $count = 0;
-    foreach my $k ( sort keys %{$alerts}) {
-	$count++;
-	my $item_id = $alerts->{$k}->{'item_id'};
-	my $debug_done = $alerts->{$k}->{'debug_done'};
-	&ProcessRecentlyAdded($item_id);  ## add item to DB -- will ignore insert if already inserte.. wish sqlite has upsert
-	
-	my $push_type = 'push_recentlyadded';
-	my $provider;
-	
-	## 'recently_added' table has columns for each provider -- we will notify and verify each provider has success. 
-	## TODO - extend this logic into the normal notifications
 
-	## logging to file
-	$provider = 'file';
-	## file logging
-	if ($notify->{'file'}->{'enabled'}) {	
-	    if ($ra_done->{$item_id}->{$provider}) {
-		print $provider . ' ' . $debug_done if $debug;
-	    } else {
-		&ConsoleLog($alerts->{$k}->{'alert'});
-		&SetNotified_RA($provider,$item_id);
-	    }
-	}
-	####
-
-	$provider = 'prowl';
-	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
-	    if ($ra_done->{$item_id}->{$provider}) {
-		print $provider . ' ' . $debug_done if $debug;
-	    } 
-	    elsif (&NotifyProwl($alerts->{$k}->{'alert'},'',$alerts->{$k}->{'alert_short'})) {
-		&SetNotified_RA($provider,$item_id);
-	    } 
-	    else {
-		print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
-	    }
-	}
-	
-	$provider = 'pushover';
-	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
-	    if ($ra_done->{$item_id}->{$provider}) {
-		print $provider . ' ' . $debug_done if $debug;
-	    } 
-	    elsif (&NotifyPushOver($alerts->{$k}->{'alert'})) {
-		&SetNotified_RA($provider,$item_id);
-	    } 
-	    else {
-		print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
-	    }
-	}
-
-	$provider = 'growl';
-	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
-	    if ($ra_done->{$item_id}->{$provider}) {
-		print $provider . ' ' . $debug_done if $debug;
-	    } 
-	    elsif (&NotifyGrowl($alerts->{$k}->{'alert'})) {
-		&SetNotified_RA($provider,$item_id);
-	    } 
-	    else {
-		print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
-	    }
-	}
-	
-	$provider = 'twitter';
-	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
-	    if ($ra_done->{$item_id}->{$provider}) {
-		print $provider . ' ' . $debug_done if $debug;
-	    } 
-	    elsif (&NotifyTwitter($alerts->{$k}->{'alert'},$alerts->{$k}->{'alert_tag'},$alerts->{$k}->{'alert_url'})) {
-		&SetNotified_RA($provider,$item_id);
-	    } 
-	    else {
-		print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
-	    }
-	}
-	
-	$provider = 'boxcar';
-	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
-	    if ($ra_done->{$item_id}->{$provider}) {
-		print $provider . ' ' . $debug_done if $debug;
-	    } 
-	    elsif (&NotifyBoxcar($alerts->{$k}->{'alert'})) {
-		&SetNotified_RA($provider,$item_id);
-	    } 
-	    else {
-		print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
-	    }
-	}
-    }
+    &ProcessRAalerts($alerts) if ref($alerts);
 }
 
 
@@ -1131,6 +1044,10 @@ sub initDBtable() {
 sub NotifyTwitter() {
     #use Net::Twitter::Lite::WithAPIv1_1;
     #use Scalar::Util 'blessed';
+    if ($provider_452->{'twitter'}) {
+	if ($options{'debug'}) { print "Twitter 452: backing off\n"; }
+	return 0;
+    }
     my $alert = shift;
     my $tag = shift;
     my $url = shift;
@@ -1141,10 +1058,14 @@ sub NotifyTwitter() {
     if (length($alert) > 139) {	$alert = substr($alert,0,140);    }
     
     ## url can be appended - twitter allows it even if the alert is 140 chars -- well it looks like 115 is max if URL is included..
+    my $non_url_alert = $alert;
     if ($url) {
 	if (length($alert) > 114) {	$alert = substr($alert,0,114);    }
 	$alert .= ' '. $url;   
     }
+    
+    
+
     
     ## cleanup spaces
     $alert =~ s/\s+$//g;
@@ -1160,8 +1081,21 @@ sub NotifyTwitter() {
 	consumer_secret     => $tw{'consumer_secret'},
 	access_token        => $tw{'access_token'},
 	access_token_secret => $tw{'access_token_secret'},
+	
 	);
+    
     my $result = eval { $nt->update($alert); };
+    
+    ## try one more time..
+    if ( my $err = $@ ) {
+	## my $rl = $nt->rate_limit_status; not useful for writes atm
+	#if ($err->code == 403 && $rl->{'resources'}->{'application'}->{'/application/rate_limit_status'}->{'remaining'} > 1) {
+	if ($err->code == 403) {
+	    $provider_452->{'twitter'} = 1;
+	    print "Twitter error 403 (You are over the daily limit for sending Tweets. Please wait a few hours and try again.) -- setting twitter to back off additional notifictions\n";
+	    return 0;
+	}
+    }
     
     if ( my $err = $@ ) {
 	#die $@ unless blessed $err && $err->isa('Net::Twitter::Lite::Error');
@@ -1480,19 +1414,38 @@ sub RunTestNotify() {
     my $ntype = 'start'; ## default
     $ntype = 'stop' if $options{test_notify} =~ /stop/;
     $ntype = 'stop' if $options{test_notify} =~ /watched/;
-
-    $format_options->{'ntype'} = $ntype;
-    my $info = &GetTestNotify($ntype);
-    if ($info) {
-	foreach my $k (keys %{$info}) {
-	    my $start_epoch = $info->{$k}->{time} if $info->{$k}->{time}; ## DB only
-	    my $stop_epoch = $info->{$k}->{stopped} if $info->{$k}->{stopped}; ## DB only
-	    my $info = &info_from_xml($info->{$k}->{'xml'},$ntype,$start_epoch,$stop_epoch);
-	    &Notify($info);
-	}
+    
+    
+    $ntype = 'push_recently_added' if $options{test_notify} =~ /recent/;
+    if ($ntype =~ /push_recently_added/) {
+	my $alerts = ();
+	$alerts->{1}->{'alert'} = 'NEW: '. ' test recently added alert';
+	$alerts->{1}->{'alert_short'} = 'NEW: '. 'test recently added alert (short version)';
+	$alerts->{1}->{'item_id'} = 'test_item_id';
+	$alerts->{1}->{'debug_done'} = 'testing alert already done';
+	$alerts->{1}->{'alert_url'} = 'https://github.com/ljunkie/plexWatch';
+	&ProcessRAalerts($alerts,1);
     } else {
-	&Notify($format_options);
+	
+	$format_options->{'ntype'} = $ntype;
+	my $info = &GetTestNotify($ntype);
+	## notify if we have a valid DB results
+	if ($info) {
+	    foreach my $k (keys %{$info}) {
+		my $start_epoch = $info->{$k}->{time} if $info->{$k}->{time}; ## DB only
+		my $stop_epoch = $info->{$k}->{stopped} if $info->{$k}->{stopped}; ## DB only
+		my $info = &info_from_xml($info->{$k}->{'xml'},$ntype,$start_epoch,$stop_epoch);
+		&Notify($info);
+	    }
+	} 
+	## notify the default format if there is not DB log yet.
+	else {
+	    &Notify($format_options);
+	}
     }
+    
+    ## test notify -- exit 
+    exit;
 }
 
 
@@ -1590,7 +1543,10 @@ sub GetRecentlyAdded() {
     
     foreach my $section (@$section) {
 	my $url = $host . '/library/sections/'.$section.'/recentlyAdded';
-	my $response = $ua->get( $url );
+	
+	## limit the output to the last 25 added.
+	my $limit = '?query=c&X-Plex-Container-Start=0&X-Plex-Container-Size=25';
+	my $response = $ua->get( $url . $limit);
 	if ( ! $response->is_success ) {
 	    print "Failed to get Library Sections from $url\n";
 	    exit(2);
@@ -1622,6 +1578,126 @@ sub urldecode {
     $s =~ s/\+/ /g;
     return $s;
 }
+
+    
+sub ProcessRAalerts() {
+    my $alerts = shift;
+    my $test_notify = shift;
+    my $count = 0;
+
+    my $ra_done = &GetRecentlyAddedDB() if !$test_notify;  ## only check if done if this is NOT a test
+
+    ## $alerts: keys
+    # item_id
+    # debug_done
+    # alert_tag
+    # alert_url
+    # alert_short
+    foreach my $k ( sort keys %{$alerts}) {
+	$count++;
+	my $item_id = $alerts->{$k}->{'item_id'};
+	my $debug_done = $alerts->{$k}->{'debug_done'};
+	## add item to DB -- will ignore insert if already inserte.. wish sqlite has upsert
+	#print $alerts->{$k}->{'alert'} . "\n";
+	#next;
+	&ProcessRecentlyAdded($item_id)  if !$test_notify; 
+	
+	my $push_type = 'push_recentlyadded';
+	my $provider;
+	
+	## 'recently_added' table has columns for each provider -- we will notify and verify each provider has success. 
+	## TODO - extend this logic into the normal notifications
+	
+	## logging to file
+	$provider = 'file';
+	## file logging
+	if ($notify->{'file'}->{'enabled'}) {	
+	    if ($ra_done->{$item_id}->{$provider}) {
+		print $provider . ' ' . $debug_done if $debug;
+	    } else {
+		&ConsoleLog($alerts->{$k}->{'alert'});
+		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
+	    }
+	}
+	####
+	
+	$provider = 'prowl';
+	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
+	    if ($ra_done->{$item_id}->{$provider}) {
+		print $provider . ' ' . $debug_done if $debug;
+	    } 
+	    elsif (&NotifyProwl($alerts->{$k}->{'alert'},'',$alerts->{$k}->{'alert_short'})) {
+		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
+	    } 
+	    else {
+		if (( $provider_452->{$provider} && $options{'debug'}) || $options{'debug'}) {
+		    print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
+		}
+	    }
+	}
+	
+	$provider = 'pushover';
+	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
+	    if ($ra_done->{$item_id}->{$provider}) {
+		print $provider . ' ' . $debug_done if $debug;
+	    } 
+	    elsif (&NotifyPushOver($alerts->{$k}->{'alert'})) {
+		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
+	    } 
+	    else {
+		if (( $provider_452->{$provider} && $options{'debug'}) || $options{'debug'}) {
+		    print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
+		}
+	    }
+	}
+	
+	$provider = 'growl';
+	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
+	    if ($ra_done->{$item_id}->{$provider}) {
+		print $provider . ' ' . $debug_done if $debug;
+	    } 
+	    elsif (&NotifyGrowl($alerts->{$k}->{'alert'})) {
+		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
+	    } 
+	    else {
+		if (( $provider_452->{$provider} && $options{'debug'}) || $options{'debug'}) {
+		    print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
+		}
+	    }
+	}
+	
+	$provider = 'twitter';
+	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
+	    if ($ra_done->{$item_id}->{$provider}) {
+		print $provider . ' ' . $debug_done if $debug;
+	    } 
+	    elsif (&NotifyTwitter($alerts->{$k}->{'alert'},$alerts->{$k}->{'alert_tag'},$alerts->{$k}->{'alert_url'})) {
+		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
+	    } 
+	    else {
+		if (( $provider_452->{$provider} && $options{'debug'}) || $options{'debug'}) {
+		    print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
+		}
+	    }
+	}
+	
+	$provider = 'boxcar';
+	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
+	    if ($ra_done->{$item_id}->{$provider}) {
+		print $provider . ' ' . $debug_done if $debug;
+	    } 
+	    elsif (&NotifyBoxcar($alerts->{$k}->{'alert'})) {
+		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
+	    } 
+	    else {
+		if (( $provider_452->{$provider} && $options{'debug'}) || $options{'debug'}) {
+		    print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
+		}
+	    }
+	}
+    }
+}
+
 
 
 __DATA__

@@ -1,3 +1,18 @@
+# 0.0.16-1-dev
+# * rate limiting: provide mechinisms to back off notifications if provider fails
+#     -- twitter: no api for writes. If we recieve 403, we assume user hit daily limits (unknown hourly limit). Do not process additional notification until next run.
+#     -- boxcar: ?
+#     -- prowl: ?
+#     -- growl: ?? shoulw not have limits
+#     -- pushover: ?
+#     -- gntp: ?? haven't added GNTP -- but shouldn't have limits
+# * --recently_added: 25 results per section created (multiple sections of same type: two sections with type 'shows' = 50 results )
+#
+# * Paused status:  ?? to add
+# * Add GNTP: ?
+#
+
+
 # 0.0.15
 # * added recently_added=[movie,show]  -- notify on recently added items to PMS
 # * Twitter added as a provider
@@ -14,7 +29,7 @@
 # * removed module WWW::Curl::Easy (replaced with LWP which is more standard)
 # * removed module URI::Escape (using my own subroutine)
 # * --version added -- easier to debug
-	
+
 # 0.0.14
 # * --watched -- join the same show title in one line if it was watched into the next day. 
 #	I.E. Movie1 watdched from 11pm - 1am:  would noramlly show two lines.. 1 from 11pm-11:59pm and 2 from 12am-1am. Now it will just show one
