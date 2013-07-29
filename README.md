@@ -1,4 +1,4 @@
-plexWatch - 0.0.15-rc1
+plexWatch - 0.0.15
 =========
 
 ***Notify*** and Log ***'Now Playing'*** content from a Plex Media Server
