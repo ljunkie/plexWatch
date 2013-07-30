@@ -181,6 +181,16 @@ if ($options{'recently_added'}) {
     my $info = &GetRecentlyAdded($plex_sections->{'types'}->{$want},$hkey);
     my $alerts = (); # containers to push alerts from oldest -> newest
     foreach my $k (keys %{$info}) {
+    ## skip invalid keys.. not sure how this happened? --debug can be used to help
+	if (!ref($info->{$k})) {
+	    if ($debug) {
+		print "Skipping KEY $k (expected key =~ '/library/metadata/###') -- it's not a hash ref?\n";
+		print "\$info->{$k} is not a hash ref?\n";
+		print Dumper($info->{$k});
+	    }
+	    next;
+	}
+
 	## container for debug message
 	my $debug_done =  "already notified [$k]: ";
 	$debug_done .= $info->{$k}->{'grandparentTitle'} . ' - ' if $info->{$k}->{'grandparentTitle'};
