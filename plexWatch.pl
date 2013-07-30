@@ -1,4 +1,4 @@
-#!/usr/bin/perl -w
+#!/usr/bin/env perl
 
 my $version = '0.0.15';
 my $author_info = <<EOF;
@@ -23,6 +23,7 @@ use Fcntl qw(:flock);
 use Time::ParseDate;
 use POSIX qw(strftime);
 use File::Basename;
+use warnings;
 
 ## removed modules
 #use WWW::Curl::Easy; #removed -- using LWP
