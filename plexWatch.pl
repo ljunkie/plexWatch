@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 
-my $version = '0.0.15-1';
+my $version = '0.0.15-2';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
@@ -1597,8 +1597,18 @@ sub GetRecentlyAdded() {
 	} else {
 	    my $content  = $response->decoded_content();
 	    my $data = XMLin($content);
-	    ## verify we are recieving what we expect.
-	    if (ref $data eq ref {}) {
+	    ## verify we are recieving what we expect. -- extra output for debugging
+	    if (!ref $data && $debug) {
+		print " result from $url is not in an expected format\n";
+		print "-------------------- CONTENT --------------------\n";
+		print $content;
+		print "-------------------- END --------------------\n";
+		print "-------------------- DUMPER --------------------\n";
+		print Dumper($data);
+		print "-------------------- END --------------------\n";
+		print " result above from $url is not in an expected format\n";
+	    }
+	    if (ref $data) {
 		if ($data->{$hkey}) {
 		    if (ref($info)) {
 			my $tmp = $data->{$hkey};
