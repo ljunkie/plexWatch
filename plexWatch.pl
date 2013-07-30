@@ -1667,9 +1667,9 @@ sub GetRecentlyAdded() {
 	} else {
             my $content  = $response->decoded_content();
             my $data = XMLin($content);
-            ## verify we are recieving what we expect.                                                                                                                                                       
+            ## verify we are recieving what we expect.
             if (ref $data eq ref {}) {
-                if ($data->{$hkey}) {
+                if ($data->{'Video'}) {
                     if (ref($info)) {
                         my $tmp = $data->{$hkey};
                         %result = (%$info, %$tmp);
@@ -1679,7 +1679,7 @@ sub GetRecentlyAdded() {
                     }
                 }
             }
-        }
+	}
     }
     return $info;
 }
