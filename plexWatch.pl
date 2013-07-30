@@ -1606,7 +1606,7 @@ sub GetRecentlyAdded() {
 	    exit(2);
 	} else {
 	    my $content  = $response->decoded_content();
-	    my $data = XMLin($content);
+	    my $data = XMLin($content, ForceArray => ['Video']);
 	    ## verify we are recieving what we expect. -- extra output for debugging
 	    if (!ref $data && $debug) {
 		print " result from $url is not in an expected format\n";
