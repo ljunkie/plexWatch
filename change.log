@@ -7,10 +7,12 @@
 #     -- pushover: ?
 #     -- gntp: ?? haven't added GNTP -- but shouldn't have limits
 # * --recently_added: 25 results per section created (multiple sections of same type: two sections with type 'shows' = 50 results )
+# * --recently_added: SKIP notifications for a video if the addedDate is older than 5 days
+# * --recently_added: process backlog of recently added ( if notification failed and more videos were added before we could process video, keep trying -- but only for 2 days)
 #
 # * Paused status:  ?? to add
 # * Add GNTP: ?
-#
+# * test_notify=recently_added  -- option to test notification for recently added content (verify provider even works)
 
 
 # 0.0.15

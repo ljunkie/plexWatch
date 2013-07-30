@@ -178,42 +178,97 @@ if ($options{'recently_added'}) {
 	exit;
     }
     
-    my $plex_sections = &GetSectionsIDs();
+    my $plex_sections = &GetSectionsIDs(); ## allow for multiple sections with the same type (movie, show, etc)
     
     my $info = &GetRecentlyAdded($plex_sections->{'types'}->{$want},$hkey);
     my $alerts = (); # containers to push alerts from oldest -> newest
-
+    
+    my %seen;
     foreach my $k (keys %{$info}) {
-	## container for debug message
-	my $debug_done =  "already notified [$k]: ";
-	$debug_done .= $info->{$k}->{'grandparentTitle'} . ' - ' if $info->{$k}->{'grandparentTitle'};
-	$debug_done .= $info->{$k}->{'title'} if $info->{$k}->{'title'};
-	$debug_done .= "\n";
-
+	$seen{$k} = 1; ## alert seen
 	my $item = &ParseDataItem($info->{$k},$want);
+	my $res = &RAdataAlert($k,$item,$want);
+	$alerts->{$item->{addedAt}.$k} = $res;
+    }
+    
+    
+    ## RA backlog - make sure we have all alerts -- some might has been added previously but notification failed and newer content has purged the results above
+    my $ra_done = &GetRecentlyAddedDB();
+    my $push_type = 'push_recentlyadded';
+    foreach my $provider (keys %{$notify}) {
+	next if ( !$notify->{$provider}->{'enabled'} || !$notify->{$provider}->{$push_type}); ## skip provider if not enabled
+	foreach my $key (keys %{$ra_done}) {
+	    next if $seen{$key}; ## already in alerts hash
+	    next if ($ra_done->{$key}->{$provider}); ## provider already notified
+
+	    ## we passed checks -- let's process this old/failed notification
+	    my $data = &GetItemMetadata($key,1);
+	    
+	    ## if result is not a ref 
+	    if (!ref($data)) {
+		##  maybe we got 404 -- I.E. old/removed video.. set at 404 -> not found
+		if ($data =~ /404/) {
+		    &SetNotified_RA($provider,$key,404);
+		    next;
+		}
+		## any other results we care about? maybe later
+	    }
+	    
+	    else {
+		my $item = &ParseDataItem($data,$want);
+		
+		## check age of notification. -- allow two days ( we will keep trying to notify for 2 days.. if we keep failing.. we need to skip this)
+		my $age = time()-$ra_done->{$key}->{'time'};
+		if ($age > 86400*2) {
+		    ## notification is OLD .. set notify = 2 to exclude from processing
+		    my $msg = "Could not notify $provider on [$key] $item->{'title'} for " . &durationrr($age) . " -- setting as old notification/done";
+		    &ConsoleLog($msg,1);
+		    &SetNotified_RA($provider,$key,2);
+		}
+		
+		next if $data->{'type'} =~ /episode/ && $want !~ /show/; ## next if episode and current task is not a show
+		next if $data->{'type'} =~ /movie/ && $want !~ /movie/;  ## next if movie and current task is not a movie
+		
+		
+		if ($alerts->{$item->{addedAt}.$key}) {
+		    ## redundant code from above hash %seen 
+		    #print "$item->{'title'} is already in current releases... nothing missed\n";
+		} else {
+		    print "$item->{'title'} is NOT in current releases -- we failed to notify previouly, so trying again\n" if $options{'debug'};
+		    my $res = &RAdataAlert($key,$item,$want);
+		    $alerts->{$item->{addedAt}.$key} = $res;
+		}
+	    }
+	    
+	}
+	
+    }
+
+
+    &ProcessRAalerts($alerts) if ref($alerts);
+}
+
+
+sub RAdataAlert() {
+    my $item_id = shift;
+    my $item = shift;
+    my $want = shift;
+    
+    my $result;
+    
+    my $debug_done = '';
+    $debug_done .= $item->{'grandparentTitle'} . ' - ' if $item->{'grandparentTitle'};
+    $debug_done .= $item->{'title'} if $item->{'title'};
+    $debug_done .= "\n";
+    
+	
 	my $alert = 'unknown type';
 	my ($alert_url,$alert_short);
 	my $add_date = &twittime($item->{addedAt});
-	
 	my $media;
 	$media .= $item->{'videoResolution'}.'p ' if $item->{'videoResolution'};
 	$media .= $item->{'audioChannels'}.'ch' if $item->{'audioChannels'};
-	#my $twitter; #twitter sucks... has to be short. --- might use this later.
-	
-	## movie alert
-	if ($want eq 'movie') {
-	    $alert = $item->{'title'};
-	    $alert_short = $item->{'title'};
-	    $alert .= " [$item->{'contentRating'}]" if $item->{'contentRating'};
-	    $alert .= " [$item->{'year'}]" if $item->{'year'};
-	    $alert .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
-	    $alert .= " [$media]" if $media;
-	    $alert .= " [$add_date]";
-	    #$twitter = $alert; ## movies are normally short enough.
-	    $alert_url .= ' http://www.imdb.com/find?s=tt&q=' . urlencode($item->{'imdb_title'});
-	}
-	
-	## tv show alert
+	##my $twitter; #twitter sucks... has to be short. --- might use this later.
 	if ($want eq 'show') {
 	    $alert = $item->{'title'};
 	    $alert_short = $item->{'title'};
@@ -229,17 +284,26 @@ if ($options{'recently_added'}) {
 	    #$twitter .= " [$add_date]";
 	    $alert_url .= ' http://www.imdb.com/find?s=tt&q=' . urlencode($item->{'imdb_title'});
 	}
+	if ($want eq 'movie') {
+	    $alert = $item->{'title'};
+	    $alert_short = $item->{'title'};
+	    $alert .= " [$item->{'contentRating'}]" if $item->{'contentRating'};
+	    $alert .= " [$item->{'year'}]" if $item->{'year'};
+	    $alert .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
+	    $alert .= " [$media]" if $media;
+	    $alert .= " [$add_date]";
+	    #$twitter = $alert; ## movies are normally short enough.
+	    $alert_url .= ' http://www.imdb.com/find?s=tt&q=' . urlencode($item->{'imdb_title'});
+	}
 	
-	$alerts->{$item->{addedAt}.$k}->{'alert'} = 'NEW: '.$alert;
-	$alerts->{$item->{addedAt}.$k}->{'alert_short'} = 'NEW: '.$alert_short;
-	$alerts->{$item->{addedAt}.$k}->{'item_id'} = $k;
-	$alerts->{$item->{addedAt}.$k}->{'debug_done'} = $debug_done;
-	$alerts->{$item->{addedAt}.$k}->{'alert_url'} = $alert_url;
-	#$alerts->{$item->{addedAt}.$k}->{'alert_tag'} = 'new'.ucfirst($want); ## twitter msg too long
+	$result->{'alert'} = 'NEW: '.$alert;
+	$result->{'alert_short'} = 'NEW: '.$alert_short;
+	$result->{'item_id'} = $item_id;
+	$result->{'debug_done'} = $debug_done;
+	$result->{'alert_url'} = $alert_url;
+	
+	return $result;
     }
-
-    &ProcessRAalerts($alerts) if ref($alerts);
-}
 
 
 ###############################################################################################################3
@@ -588,9 +652,11 @@ sub formatAlert() {
 
 sub ConsoleLog() {
     my $msg = shift;
+    my $print = shift;
     my $console;
-    if ($debug) {
+    if ($debug || $print) {
 	$console = &consoletxt("$date: DEBUG: $msg"); 
+	print   $console ."\n";   
     } elsif ($options{test_notify}) {
 	$console = &consoletxt("$date: DEBUG test_notify: $msg"); 
 	print   $console ."\n";   
@@ -821,8 +887,10 @@ sub SetNotified() {
 sub SetNotified_RA() {
     my $provider = shift;
     my $id = shift;
+    my $status = shift;
+    $status = 1 if !$status; ## status = 1 by default (success), 2 = failed - day old.. do not process anymore
     if ($id) {
-	my $cmd = "update recently_added set $provider = 1 where item_id = '$id'";
+	my $cmd = "update recently_added set $provider = $status where item_id = '$id'";
 	print $cmd . "\n" if ($debug);
 	my $sth = $dbh->prepare($cmd);
 	$sth->execute or die("Unable to execute query: $dbh->errstr\n");
@@ -1419,11 +1487,11 @@ sub RunTestNotify() {
     $ntype = 'push_recently_added' if $options{test_notify} =~ /recent/;
     if ($ntype =~ /push_recently_added/) {
 	my $alerts = ();
-	$alerts->{1}->{'alert'} = 'NEW: '. ' test recently added alert';
-	$alerts->{1}->{'alert_short'} = 'NEW: '. 'test recently added alert (short version)';
-	$alerts->{1}->{'item_id'} = 'test_item_id';
-	$alerts->{1}->{'debug_done'} = 'testing alert already done';
-	$alerts->{1}->{'alert_url'} = 'https://github.com/ljunkie/plexWatch';
+	$alerts->{'test'}->{'alert'} = 'NEW: '. ' test recently added alert';
+	$alerts->{'test'}->{'alert_short'} = 'NEW: '. 'test recently added alert (short version)';
+	$alerts->{'test'}->{'item_id'} = 'test_item_id';
+	$alerts->{'test'}->{'debug_done'} = 'testing alert already done';
+	$alerts->{'test'}->{'alert_url'} = 'https://github.com/ljunkie/plexWatch';
 	&ProcessRAalerts($alerts,1);
     } else {
 	
@@ -1475,6 +1543,7 @@ sub ParseDataItem() {
     my $data = shift;
     my $type = shift;
     my $info = $data; ## fallback
+    
     if ($type =~ /movie/i || $type=~/show/) {
 	$info = ();    	
 	$info->{'originallyAvailableAt'} = $data->{'originallyAvailableAt'};
@@ -1528,6 +1597,34 @@ sub GetSectionsIDs() {
 	}
     }
     return $sections;
+}
+
+sub GetItemMetadata() {
+    my $ua      = LWP::UserAgent->new();
+    my $host = "http://$server:$port";
+    my $item = shift;
+    my $full_uri = shift;
+    my $url = $host . '/library/metadata/' . $item;
+    if ($full_uri) {
+	$url = $host . $item;
+    }
+    
+    my $sections = ();
+    my $response = $ua->get( $url );
+    if ( ! $response->is_success ) {
+	if ($options{'debug'}) {
+	    print "Failed to get MetaData from from $url\n";
+	    print Dumper($response);
+	}
+	return $response->{'_rc'} if $response->{'_rc'} == 404;
+	exit(2);
+    } else {
+	my $content  = $response->decoded_content();
+	#my $vid = XMLin($hash,KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
+	#my $data = XMLin($content, KeyAttr => { Role => ''} );
+	my $data = XMLin($content);
+	return $data->{'Video'} if $data->{'Video'};
+    }
 }
 
 sub GetRecentlyAdded() {
@@ -1584,22 +1681,36 @@ sub ProcessRAalerts() {
     my $alerts = shift;
     my $test_notify = shift;
     my $count = 0;
-
+    
     my $ra_done = &GetRecentlyAddedDB() if !$test_notify;  ## only check if done if this is NOT a test
-
+    
+    ## used for output
+    my $done_keys = {'1' => 'Already notified',
+		     '2' => 'Skipeed notify - to many failures',
+		     '3' => 'Skipped notify - not recent enough to notify',
+		     '404' => 'Not Found - No longer found on PMS',
+    };
+    
     ## $alerts: keys
     # item_id
     # debug_done
     # alert_tag
     # alert_url
     # alert_short
+    my %notseen;
     foreach my $k ( sort keys %{$alerts}) {
 	$count++;
+	my $is_old = 0;
+	if ($k =~ /(\d+)\//) {
+	    my $epoch = $1;
+	    my $age = time()-$epoch;
+	    if ($age > 86400*5) { $is_old = 1; }
+	}
+	
 	my $item_id = $alerts->{$k}->{'item_id'};
 	my $debug_done = $alerts->{$k}->{'debug_done'};
+	
 	## add item to DB -- will ignore insert if already inserte.. wish sqlite has upsert
-	#print $alerts->{$k}->{'alert'} . "\n";
-	#next;
 	&ProcessRecentlyAdded($item_id)  if !$test_notify; 
 	
 	my $push_type = 'push_recentlyadded';
@@ -1613,7 +1724,9 @@ sub ProcessRAalerts() {
 	## file logging
 	if ($notify->{'file'}->{'enabled'}) {	
 	    if ($ra_done->{$item_id}->{$provider}) {
-		print $provider . ' ' . $debug_done if $debug;
+		print uc($provider) . ': ' . $done_keys->{$ra_done->{$item_id}->{$provider}} . ' -- ' . $debug_done if $debug;
+	    } elsif ($is_old) {
+		&SetNotified_RA($provider,$item_id,3);
 	    } else {
 		&ConsoleLog($alerts->{$k}->{'alert'});
 		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
@@ -1624,8 +1737,10 @@ sub ProcessRAalerts() {
 	$provider = 'prowl';
 	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
 	    if ($ra_done->{$item_id}->{$provider}) {
-		print $provider . ' ' . $debug_done if $debug;
-	    } 
+		print uc($provider) . ': ' . $done_keys->{$ra_done->{$item_id}->{$provider}} . ' -- ' . $debug_done if $debug;
+	    } elsif ($is_old) {
+		&SetNotified_RA($provider,$item_id,3);
+	    }
 	    elsif (&NotifyProwl($alerts->{$k}->{'alert'},'',$alerts->{$k}->{'alert_short'})) {
 		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
 	    } 
@@ -1639,8 +1754,10 @@ sub ProcessRAalerts() {
 	$provider = 'pushover';
 	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
 	    if ($ra_done->{$item_id}->{$provider}) {
-		print $provider . ' ' . $debug_done if $debug;
-	    } 
+		print uc($provider) . ': ' . $done_keys->{$ra_done->{$item_id}->{$provider}} . ' -- ' . $debug_done if $debug;
+	    } elsif ($is_old) {
+		&SetNotified_RA($provider,$item_id,3);
+	    }
 	    elsif (&NotifyPushOver($alerts->{$k}->{'alert'})) {
 		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
 	    } 
@@ -1654,7 +1771,9 @@ sub ProcessRAalerts() {
 	$provider = 'growl';
 	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
 	    if ($ra_done->{$item_id}->{$provider}) {
-		print $provider . ' ' . $debug_done if $debug;
+		print uc($provider) . ': ' . $done_keys->{$ra_done->{$item_id}->{$provider}} . ' -- ' . $debug_done if $debug;
+	    } elsif ($is_old) {
+		&SetNotified_RA($provider,$item_id,3);
 	    } 
 	    elsif (&NotifyGrowl($alerts->{$k}->{'alert'})) {
 		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
@@ -1669,8 +1788,10 @@ sub ProcessRAalerts() {
 	$provider = 'twitter';
 	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
 	    if ($ra_done->{$item_id}->{$provider}) {
-		print $provider . ' ' . $debug_done if $debug;
-	    } 
+		print uc($provider) . ': ' . $done_keys->{$ra_done->{$item_id}->{$provider}} . ' -- ' . $debug_done if $debug;
+	    } elsif ($is_old) {
+		&SetNotified_RA($provider,$item_id,3);
+	    }
 	    elsif (&NotifyTwitter($alerts->{$k}->{'alert'},$alerts->{$k}->{'alert_tag'},$alerts->{$k}->{'alert_url'})) {
 		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
 	    } 
@@ -1684,8 +1805,10 @@ sub ProcessRAalerts() {
 	$provider = 'boxcar';
 	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
 	    if ($ra_done->{$item_id}->{$provider}) {
-		print $provider . ' ' . $debug_done if $debug;
-	    } 
+		print uc($provider) . ': ' . $done_keys->{$ra_done->{$item_id}->{$provider}} . ' -- ' . $debug_done if $debug;
+	    } elsif ($is_old) {
+		&SetNotified_RA($provider,$item_id,3);
+	    }
 	    elsif (&NotifyBoxcar($alerts->{$k}->{'alert'})) {
 		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
 	    } 
@@ -1695,7 +1818,9 @@ sub ProcessRAalerts() {
 		}
 	    }
 	}
-    }
+	
+    } # end alerts
+
 }
 
 
