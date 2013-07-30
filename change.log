@@ -14,7 +14,8 @@
 # * Add GNTP: ?
 # * test_notify=recently_added  -- option to test notification for recently added content (verify provider even works)
 # * config.pl: $notify_started and $notify_stopped deprecated: use per provider settings globally (i.e. push_watched, push_watching)
-
+# * recently_added: bugfix - failed when section only have 1 video.
+	
 # 0.0.15
 # * added recently_added=[movie,show]  -- notify on recently added items to PMS
 # * Twitter added as a provider
