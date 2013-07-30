@@ -35,7 +35,7 @@ if (!-e $dirname .'/config.pl') {
     exit;
 }
 do $dirname.'/config.pl';
-use vars qw/$data_dir $server $port $notify_started $notify_stopped $appname $user_display $alert_format $notify/; 
+use vars qw/$data_dir $server $port $appname $user_display $alert_format $notify/; 
 if (!$data_dir || !$server || !$port || !$appname || !$alert_format || !$notify) {
     print "config file missing data\n";
     exit;
@@ -151,6 +151,9 @@ if  ($options{test_notify}) {
     exit;
 }
 
+
+my %notify_func = &GetNotifyfuncs();
+
 ########################################## START MAIN #######################################################
 
 
@@ -191,7 +194,6 @@ if ($options{'recently_added'}) {
 	$alerts->{$item->{addedAt}.$k} = $res;
     }
     
-    
     ## RA backlog - make sure we have all alerts -- some might has been added previously but notification failed and newer content has purged the results above
     my $ra_done = &GetRecentlyAddedDB();
     my $push_type = 'push_recentlyadded';
@@ -219,7 +221,8 @@ if ($options{'recently_added'}) {
 		
 		## check age of notification. -- allow two days ( we will keep trying to notify for 2 days.. if we keep failing.. we need to skip this)
 		my $age = time()-$ra_done->{$key}->{'time'};
-		if ($age > 86400*2) {
+		my $ra_max_fail_days = 2; ## TODO: advanced config options?
+		if ($age > 86400*$ra_max_fail_days) {
 		    ## notification is OLD .. set notify = 2 to exclude from processing
 		    my $msg = "Could not notify $provider on [$key] $item->{'title'} for " . &durationrr($age) . " -- setting as old notification/done";
 		    &ConsoleLog($msg,1);
@@ -255,55 +258,56 @@ sub RAdataAlert() {
     my $want = shift;
     
     my $result;
+
+    my $add_date = &twittime($item->{addedAt});
     
     my $debug_done = '';
     $debug_done .= $item->{'grandparentTitle'} . ' - ' if $item->{'grandparentTitle'};
     $debug_done .= $item->{'title'} if $item->{'title'};
-    $debug_done .= "\n";
+    $debug_done .= " [$add_date]";
     
-	
-	my $alert = 'unknown type';
-	my ($alert_url,$alert_short);
-	my $add_date = &twittime($item->{addedAt});
-	my $media;
-	$media .= $item->{'videoResolution'}.'p ' if $item->{'videoResolution'};
-	$media .= $item->{'audioChannels'}.'ch' if $item->{'audioChannels'};
-	##my $twitter; #twitter sucks... has to be short. --- might use this later.
-	if ($want eq 'show') {
-	    $alert = $item->{'title'};
-	    $alert_short = $item->{'title'};
-	    $alert .= " [$item->{'contentRating'}]" if $item->{'contentRating'};
-	    $alert .= " [$item->{'year'}]" if $item->{'year'};
-	    $alert .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
-	    $alert .= " [$media]" if $media;
-	    $alert .= " [$add_date]";
-	    #$twitter = $item->{'title'};
-	    #$twitter .= " [$item->{'year'}]";
-	    #$twitter .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
-	    #$twitter .= " [$media]" if $media;
-	    #$twitter .= " [$add_date]";
-	    $alert_url .= ' http://www.imdb.com/find?s=tt&q=' . urlencode($item->{'imdb_title'});
-	}
-	if ($want eq 'movie') {
-	    $alert = $item->{'title'};
-	    $alert_short = $item->{'title'};
-	    $alert .= " [$item->{'contentRating'}]" if $item->{'contentRating'};
-	    $alert .= " [$item->{'year'}]" if $item->{'year'};
-	    $alert .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
-	    $alert .= " [$media]" if $media;
-	    $alert .= " [$add_date]";
-	    #$twitter = $alert; ## movies are normally short enough.
-	    $alert_url .= ' http://www.imdb.com/find?s=tt&q=' . urlencode($item->{'imdb_title'});
-	}
-	
-	$result->{'alert'} = 'NEW: '.$alert;
-	$result->{'alert_short'} = 'NEW: '.$alert_short;
-	$result->{'item_id'} = $item_id;
-	$result->{'debug_done'} = $debug_done;
-	$result->{'alert_url'} = $alert_url;
-	
-	return $result;
+    
+    my $alert = 'unknown type';
+    my ($alert_url,$alert_short);
+    my $media;
+    $media .= $item->{'videoResolution'}.'p ' if $item->{'videoResolution'};
+    $media .= $item->{'audioChannels'}.'ch' if $item->{'audioChannels'};
+    ##my $twitter; #twitter sucks... has to be short. --- might use this later.
+    if ($want eq 'show') {
+	$alert = $item->{'title'};
+	$alert_short = $item->{'title'};
+	$alert .= " [$item->{'contentRating'}]" if $item->{'contentRating'};
+	$alert .= " [$item->{'year'}]" if $item->{'year'};
+	$alert .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
+	$alert .= " [$media]" if $media;
+	$alert .= " [$add_date]";
+	#$twitter = $item->{'title'};
+	#$twitter .= " [$item->{'year'}]";
+	#$twitter .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
+	#$twitter .= " [$media]" if $media;
+	#$twitter .= " [$add_date]";
+	$alert_url .= ' http://www.imdb.com/find?s=tt&q=' . urlencode($item->{'imdb_title'});
     }
+    if ($want eq 'movie') {
+	$alert = $item->{'title'};
+	$alert_short = $item->{'title'};
+	$alert .= " [$item->{'contentRating'}]" if $item->{'contentRating'};
+	$alert .= " [$item->{'year'}]" if $item->{'year'};
+	$alert .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
+	$alert .= " [$media]" if $media;
+	$alert .= " [$add_date]";
+	#$twitter = $alert; ## movies are normally short enough.
+	$alert_url .= ' http://www.imdb.com/find?s=tt&q=' . urlencode($item->{'imdb_title'});
+    }
+    
+    $result->{'alert'} = 'NEW: '.$alert;
+    $result->{'alert_short'} = 'NEW: '.$alert_short;
+    $result->{'item_id'} = $item_id;
+    $result->{'debug_done'} = $debug_done;
+    $result->{'alert_url'} = $alert_url;
+    
+    return $result;
+}
 
 
 ###############################################################################################################3
@@ -647,6 +651,7 @@ sub formatAlert() {
     $regex = qr/$regex/;
     $s =~ s/{($regex)}/$alert{$1}/g;
     $orig =~ s/{($regex)}/$alert{$1}/g;
+    ## $orig is pretty much deprecated..
     return ($s,$orig);
 }
 
@@ -670,6 +675,7 @@ sub ConsoleLog() {
 	print FILE "$console\n";
 	close(FILE);
     }
+    return 1;
 }
 
 sub Notify() {
@@ -677,10 +683,6 @@ sub Notify() {
     my $ret_alert = shift;
     my $type = $info->{'ntype'};
     my ($alert,$orig) = &formatAlert($info);
-    my $extra = ''; ## clean me
-    
-    ## file logging
-    &ConsoleLog($alert);
     
     ## --exclude_user array ref -- do not notify if user is excluded.. however continue processing -- logging to DB - logging to file still happens.
     return 1 if ( grep { $_ =~ /$info->{'orig_user'}/i } @{$options{'exclude_user'}});
@@ -688,26 +690,41 @@ sub Notify() {
     
     ## only return the alert - do not notify -- used for CLI to keep formatting the same
     return &consoletxt($alert) if $ret_alert;
+        
+    my $push_type;
+    if ($type =~ /start/) {	$push_type = 'push_watching';    } 
+    if ($type =~ /stop/) {	$push_type = 'push_watched';    } 
+    
+    foreach my $provider (keys %{$notify}) {
+	if ( ( $notify->{$provider}->{'enabled'} ) && ( $notify->{$provider}->{$push_type} || $provider =~ /file/)) { 
+	    $notify_func{$provider}->($alert);
+	}
+    }
+
+    ## OLD STYLE - to remove at a later date
+    ## file logging
+    #&ConsoleLog($alert);
     
     ## started :: watching
-    if ($notify_started && $type =~ /start/) {
-	my $push_type = 'push_watching';
-	if ($notify->{'prowl'}->{'enabled'} && $notify->{'prowl'}->{$push_type})       { &NotifyProwl($alert,$type,$orig); }
-	if ($notify->{'pushover'}->{'enabled'} && $notify->{'pushover'}->{$push_type}) { &NotifyPushOver($alert);          }
-	if ($notify->{'growl'}->{'enabled'} && $notify->{'growl'}->{$push_type})       { &NotifyGrowl($alert);             }
-	if ($notify->{'twitter'}->{'enabled'} && $notify->{'twitter'}->{$push_type})   { &NotifyTwitter($alert);             }
-	if ($notify->{'boxcar'}->{'enabled'} && $notify->{'boxcar'}->{$push_type})     { &NotifyBoxcar($alert);             }
-    }
-    
-    ## stopped :: watched
-    if ($notify_stopped && $type =~ /stop/) {    
-	my $push_type = 'push_watched';
-	if ($notify->{'prowl'}->{'enabled'} && $notify->{'prowl'}->{$push_type})       { &NotifyProwl($alert,$type,$orig); }
-	if ($notify->{'pushover'}->{'enabled'} && $notify->{'pushover'}->{$push_type}) { &NotifyPushOver($alert);          }
-	if ($notify->{'growl'}->{'enabled'} && $notify->{'growl'}->{$push_type})       { &NotifyGrowl($alert);             }
-	if ($notify->{'twitter'}->{'enabled'} && $notify->{'twitter'}->{$push_type})   { &NotifyTwitter($alert);             }
-	if ($notify->{'boxcar'}->{'enabled'} && $notify->{'boxcar'}->{$push_type})     { &NotifyBoxcar($alert);             }
-    }
+    #    if ($notify_started && $type =~ /start/) {
+    #	my $push_type = 'push_watching';
+    #	if ($notify->{'prowl'}->{'enabled'} && $notify->{'prowl'}->{$push_type})       { &NotifyProwl($alert); }
+    #	if ($notify->{'pushover'}->{'enabled'} && $notify->{'pushover'}->{$push_type}) { &NotifyPushOver($alert);          }
+    #	if ($notify->{'growl'}->{'enabled'} && $notify->{'growl'}->{$push_type})       { &NotifyGrowl($alert);             }
+    #	if ($notify->{'twitter'}->{'enabled'} && $notify->{'twitter'}->{$push_type})   { &NotifyTwitter($alert);             }
+    #	if ($notify->{'boxcar'}->{'enabled'} && $notify->{'boxcar'}->{$push_type})     { &NotifyBoxcar($alert);             }
+    #    }
+    #    
+    #    ## stopped :: watched
+    #    if ($notify_stopped && $type =~ /stop/) {    
+    #	my $push_type = 'push_watched';
+    #	if ($notify->{'prowl'}->{'enabled'} && $notify->{'prowl'}->{$push_type})       { &NotifyProwl($alert); }
+    #	if ($notify->{'pushover'}->{'enabled'} && $notify->{'pushover'}->{$push_type}) { &NotifyPushOver($alert);          }
+    #	if ($notify->{'growl'}->{'enabled'} && $notify->{'growl'}->{$push_type})       { &NotifyGrowl($alert);             }
+    #	if ($notify->{'twitter'}->{'enabled'} && $notify->{'twitter'}->{$push_type})   { &NotifyTwitter($alert);             }
+    #	if ($notify->{'boxcar'}->{'enabled'} && $notify->{'boxcar'}->{$push_type})     { &NotifyBoxcar($alert);             }
+    #    }
+    ## end OLD STYLE
 }
 
 sub RawNotify() {
@@ -1184,13 +1201,13 @@ sub NotifyProwl() {
     
     $prowl{'event'} = '';
     $prowl{'notification'} = shift;    
-    if ($prowl{'collapse'}) {
-	my $type = shift;
-	my $orig = shift;
-	#my @p = split(':',shift);
-	#$prowl{'application'} .= ' - ' . shift(@p);
-	$prowl{'event'} = $orig;
-    }
+    
+    #if ($prowl{'collapse'}) {
+    #	my $orig = shift;
+    #	#my @p = split(':',shift);
+    #	#$prowl{'application'} .= ' - ' . shift(@p);
+    #	$prowl{'event'} = $orig;
+    #   }
     
     $prowl{'priority'} ||= 0;
     $prowl{'application'} ||= $appname;
@@ -1321,7 +1338,7 @@ sub NotifyGrowl() {
 	print STDERR "\nFailed to send GROWL notification -- $growl{'script'} does not exists\n";
 	return 0;
     } else {
-	system( $growl{'script'}, "-n", $growl{'appname'}, "--image", $growl{'icon'}, "-m", $alert); 
+	system( $growl{'script'}, "-n", $growl{'application'}, "--image", $growl{'icon'}, "-m", $alert); 
 	return 1; ## need better error checking here -- no mac, so I can't test it.
     }
 }
@@ -1685,9 +1702,9 @@ sub ProcessRAalerts() {
     my $ra_done = &GetRecentlyAddedDB() if !$test_notify;  ## only check if done if this is NOT a test
     
     ## used for output
-    my $done_keys = {'1' => 'Already notified',
-		     '2' => 'Skipeed notify - to many failures',
-		     '3' => 'Skipped notify - not recent enough to notify',
+    my $done_keys = {'1' => 'Already Notified',
+		     '2' => 'Skipped Notify - to many failures',
+		     '3' => 'Skipped Notify - not recent enough to notify',
 		     '404' => 'Not Found - No longer found on PMS',
     };
     
@@ -1701,16 +1718,20 @@ sub ProcessRAalerts() {
     foreach my $k ( sort keys %{$alerts}) {
 	$count++;
 	my $is_old = 0;
+
+	## VERIFY notification is for content only recently Added -- RA content is not always recent
+	## we will allow for 1 day ( you can set this higher, but shouldn't have to if run on a 5 min cron)
+	my $ra_max_age = 1; ## TODO - advanced config options
 	if ($k =~ /(\d+)\//) {
 	    my $epoch = $1;
 	    my $age = time()-$epoch;
-	    if ($age > 86400*5) { $is_old = 1; }
+	    if ($age > 86400*$ra_max_age) { $is_old = 1; }
 	}
 	
 	my $item_id = $alerts->{$k}->{'item_id'};
 	my $debug_done = $alerts->{$k}->{'debug_done'};
 	
-	## add item to DB -- will ignore insert if already inserte.. wish sqlite has upsert
+	## add item to DB -- will ignore insert if already insert.. wish sqlite has upsert
 	&ProcessRecentlyAdded($item_id)  if !$test_notify; 
 	
 	my $push_type = 'push_recentlyadded';
@@ -1719,109 +1740,163 @@ sub ProcessRAalerts() {
 	## 'recently_added' table has columns for each provider -- we will notify and verify each provider has success. 
 	## TODO - extend this logic into the normal notifications
 	
+	## new code - iterate through all providers.. same code block
+	
+	foreach my $provider (keys %{$notify}) {
+	    # provider is globaly enable and provider push type is enable or is file
+
+	    #elsif (&NotifyProwl($alerts->{$k}->{'alert'},'',$alerts->{$k}->{'alert_short'})) {
+	    #    &SetNotified_RA($provider,$item_id)   if !$test_notify; 
+	    #} 
+
+	    if ( ( $notify->{$provider}->{'enabled'} ) && ( $notify->{$provider}->{$push_type} || $provider =~ /file/)) { 
+		if ($ra_done->{$item_id}->{$provider}) {
+		    printf("%s: %-8s %s [%s]\n", scalar localtime($ra_done->{$item_id}->{'time'}) , uc($provider) , $debug_done, $done_keys->{$ra_done->{$item_id}->{$provider}}) if $debug;
+		} elsif ($is_old) {
+		    &SetNotified_RA($provider,$item_id,3);
+		}
+		elsif ($notify_func{$provider}->($alerts->{$k}->{'alert'})) {
+		    &SetNotified_RA($provider,$item_id)   if !$test_notify; 
+		} 
+		else {
+		    if (( $provider_452->{$provider} && $options{'debug'}) || $options{'debug'}) {
+			print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
+		    }
+		}	
+	    }
+	}
+	
+
+	## OLD style - to cleanup
 	## logging to file
-	$provider = 'file';
-	## file logging
-	if ($notify->{'file'}->{'enabled'}) {	
-	    if ($ra_done->{$item_id}->{$provider}) {
-		print uc($provider) . ': ' . $done_keys->{$ra_done->{$item_id}->{$provider}} . ' -- ' . $debug_done if $debug;
-	    } elsif ($is_old) {
-		&SetNotified_RA($provider,$item_id,3);
-	    } else {
-		&ConsoleLog($alerts->{$k}->{'alert'});
-		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
-	    }
-	}
-	####
-	
-	$provider = 'prowl';
-	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
-	    if ($ra_done->{$item_id}->{$provider}) {
-		print uc($provider) . ': ' . $done_keys->{$ra_done->{$item_id}->{$provider}} . ' -- ' . $debug_done if $debug;
-	    } elsif ($is_old) {
-		&SetNotified_RA($provider,$item_id,3);
-	    }
-	    elsif (&NotifyProwl($alerts->{$k}->{'alert'},'',$alerts->{$k}->{'alert_short'})) {
-		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
-	    } 
-	    else {
-		if (( $provider_452->{$provider} && $options{'debug'}) || $options{'debug'}) {
-		    print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
-		}
-	    }
-	}
-	
-	$provider = 'pushover';
-	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
-	    if ($ra_done->{$item_id}->{$provider}) {
-		print uc($provider) . ': ' . $done_keys->{$ra_done->{$item_id}->{$provider}} . ' -- ' . $debug_done if $debug;
-	    } elsif ($is_old) {
-		&SetNotified_RA($provider,$item_id,3);
-	    }
-	    elsif (&NotifyPushOver($alerts->{$k}->{'alert'})) {
-		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
-	    } 
-	    else {
-		if (( $provider_452->{$provider} && $options{'debug'}) || $options{'debug'}) {
-		    print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
-		}
-	    }
-	}
-	
-	$provider = 'growl';
-	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
-	    if ($ra_done->{$item_id}->{$provider}) {
-		print uc($provider) . ': ' . $done_keys->{$ra_done->{$item_id}->{$provider}} . ' -- ' . $debug_done if $debug;
-	    } elsif ($is_old) {
-		&SetNotified_RA($provider,$item_id,3);
-	    } 
-	    elsif (&NotifyGrowl($alerts->{$k}->{'alert'})) {
-		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
-	    } 
-	    else {
-		if (( $provider_452->{$provider} && $options{'debug'}) || $options{'debug'}) {
-		    print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
-		}
-	    }
-	}
-	
-	$provider = 'twitter';
-	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
-	    if ($ra_done->{$item_id}->{$provider}) {
-		print uc($provider) . ': ' . $done_keys->{$ra_done->{$item_id}->{$provider}} . ' -- ' . $debug_done if $debug;
-	    } elsif ($is_old) {
-		&SetNotified_RA($provider,$item_id,3);
-	    }
-	    elsif (&NotifyTwitter($alerts->{$k}->{'alert'},$alerts->{$k}->{'alert_tag'},$alerts->{$k}->{'alert_url'})) {
-		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
-	    } 
-	    else {
-		if (( $provider_452->{$provider} && $options{'debug'}) || $options{'debug'}) {
-		    print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
-		}
-	    }
-	}
-	
-	$provider = 'boxcar';
-	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
-	    if ($ra_done->{$item_id}->{$provider}) {
-		print uc($provider) . ': ' . $done_keys->{$ra_done->{$item_id}->{$provider}} . ' -- ' . $debug_done if $debug;
-	    } elsif ($is_old) {
-		&SetNotified_RA($provider,$item_id,3);
-	    }
-	    elsif (&NotifyBoxcar($alerts->{$k}->{'alert'})) {
-		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
-	    } 
-	    else {
-		if (( $provider_452->{$provider} && $options{'debug'}) || $options{'debug'}) {
-		    print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
-		}
-	    }
-	}
+	#
+	#	$provider = 'file';
+	#	## file logging
+	#	if ($notify->{'file'}->{'enabled'}) {	
+	#	    if ($ra_done->{$item_id}->{$provider}) {
+	#		printf("%s: %-8s %s [%s]\n", scalar localtime($ra_done->{$item_id}->{'time'}) , uc($provider) , $debug_done, $done_keys->{$ra_done->{$item_id}->{$provider}}) if $debug;
+	#	    } elsif ($is_old) {
+	#		&SetNotified_RA($provider,$item_id,3);
+	#	    } else {
+	#		&ConsoleLog($alerts->{$k}->{'alert'});
+	#		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
+	#	    }
+	#	}
+	#	####
+	#	
+	#	$provider = 'prowl';
+	#	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
+	#	    if ($ra_done->{$item_id}->{$provider}) {
+	#		printf("%s: %-8s %s [%s]\n", scalar localtime($ra_done->{$item_id}->{'time'}) , uc($provider) , $debug_done, $done_keys->{$ra_done->{$item_id}->{$provider}}) if $debug;
+	#	    } elsif ($is_old) {
+	#		&SetNotified_RA($provider,$item_id,3);
+	#	    }
+	#	    elsif (&NotifyProwl($alerts->{$k}->{'alert'},'',$alerts->{$k}->{'alert_short'})) {
+	#		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
+	#	    } 
+	#	    else {
+	#		if (( $provider_452->{$provider} && $options{'debug'}) || $options{'debug'}) {
+	#		    print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
+	#		}
+	#	    }
+	#	}
+	#	
+	#	$provider = 'pushover';
+	#	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
+	#	    if ($ra_done->{$item_id}->{$provider}) {
+	#		printf("%s: %-8s %s [%s]\n", scalar localtime($ra_done->{$item_id}->{'time'}) , uc($provider) , $debug_done, $done_keys->{$ra_done->{$item_id}->{$provider}}) if $debug;
+	#	    } elsif ($is_old) {
+	#		&SetNotified_RA($provider,$item_id,3);
+	#	    }
+	#	    elsif (&NotifyPushOver($alerts->{$k}->{'alert'})) {
+	#		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
+	#	    } 
+	#	    else {
+	#		if (( $provider_452->{$provider} && $options{'debug'}) || $options{'debug'}) {
+	#		    print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
+	#		}
+	#	    }
+	#	}
+	#	
+	#	$provider = 'growl';
+	#	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
+	#	    if ($ra_done->{$item_id}->{$provider}) {
+	#		printf("%s: %-8s %s [%s]\n", scalar localtime($ra_done->{$item_id}->{'time'}) , uc($provider) , $debug_done, $done_keys->{$ra_done->{$item_id}->{$provider}}) if $debug;
+	#	    } elsif ($is_old) {
+	#		&SetNotified_RA($provider,$item_id,3);
+	#	    } 
+	#	    elsif (&NotifyGrowl($alerts->{$k}->{'alert'})) {
+	#		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
+	#	    } 
+	#	    else {
+	#		if (( $provider_452->{$provider} && $options{'debug'}) || $options{'debug'}) {
+	#		    print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
+	#		}
+	#	    }
+	#	}
+	#	
+	#	$provider = 'twitter';
+	#	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
+	#	    if ($ra_done->{$item_id}->{$provider}) {
+	#		printf("%s: %-8s %s [%s]\n", scalar localtime($ra_done->{$item_id}->{'time'}) , uc($provider) , $debug_done, $done_keys->{$ra_done->{$item_id}->{$provider}}) if $debug;
+	#	    } elsif ($is_old) {
+	#		&SetNotified_RA($provider,$item_id,3);
+	#	    }
+	#	    elsif (&NotifyTwitter($alerts->{$k}->{'alert'},$alerts->{$k}->{'alert_tag'},$alerts->{$k}->{'alert_url'})) {
+	#		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
+	#	    } 
+	#	    else {
+	#		if (( $provider_452->{$provider} && $options{'debug'}) || $options{'debug'}) {
+	#		    print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
+	#		}
+	#	    }
+	#	}
+	#	
+	#	$provider = 'boxcar';
+	#	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
+	#	    if ($ra_done->{$item_id}->{$provider}) {
+	#		printf("%s: %-8s %s [%s]\n", scalar localtime($ra_done->{$item_id}->{'time'}) , uc($provider) , $debug_done, $done_keys->{$ra_done->{$item_id}->{$provider}}) if $debug;
+	#	    } elsif ($is_old) {
+	#		&SetNotified_RA($provider,$item_id,3);
+	#	    }
+	#	    elsif (&NotifyBoxcar($alerts->{$k}->{'alert'})) {
+	#		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
+	#	    } 
+	#	    else {
+	#		if (( $provider_452->{$provider} && $options{'debug'}) || $options{'debug'}) {
+	#		    print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
+	#		}
+	#	    }
+	#	}
+	#	
+	## END OLD STYLE
 	
     } # end alerts
 
 }
+
+sub GetNotifyfuncs() {
+    my %notify_func = (
+	prowl => \&NotifyProwl,
+	growl => \&NotifyGrowl,
+	pushover => \&NotifyPushOver,
+	twitter => \&NotifyTwitter,
+	boxcar => \&NotifyBoxcar,
+	file => \&ConsoleLog,
+	);
+    my $error;
+    ## this SHOULD never happen if the code is released -- this is just a reminder for whomever is adding a new provider in config.pl
+    foreach my $provider (keys %{$notify}) {
+	if (!$notify_func{$provider}) {
+	    print "$provider: missing a notify function subroutine (did you add a new provider?) -- check 'sub GetNotifyfuncs()' \n";
+	    $error = 1;
+	}
+    }
+    die if $error;
+    return %notify_func;
+}
+
+
 
 
 

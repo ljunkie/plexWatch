@@ -3,8 +3,8 @@ $data_dir = '/opt/plexWatch/'; ## to store the DB, logfile - can be the same as 
 $server = 'localhost'; ## IP of PMS - or localhost
 $port = 32400;         ## port of PMS
 
-$notify_started = 1;   ## notify when a stream is started
-$notify_stopped = 1;   ## notify when a stream is stopped
+$notify_started = 1;   # !deprecated -- does nothing anymore (use push_watched, push_watching in $notify)
+$notify_stopped = 1;   # !deprecated -- does nothing anymore (use push_watched, push_watching in $notify)
 
 $appname = 'plexWatch';
 
@@ -42,7 +42,7 @@ $notify = {
        'application' => $appname,
        'priority' => 0,
        'url' => '',
-       'collapse' => 0, ## will change formating if collapsed notification are set in prowl    
+       'collapse' => 0, ## will change formating if collapsed notification are set in prowl   (deprecated)
     },
     
     'pushover' => {
