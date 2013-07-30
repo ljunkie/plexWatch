@@ -1,21 +1,25 @@
+### TODO
+# * Add titles to notification -- i.e. pass the notification type (push_watched, push_watching, push_recently_added) to the sub routines 
+# * Paused status:  ?? to add ( every run update XML ) -- some DB changes needed too
+# * Add GNTP: ?
+# * failed,452 status for --watching, --watched ( keep trying notification if failed... set failed and skip after X number of failures or if notification is X old)
+#      --- show current time if notification is OLD  'user watching movie  (36 minutes / 120 minutes)' -- requires the pause status update
+
 # 0.0.16-1-dev
-# * rate limiting: provide mechinisms to back off notifications if provider fails
+# * rate limiting: provide mechinisms to back off notifications if provider fails (mainly due to --recently_added)
 #     -- twitter: no api for writes. If we recieve 403, we assume user hit daily limits (unknown hourly limit). Do not process additional notification until next run.
 #     -- boxcar: ?
 #     -- prowl: ?
-#     -- growl: ?? shoulw not have limits
+#     -- growl: ?? should not have limits
 #     -- pushover: ?
 #     -- gntp: ?? haven't added GNTP -- but shouldn't have limits
 # * --recently_added: 25 results per section created (multiple sections of same type: two sections with type 'shows' = 50 results )
-# * --recently_added: SKIP notifications for a video if the addedDate is older than 5 days
+# * --recently_added: SKIP notifications for a video if the addedDate is older than 1 day
 # * --recently_added: process backlog of recently added ( if notification failed and more videos were added before we could process video, keep trying -- but only for 2 days)
-#
-# * Paused status:  ?? to add
-# * Add GNTP: ?
 # * test_notify=recently_added  -- option to test notification for recently added content (verify provider even works)
 # * config.pl: $notify_started and $notify_stopped deprecated: use per provider settings globally (i.e. push_watched, push_watching)
 # * recently_added: bugfix - failed when section only have 1 video.
-	
+
 # 0.0.15
 # * added recently_added=[movie,show]  -- notify on recently added items to PMS
 # * Twitter added as a provider
