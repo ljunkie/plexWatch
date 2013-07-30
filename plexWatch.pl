@@ -189,6 +189,15 @@ if ($options{'recently_added'}) {
     my %seen;
     foreach my $k (keys %{$info}) {
 	$seen{$k} = 1; ## alert seen
+	if (!ref($info->{$k})) {
+	    if ($debug) {
+		print "Skipping KEY '$k' (expected key =~ '/library/metadata/###') -- it's not a hash ref?\n";
+		print "\$info->{'$k'} is not a hash ref?\n";
+		print Dumper($info->{$k});
+	    }
+	    next;
+	}
+
 	my $item = &ParseDataItem($info->{$k},$want);
 	my $res = &RAdataAlert($k,$item,$want);
 	$alerts->{$item->{addedAt}.$k} = $res;
