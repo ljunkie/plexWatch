@@ -1665,16 +1665,21 @@ sub GetRecentlyAdded() {
 	    print "Failed to get Library Sections from $url\n";
 	    exit(2);
 	} else {
-	    my $content  = $response->decoded_content();
-	    my $data = XMLin($content);
-	    if (ref($info)) {
-		my $tmp = $data->{$hkey};
-		%result = (%$info, %$tmp);
-		$info = \%result;
-	    } else {
-		$info = $data->{$hkey};
-	    }
-	}
+            my $content  = $response->decoded_content();
+            my $data = XMLin($content);
+            ## verify we are recieving what we expect.                                                                                                                                                       
+            if (ref $data eq ref {}) {
+                if ($data->{'Video'}) {
+                    if (ref($info)) {
+                        my $tmp = $data->{$hkey};
+                        %result = (%$info, %$tmp);
+                        $info = \%result;
+                    } else {
+                        $info = $data->{$hkey};
+                    }
+                }
+            }
+        }
     }
     return $info;
 }
