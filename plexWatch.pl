@@ -1,4 +1,4 @@
-#!/usr/bin/perl -w
+#!/opt/local/bin/perl -w
 
 my $version = '0.0.15';
 my $author_info = <<EOF;
@@ -1319,7 +1319,7 @@ sub NotifyGrowl() {
 	print STDERR "\nFailed to send GROWL notification -- $growl{'script'} does not exists\n";
 	return 0;
     } else {
-	system( $growl{'script'}, "-n", $growl{'appname'}, "--image", $growl{'icon'}, "-m", $alert); 
+	system( $growl{'script'}, "-n", $growl{'application'}, "--image", $growl{'icon'}, "-m", $alert, "PlexWatch Notification"); 
 	return 1; ## need better error checking here -- no mac, so I can't test it.
     }
 }
