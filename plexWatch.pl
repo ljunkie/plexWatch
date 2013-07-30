@@ -1319,7 +1319,7 @@ sub NotifyGrowl() {
 	print STDERR "\nFailed to send GROWL notification -- $growl{'script'} does not exists\n";
 	return 0;
     } else {
-	system( $growl{'script'}, "-n", $growl{'appname'}, "--image", $growl{'icon'}, "-m", $alert); 
+	system( $growl{'script'}, "-n", $growl{'application'}, "--image", $growl{'icon'}, "-m", $alert); 
 	return 1; ## need better error checking here -- no mac, so I can't test it.
     }
 }
