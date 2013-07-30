@@ -197,12 +197,13 @@ if ($options{'recently_added'}) {
 	    }
 	    next;
 	}
-
+	
 	my $item = &ParseDataItem($info->{$k},$want);
 	my $res = &RAdataAlert($k,$item,$want);
 	$alerts->{$item->{addedAt}.$k} = $res;
     }
-    
+
+
     ## RA backlog - make sure we have all alerts -- some might has been added previously but notification failed and newer content has purged the results above
     my $ra_done = &GetRecentlyAddedDB();
     my $push_type = 'push_recentlyadded';
@@ -1675,8 +1676,7 @@ sub GetRecentlyAdded() {
 	    exit(2);
 	} else {
             my $content  = $response->decoded_content();
-            my $data = XMLin($content);
-            ## verify we are recieving what we expect.
+	    my $data = XMLin($content, ForceArray => ['Video']);
             if (ref $data eq ref {}) {
                 if ($data->{'Video'}) {
                     if (ref($info)) {
