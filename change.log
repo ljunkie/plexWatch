@@ -1,3 +1,7 @@
+# 0.0.15-1
+* bug fixes: growl application name
+* bug fixes: recenlty_added resulted in non hashref - now verified
+	
 # 0.0.15
 # * added recently_added=[movie,show]  -- notify on recently added items to PMS
 # * Twitter added as a provider

@@ -1,11 +1,11 @@
 #!/usr/bin/perl -w
 
-my $version = '0.0.15';
+my $version = '0.0.15-1';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-07-29 08:00 PST
+# Modified: 2013-07-30 11:11 PST
 #
 #  Version: $version
 # https://github.com/ljunkie/plexWatch
@@ -1599,7 +1599,7 @@ sub GetRecentlyAdded() {
 	    my $data = XMLin($content);
 	    ## verify we are recieving what we expect.
 	    if (ref $data eq ref {}) {
-		if ($data->{'Video'}) {
+		if ($data->{$hkey}) {
 		    if (ref($info)) {
 			my $tmp = $data->{$hkey};
 			%result = (%$info, %$tmp);
