@@ -1669,7 +1669,7 @@ sub GetRecentlyAdded() {
             my $data = XMLin($content);
             ## verify we are recieving what we expect.                                                                                                                                                       
             if (ref $data eq ref {}) {
-                if ($data->{'Video'}) {
+                if ($data->{$hkey}) {
                     if (ref($info)) {
                         my $tmp = $data->{$hkey};
                         %result = (%$info, %$tmp);
