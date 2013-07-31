@@ -1,11 +1,11 @@
 #!/usr/bin/perl
 
-my $version = '0.0.15-2';
+my $version = '0.0.16';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-07-30 11:11 PST
+# Modified: 2013-07-31 14:13 PST
 #
 #  Version: $version
 # https://github.com/ljunkie/plexWatch
@@ -36,7 +36,7 @@ if (!-e $dirname .'/config.pl') {
     exit;
 }
 do $dirname.'/config.pl';
-use vars qw/$data_dir $server $port $notify_started $notify_stopped $appname $user_display $alert_format $notify/; 
+use vars qw/$data_dir $server $port $appname $user_display $alert_format $notify $push_titles/; 
 if (!$data_dir || !$server || !$port || !$appname || !$alert_format || !$notify) {
     print "config file missing data\n";
     exit;
@@ -75,6 +75,9 @@ if (!-d $data_dir) {
     print "\n** Sorry. Please create your datadir $data_dir\n\n";
     exit;
 }
+
+## place holder to back off notifications per provider
+my $provider_452 = ();
 
 &CheckLock(); # just make sure we only run one at a time
 
@@ -149,6 +152,10 @@ if  ($options{test_notify}) {
     exit;
 }
 
+
+my %notify_func = &GetNotifyfuncs();
+my $push_type_titles = &GetPushTitles();
+
 ########################################## START MAIN #######################################################
 
 
@@ -156,7 +163,6 @@ if  ($options{test_notify}) {
 ####################################################################
 ## RECENTLY ADDED 
 if ($options{'recently_added'}) {
-    my $ra_done = &GetRecentlyAddedDB();
     my ($want,$hkey);
     if ($options{'recently_added'} =~ /movie/i) {
 	$want = 'movie';
@@ -177,166 +183,144 @@ if ($options{'recently_added'}) {
 	exit;
     }
     
-    my $plex_sections = &GetSectionsIDs();
+    my $plex_sections = &GetSectionsIDs(); ## allow for multiple sections with the same type (movie, show, etc)
     
     my $info = &GetRecentlyAdded($plex_sections->{'types'}->{$want},$hkey);
     my $alerts = (); # containers to push alerts from oldest -> newest
+    
+    my %seen;
     foreach my $k (keys %{$info}) {
-	## skip invalid keys.. not sure how this happened? --debug can be used to help
+	$seen{$k} = 1; ## alert seen
 	if (!ref($info->{$k})) {
 	    if ($debug) {
-		print "Skipping KEY $k (expected key =~ '/library/metadata/###') -- it's not a hash ref?\n";
-		print "\$info->{$k} is not a hash ref?\n";
+		print "Skipping KEY '$k' (expected key =~ '/library/metadata/###') -- it's not a hash ref?\n";
+		print "\$info->{'$k'} is not a hash ref?\n";
 		print Dumper($info->{$k});
 	    }
 	    next;
 	}
-
-	## container for debug message
-	my $debug_done =  "already notified [$k]: ";
-	$debug_done .= $info->{$k}->{'grandparentTitle'} . ' - ' if $info->{$k}->{'grandparentTitle'};
-	$debug_done .= $info->{$k}->{'title'} if $info->{$k}->{'title'};
-	$debug_done .= "\n";
-
+	
 	my $item = &ParseDataItem($info->{$k},$want);
-	my $alert = 'unknown type';
-	my ($alert_url,$alert_short);
-	my $add_date = &twittime($item->{addedAt});
-	
-	my $media;
-	$media .= $item->{'videoResolution'}.'p ' if $item->{'videoResolution'};
-	$media .= $item->{'audioChannels'}.'ch' if $item->{'audioChannels'};
-	#my $twitter; #twitter sucks... has to be short. --- might use this later.
-	
-	## movie alert
-	if ($want eq 'movie') {
-	    $alert = $item->{'title'};
-	    $alert_short = $item->{'title'};
-	    $alert .= " [$item->{'contentRating'}]" if $item->{'contentRating'};
-	    $alert .= " [$item->{'year'}]" if $item->{'year'};
-	    $alert .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
-	    $alert .= " [$media]" if $media;
-	    $alert .= " [$add_date]";
-	    #$twitter = $alert; ## movies are normally short enough.
-	    $alert_url .= ' http://www.imdb.com/find?s=tt&q=' . urlencode($item->{'imdb_title'});
+	my $res = &RAdataAlert($k,$item,$want);
+	$alerts->{$item->{addedAt}.$k} = $res;
+    }
+
+
+    ## RA backlog - make sure we have all alerts -- some might has been added previously but notification failed and newer content has purged the results above
+    my $ra_done = &GetRecentlyAddedDB();
+    my $push_type = 'push_recentlyadded';
+    foreach my $provider (keys %{$notify}) {
+	next if ( !$notify->{$provider}->{'enabled'} || !$notify->{$provider}->{$push_type}); ## skip provider if not enabled
+	foreach my $key (keys %{$ra_done}) {
+	    next if $seen{$key}; ## already in alerts hash
+	    next if ($ra_done->{$key}->{$provider}); ## provider already notified
+
+	    ## we passed checks -- let's process this old/failed notification
+	    my $data = &GetItemMetadata($key,1);
+	    
+	    ## if result is not a ref 
+	    if (!ref($data)) {
+		##  maybe we got 404 -- I.E. old/removed video.. set at 404 -> not found
+		if ($data =~ /404/) {
+		    &SetNotified_RA($provider,$key,404);
+		    next;
+		}
+		## any other results we care about? maybe later
+	    }
+	    
+	    else {
+		my $item = &ParseDataItem($data,$want);
+		
+		## check age of notification. -- allow two days ( we will keep trying to notify for 2 days.. if we keep failing.. we need to skip this)
+		my $age = time()-$ra_done->{$key}->{'time'};
+		my $ra_max_fail_days = 2; ## TODO: advanced config options?
+		if ($age > 86400*$ra_max_fail_days) {
+		    ## notification is OLD .. set notify = 2 to exclude from processing
+		    my $msg = "Could not notify $provider on [$key] $item->{'title'} for " . &durationrr($age) . " -- setting as old notification/done";
+		    &ConsoleLog($msg,,1);
+		    &SetNotified_RA($provider,$key,2);
+		}
+		
+		next if $data->{'type'} =~ /episode/ && $want !~ /show/; ## next if episode and current task is not a show
+		next if $data->{'type'} =~ /movie/ && $want !~ /movie/;  ## next if movie and current task is not a movie
+		
+		
+		if ($alerts->{$item->{addedAt}.$key}) {
+		    ## redundant code from above hash %seen 
+		    #print "$item->{'title'} is already in current releases... nothing missed\n";
+		} else {
+		    print "$item->{'title'} is NOT in current releases -- we failed to notify previouly, so trying again\n" if $options{'debug'};
+		    my $res = &RAdataAlert($key,$item,$want);
+		    $alerts->{$item->{addedAt}.$key} = $res;
+		}
+	    }
+	    
 	}
 	
-	## tv show alert
-	if ($want eq 'show') {
-	    $alert = $item->{'title'};
-	    $alert_short = $item->{'title'};
-	    $alert .= " [$item->{'contentRating'}]" if $item->{'contentRating'};
-	    $alert .= " [$item->{'year'}]" if $item->{'year'};
-	    $alert .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
-	    $alert .= " [$media]" if $media;
-	    $alert .= " [$add_date]";
-	    #$twitter = $item->{'title'};
-	    #$twitter .= " [$item->{'year'}]";
-	    #$twitter .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
-	    #$twitter .= " [$media]" if $media;
-	    #$twitter .= " [$add_date]";
-	    $alert_url .= ' http://www.imdb.com/find?s=tt&q=' . urlencode($item->{'imdb_title'});
-	}
-	
-	$alerts->{$item->{addedAt}.$k}->{'alert'} = 'NEW: '.$alert;
-	$alerts->{$item->{addedAt}.$k}->{'alert_short'} = 'NEW: '.$alert_short;
-	$alerts->{$item->{addedAt}.$k}->{'item_id'} = $k;
-	$alerts->{$item->{addedAt}.$k}->{'debug_done'} = $debug_done;
-	$alerts->{$item->{addedAt}.$k}->{'alert_url'} = $alert_url;
-	#$alerts->{$item->{addedAt}.$k}->{'alert_tag'} = 'new'.ucfirst($want); ## twitter msg too long
+    }
+
+
+    &ProcessRAalerts($alerts) if ref($alerts);
+}
+
+
+sub RAdataAlert() {
+    my $item_id = shift;
+    my $item = shift;
+    my $want = shift;
+    
+    my $result;
+
+    my $add_date = &twittime($item->{addedAt});
+    
+    my $debug_done = '';
+    $debug_done .= $item->{'grandparentTitle'} . ' - ' if $item->{'grandparentTitle'};
+    $debug_done .= $item->{'title'} if $item->{'title'};
+    $debug_done .= " [$add_date]";
+    
+    
+    my $alert = 'unknown type';
+    my ($alert_url,$alert_short);
+    my $media;
+    $media .= $item->{'videoResolution'}.'p ' if $item->{'videoResolution'};
+    $media .= $item->{'audioChannels'}.'ch' if $item->{'audioChannels'};
+    ##my $twitter; #twitter sucks... has to be short. --- might use this later.
+    if ($want eq 'show') {
+	$alert = $item->{'title'};
+	$alert_short = $item->{'title'};
+	$alert .= " [$item->{'contentRating'}]" if $item->{'contentRating'};
+	$alert .= " [$item->{'year'}]" if $item->{'year'};
+	$alert .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
+	$alert .= " [$media]" if $media;
+	$alert .= " [$add_date]";
+	#$twitter = $item->{'title'};
+	#$twitter .= " [$item->{'year'}]";
+	#$twitter .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
+	#$twitter .= " [$media]" if $media;
+	#$twitter .= " [$add_date]";
+	$alert_url .= ' http://www.imdb.com/find?s=tt&q=' . urlencode($item->{'imdb_title'});
+    }
+    if ($want eq 'movie') {
+	$alert = $item->{'title'};
+	$alert_short = $item->{'title'};
+	$alert .= " [$item->{'contentRating'}]" if $item->{'contentRating'};
+	$alert .= " [$item->{'year'}]" if $item->{'year'};
+	$alert .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
+	$alert .= " [$media]" if $media;
+	$alert .= " [$add_date]";
+	#$twitter = $alert; ## movies are normally short enough.
+	$alert_url .= ' http://www.imdb.com/find?s=tt&q=' . urlencode($item->{'imdb_title'});
     }
     
-    my $count = 0;
-    foreach my $k ( sort keys %{$alerts}) {
-	$count++;
-	my $item_id = $alerts->{$k}->{'item_id'};
-	my $debug_done = $alerts->{$k}->{'debug_done'};
-	&ProcessRecentlyAdded($item_id);  ## add item to DB -- will ignore insert if already inserte.. wish sqlite has upsert
-	
-	my $push_type = 'push_recentlyadded';
-	my $provider;
-	
-	## 'recently_added' table has columns for each provider -- we will notify and verify each provider has success. 
-	## TODO - extend this logic into the normal notifications
-
-	## logging to file
-	$provider = 'file';
-	## file logging
-	if ($notify->{'file'}->{'enabled'}) {	
-	    if ($ra_done->{$item_id}->{$provider}) {
-		print $provider . ' ' . $debug_done if $debug;
-	    } else {
-		&ConsoleLog($alerts->{$k}->{'alert'});
-		&SetNotified_RA($provider,$item_id);
-	    }
-	}
-	####
-
-	$provider = 'prowl';
-	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
-	    if ($ra_done->{$item_id}->{$provider}) {
-		print $provider . ' ' . $debug_done if $debug;
-	    } 
-	    elsif (&NotifyProwl($alerts->{$k}->{'alert'},'',$alerts->{$k}->{'alert_short'})) {
-		&SetNotified_RA($provider,$item_id);
-	    } 
-	    else {
-		print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
-	    }
-	}
-	
-	$provider = 'pushover';
-	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
-	    if ($ra_done->{$item_id}->{$provider}) {
-		print $provider . ' ' . $debug_done if $debug;
-	    } 
-	    elsif (&NotifyPushOver($alerts->{$k}->{'alert'})) {
-		&SetNotified_RA($provider,$item_id);
-	    } 
-	    else {
-		print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
-	    }
-	}
-
-	$provider = 'growl';
-	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
-	    if ($ra_done->{$item_id}->{$provider}) {
-		print $provider . ' ' . $debug_done if $debug;
-	    } 
-	    elsif (&NotifyGrowl($alerts->{$k}->{'alert'})) {
-		&SetNotified_RA($provider,$item_id);
-	    } 
-	    else {
-		print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
-	    }
-	}
-	
-	$provider = 'twitter';
-	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
-	    if ($ra_done->{$item_id}->{$provider}) {
-		print $provider . ' ' . $debug_done if $debug;
-	    } 
-	    elsif (&NotifyTwitter($alerts->{$k}->{'alert'},$alerts->{$k}->{'alert_tag'},$alerts->{$k}->{'alert_url'})) {
-		&SetNotified_RA($provider,$item_id);
-	    } 
-	    else {
-		print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
-	    }
-	}
-	
-	$provider = 'boxcar';
-	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
-	    if ($ra_done->{$item_id}->{$provider}) {
-		print $provider . ' ' . $debug_done if $debug;
-	    } 
-	    elsif (&NotifyBoxcar($alerts->{$k}->{'alert'})) {
-		&SetNotified_RA($provider,$item_id);
-	    } 
-	    else {
-		print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
-	    }
-	}
-    }
+    $result->{'alert'} = $alert;
+    $result->{'alert_short'} = $alert_short;
+    #$result->{'alert'} = 'NEW: '.$alert;
+    #$result->{'alert_short'} = 'NEW: '.$alert_short;
+    $result->{'item_id'} = $item_id;
+    $result->{'debug_done'} = $debug_done;
+    $result->{'alert_url'} = $alert_url;
+    
+    return $result;
 }
 
 
@@ -447,7 +431,7 @@ if ($options{'watched'} || $options{'stats'}) {
 		}
 		my $time = localtime ($is_watched->{$k}->{time} );
 		my $info = &info_from_xml($is_watched->{$k}->{'xml'},$ntype,$is_watched->{$k}->{'time'},$is_watched->{$k}->{'stopped'});
-		my $alert = &Notify($info,1);
+		my $alert = &Notify($info,1); ## only return formated alert
 		printf(" %s: %s\n",$time, $alert);
 	    } else {
 		if (!$seen{$skey}) {
@@ -482,7 +466,7 @@ if ($options{'watched'} || $options{'stats'}) {
 	    }
 	    my $time = localtime ($seen{$k}->{time} );
 	    my $info = &info_from_xml($seen{$k}->{xml},$ntype,$seen{$k}->{'time'},$seen{$k}->{'stopped'},$seen{$k}->{'duration'});
-	    my $alert = &Notify($info,1);
+	    my $alert = &Notify($info,1); ## only return formated alert
 	    printf(" %s: %s\n",$time, $alert);
 	}
     }
@@ -546,7 +530,7 @@ if ($options{'watching'}) {
 	    $info->{'progress'} = &durationrr($live->{$live_key}->{viewOffset}/1000);
 	    $info->{'time_left'} = &durationrr(($info->{raw_length}/1000)-($live->{$live_key}->{viewOffset}/1000));
 	    
-	    my $alert = &Notify($info,1);
+	    my $alert = &Notify($info,1); ## only return formated alert
 	    printf(" %s: %s\n",$time, $alert);
 	}
 	
@@ -681,14 +665,19 @@ sub formatAlert() {
     $regex = qr/$regex/;
     $s =~ s/{($regex)}/$alert{$1}/g;
     $orig =~ s/{($regex)}/$alert{$1}/g;
+    ## $orig is pretty much deprecated..
     return ($s,$orig);
 }
 
 sub ConsoleLog() {
     my $msg = shift;
+    my $alert_options = shift;
+    my $print = shift;
+    
     my $console;
-    if ($debug) {
+    if ($debug || $print) {
 	$console = &consoletxt("$date: DEBUG: $msg"); 
+	print   $console ."\n";   
     } elsif ($options{test_notify}) {
 	$console = &consoletxt("$date: DEBUG test_notify: $msg"); 
 	print   $console ."\n";   
@@ -702,6 +691,7 @@ sub ConsoleLog() {
 	print FILE "$console\n";
 	close(FILE);
     }
+    return 1;
 }
 
 sub Notify() {
@@ -709,10 +699,6 @@ sub Notify() {
     my $ret_alert = shift;
     my $type = $info->{'ntype'};
     my ($alert,$orig) = &formatAlert($info);
-    my $extra = ''; ## clean me
-    
-    ## file logging
-    &ConsoleLog($alert);
     
     ## --exclude_user array ref -- do not notify if user is excluded.. however continue processing -- logging to DB - logging to file still happens.
     return 1 if ( grep { $_ =~ /$info->{'orig_user'}/i } @{$options{'exclude_user'}});
@@ -720,46 +706,18 @@ sub Notify() {
     
     ## only return the alert - do not notify -- used for CLI to keep formatting the same
     return &consoletxt($alert) if $ret_alert;
+        
+    my $push_type;
+    if ($type =~ /start/) {	$push_type = 'push_watching';    } 
+    if ($type =~ /stop/) {	$push_type = 'push_watched';    } 
     
-    ## started :: watching
-    if ($notify_started && $type =~ /start/) {
-	my $push_type = 'push_watching';
-	if ($notify->{'prowl'}->{'enabled'} && $notify->{'prowl'}->{$push_type})       { &NotifyProwl($alert,$type,$orig); }
-	if ($notify->{'pushover'}->{'enabled'} && $notify->{'pushover'}->{$push_type}) { &NotifyPushOver($alert);          }
-	if ($notify->{'growl'}->{'enabled'} && $notify->{'growl'}->{$push_type})       { &NotifyGrowl($alert);             }
-	if ($notify->{'twitter'}->{'enabled'} && $notify->{'twitter'}->{$push_type})   { &NotifyTwitter($alert);             }
-	if ($notify->{'boxcar'}->{'enabled'} && $notify->{'boxcar'}->{$push_type})     { &NotifyBoxcar($alert);             }
+    my $alert_options = ();
+    $alert_options->{'push_type'} = $push_type;
+    foreach my $provider (keys %{$notify}) {
+	if ( ( $notify->{$provider}->{'enabled'} ) && ( $notify->{$provider}->{$push_type} || $provider =~ /file/)) { 
+	    $notify_func{$provider}->($alert,$alert_options);
+	}
     }
-    
-    ## stopped :: watched
-    if ($notify_stopped && $type =~ /stop/) {    
-	my $push_type = 'push_watched';
-	if ($notify->{'prowl'}->{'enabled'} && $notify->{'prowl'}->{$push_type})       { &NotifyProwl($alert,$type,$orig); }
-	if ($notify->{'pushover'}->{'enabled'} && $notify->{'pushover'}->{$push_type}) { &NotifyPushOver($alert);          }
-	if ($notify->{'growl'}->{'enabled'} && $notify->{'growl'}->{$push_type})       { &NotifyGrowl($alert);             }
-	if ($notify->{'twitter'}->{'enabled'} && $notify->{'twitter'}->{$push_type})   { &NotifyTwitter($alert);             }
-	if ($notify->{'boxcar'}->{'enabled'} && $notify->{'boxcar'}->{$push_type})     { &NotifyBoxcar($alert);             }
-    }
-}
-
-sub RawNotify() {
-    ### not used yet... probably never will be. -- to remove later
-    my $alert = shift;
-    my $push_type = shift; #[push_watched, push_watching or push_recently_added]
-    
-    my $ret_alert = shift;
-    
-    ## only return the alert - do not notify -- used for CLI to keep formatting the same
-    return &consoletxt($alert) if $ret_alert;
-    
-    if ($notify->{'prowl'}->{'enabled'} && $notify->{'prowl'}->{$push_type})       { &NotifyProwl($alert);    }
-    if ($notify->{'pushover'}->{'enabled'} && $notify->{'pushover'}->{$push_type}) { &NotifyPushOver($alert); }
-    if ($notify->{'growl'}->{'enabled'} && $notify->{'growl'}->{$push_type})       { &NotifyGrowl($alert);    }
-    if ($notify->{'twitter'}->{'enabled'} && $notify->{'twitter'}->{$push_type})   { &NotifyTwitter($alert);  }
-    if ($notify->{'boxcar'}->{'enabled'} && $notify->{'boxcar'}->{$push_type})     { &NotifyBoxcar($alert);             }
-    
-    ## file logging
-    &ConsoleLog($alert);
 }
 
 sub ProcessStart() {
@@ -919,8 +877,10 @@ sub SetNotified() {
 sub SetNotified_RA() {
     my $provider = shift;
     my $id = shift;
+    my $status = shift;
+    $status = 1 if !$status; ## status = 1 by default (success), 2 = failed - day old.. do not process anymore
     if ($id) {
-	my $cmd = "update recently_added set $provider = 1 where item_id = '$id'";
+	my $cmd = "update recently_added set $provider = $status where item_id = '$id'";
 	print $cmd . "\n" if ($debug);
 	my $sth = $dbh->prepare($cmd);
 	$sth->execute or die("Unable to execute query: $dbh->errstr\n");
@@ -1142,25 +1102,39 @@ sub initDBtable() {
 sub NotifyTwitter() {
     #use Net::Twitter::Lite::WithAPIv1_1;
     #use Scalar::Util 'blessed';
-    my $alert = shift;
-    my $tag = shift;
-    my $url = shift;
+    my $provider = 'twitter';
+    if ($provider_452->{$provider}) {
+	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
+	return 0;
+    }
     
-    if ($tag) {	$alert .= ' #'.$appname.'_'.$tag;    }
+    my $alert = shift;
+    my $alert_options = shift;
+
+    my $url = $alert_options->{'url'} if $alert_options->{'url'};
+    $alert = $push_type_titles->{$alert_options->{'push_type'}} . ': ' . $alert if $alert_options->{'push_type'};        
     
     ## trim down alert..
-    if (length($alert) > 139) {	$alert = substr($alert,0,140);    }
+    if (length($alert) > 139) {	
+	$alert = substr($alert,0,140);  ## strip down to 140 chars
+	if ($alert =~ /(.*)\[.*/g) { $alert = $1; } ## cut at last brackets to clean up a little
+    }
     
     ## url can be appended - twitter allows it even if the alert is 140 chars -- well it looks like 115 is max if URL is included..
+    my $non_url_alert = $alert;
     if ($url) {
-	if (length($alert) > 114) {	$alert = substr($alert,0,114);    }
+	if (length($alert) > 114) {
+	    $alert = substr($alert,0,114);   
+	    if ($alert =~ /(.*)\[.*/g) { $alert = $1; } ## cut at last brackets to clean up a little
+	}
 	$alert .= ' '. $url;   
     }
     
     ## cleanup spaces
-    $alert =~ s/\s+$//g;
-    $alert =~ s/\s\s/ /g;
-
+    $alert =~ s/\s+$//g; ## trim any spaces from END
+    $alert =~ s/^\s+//g; ## trim any spaces from START
+    $alert =~ s/\s+/ /g; ## replace multiple spaced with ONE
+    
     if ($debug) {
 	print "Twitter Alert: $alert\n";
     }
@@ -1171,9 +1145,25 @@ sub NotifyTwitter() {
 	consumer_secret     => $tw{'consumer_secret'},
 	access_token        => $tw{'access_token'},
 	access_token_secret => $tw{'access_token_secret'},
+	
 	);
+    
     my $result = eval { $nt->update($alert); };
     
+    ## try one more time..
+    if ( my $err = $@ ) {
+	## my $rl = $nt->rate_limit_status; not useful for writes atm
+	# twitter API doesn't publish limits for writes -- we will use this section to try again if they ever do.
+	# if ($err->code == 403 && $rl->{'resources'}->{'application'}->{'/application/rate_limit_status'}->{'remaining'} > 1) {
+	if ($err->code == 403) {
+	    $provider_452->{$provider} = 1;
+	    my $msg452 = uc($provider) . " error 403: $alert - (You are over the daily limit for sending Tweets. Please wait a few hours and try again.) -- setting $provider to back off additional notifictions";
+	    &ConsoleLog($msg452,,1);
+	    return 0;
+	}
+    }
+    
+    ## if we tried above or error code was not 403 -- continue with error
     if ( my $err = $@ ) {
 	#die $@ unless blessed $err && $err->isa('Net::Twitter::Lite::Error');
 	if ($debug) {
@@ -1189,17 +1179,28 @@ sub NotifyTwitter() {
 
 sub NotifyProwl() {
     ## modified from: https://www.prowlapp.com/static/prowl.pl
+    my $alert = shift;
+    my $alert_options = shift;
+
+    my $provider = 'prowl';
+    if ($provider_452->{$provider}) {
+	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
+	return 0;
+    }
+    
     my %prowl = %{$notify->{prowl}};
     
     $prowl{'event'} = '';
-    $prowl{'notification'} = shift;    
-    if ($prowl{'collapse'}) {
-	my $type = shift;
-	my $orig = shift;
-	#my @p = split(':',shift);
-	#$prowl{'application'} .= ' - ' . shift(@p);
-	$prowl{'event'} = $orig;
-    }
+    $prowl{'event'} = $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};
+    
+    $prowl{'notification'} = $alert;
+    
+    #if ($prowl{'collapse'}) {
+    #	my $orig = shift;
+    #	#my @p = split(':',shift);
+    #	#$prowl{'application'} .= ' - ' . shift(@p);
+    #	$prowl{'event'} = $orig;
+    #   }
     
     $prowl{'priority'} ||= 0;
     $prowl{'application'} ||= $appname;
@@ -1241,13 +1242,30 @@ sub NotifyProwl() {
     } else {
 	print STDERR "PROWL - Notification not posted: $prowl{'notification'} " . $response->content . "\n";
     }
+    
+    $provider_452->{$provider} = 1;
+    my $msg452 = uc($provider) . " failed: $alert - setting $provider to back off additional notifictions\n";
+    &ConsoleLog($msg452,,1);
     return 0; # failed
 }
 
 sub NotifyPushOver() {
+    my $alert = shift;
+    my $alert_options = shift;
+
+    my $provider = 'pushover';
+    if ($provider_452->{$provider}) {
+	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
+	return 0;
+    }
+    
     my %po = %{$notify->{pushover}};    
     my $ua      = LWP::UserAgent->new();
-    $po{'message'} = shift;
+    $po{'message'} = $alert;
+    	    
+    ## PushOver title is AppName by default. If there is a real title for push type, It's 'AppName: push_type'
+    $po{'title'} .= ': ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
+    
     
     my $response = $ua->post( "https://api.pushover.net/1/messages.json", [
 				  "token" => $po{'token'},
@@ -1260,6 +1278,9 @@ sub NotifyPushOver() {
 
     if ($content !~ /\"status\":1/) {
 	print STDERR "Failed to post PushOver notification -- $po{'message'} result:$content\n";
+	$provider_452->{$provider} = 1;
+	my $msg452 = uc($provider) . " failed: $alert -  setting $provider to back off additional notifictions\n";
+	&ConsoleLog($msg452,,1);
 	return 0;
     } 
     
@@ -1270,9 +1291,20 @@ sub NotifyPushOver() {
 sub NotifyBoxcar() {
     ## this will try to notifiy via box car 
     # It will try to subscribe to the plexWatch service on boxcar if we get a 401 and resend the notification
-    
+    my $alert = shift;
+    my $alert_options = shift;
+
+    my $provider = 'boxcar';
+    if ($provider_452->{$provider}) {
+	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
+	return 0;
+    }
+
     my %bc = %{$notify->{boxcar}};    
-    $bc{'message'} = shift;
+    $bc{'message'} = $alert;
+    
+    ## BoxCars title [from name] is set in config.pl. If there is a real title for push type, It's 'From: push_type_title'
+    $bc{'from'} .= ': ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
     
     if (!$bc{'email'}) {
 	my $msg = "Please specify and email address for boxcar in config.pl";
@@ -1301,8 +1333,10 @@ sub NotifyBoxcar() {
 	    }
 	}
     }
-        
-    print STDERR "Failed to post Boxcar notification - $bc{'message'}\n";
+
+    $provider_452->{$provider} = 1;
+    my $msg452 = uc($provider) . " failed: $alert - setting $provider to back off additional notifictions\n";
+    &ConsoleLog($msg452,,1);
     return 0;
 }
 
@@ -1325,12 +1359,27 @@ sub NotifyBoxcarPOST() {
 
 sub NotifyGrowl() { 
     my $alert = shift;
+    my $alert_options = shift;
+    my $extra_cmd = '';
+
+    my $provider = 'growl';
+    if ($provider_452->{$provider}) {
+	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
+	return 0;
+    }
+    
     my %growl = %{$notify->{growl}};    
+    
+    $growl{'title'} = $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
+    $extra_cmd = " -t $growl{'title'} " if $growl{'title'};
+    
     if (!-f  $growl{'script'} ) {
-	print STDERR "\nFailed to send GROWL notification -- $growl{'script'} does not exists\n";
+	$provider_452->{$provider} = 1;
+	print uc($provider) . " failed $alert: setting $provider to back off additional notifictions\n";
+	print STDERR "\n$growl{'script'} does not exists\n";
 	return 0;
     } else {
-	system( $growl{'script'}, "-n", $growl{'application'}, "--image", $growl{'icon'}, "-m", $alert); 
+	system( $growl{'script'}, "-n", $growl{'application'}, "--image", $growl{'icon'}, "-m", $alert, $extra_cmd); 
 	return 1; ## need better error checking here -- no mac, so I can't test it.
     }
 }
@@ -1491,19 +1540,41 @@ sub RunTestNotify() {
     my $ntype = 'start'; ## default
     $ntype = 'stop' if $options{test_notify} =~ /stop/;
     $ntype = 'stop' if $options{test_notify} =~ /watched/;
+    
+    
+    $ntype = 'push_recently_added' if $options{test_notify} =~ /recent/;
+    if ($ntype =~ /push_recently_added/) {
+	my $alerts = ();
 
-    $format_options->{'ntype'} = $ntype;
-    my $info = &GetTestNotify($ntype);
-    if ($info) {
-	foreach my $k (keys %{$info}) {
-	    my $start_epoch = $info->{$k}->{time} if $info->{$k}->{time}; ## DB only
-	    my $stop_epoch = $info->{$k}->{stopped} if $info->{$k}->{stopped}; ## DB only
-	    my $info = &info_from_xml($info->{$k}->{'xml'},$ntype,$start_epoch,$stop_epoch);
-	    &Notify($info);
-	}
+	$alerts->{'test'}->{'alert'} = $push_type_titles->{$ntype} .' test recently added alert';
+	$alerts->{'test'}->{'alert_short'} = $push_type_titles->{$ntype} .'test recently added alert (short version)';
+	$alerts->{'test'}->{'item_id'} = 'test_item_id';
+	$alerts->{'test'}->{'debug_done'} = 'testing alert already done';
+	$alerts->{'test'}->{'alert_url'} = 'https://github.com/ljunkie/plexWatch';
+	&ProcessRAalerts($alerts,1);
     } else {
-	&Notify($format_options);
+	
+	$format_options->{'ntype'} = $ntype;
+	my $info = &GetTestNotify($ntype);
+	## notify if we have a valid DB results
+	if ($info) {
+	    foreach my $k (keys %{$info}) {
+		my $start_epoch = $info->{$k}->{time} if $info->{$k}->{time}; ## DB only
+		my $stop_epoch = $info->{$k}->{stopped} if $info->{$k}->{stopped}; ## DB only
+		my $info = &info_from_xml($info->{$k}->{'xml'},$ntype,$start_epoch,$stop_epoch);
+		&Notify($info);
+		## nothing to set as notified - this is a test
+	    }
+	} 
+	## notify the default format if there is not DB log yet.
+	else {
+	    &Notify($format_options);
+	    ## nothing to set as notified - this is a test
+	}
     }
+    
+    ## test notify -- exit 
+    exit;
 }
 
 
@@ -1533,6 +1604,7 @@ sub ParseDataItem() {
     my $data = shift;
     my $type = shift;
     my $info = $data; ## fallback
+    
     if ($type =~ /movie/i || $type=~/show/) {
 	$info = ();    	
 	$info->{'originallyAvailableAt'} = $data->{'originallyAvailableAt'};
@@ -1588,6 +1660,34 @@ sub GetSectionsIDs() {
     return $sections;
 }
 
+sub GetItemMetadata() {
+    my $ua      = LWP::UserAgent->new();
+    my $host = "http://$server:$port";
+    my $item = shift;
+    my $full_uri = shift;
+    my $url = $host . '/library/metadata/' . $item;
+    if ($full_uri) {
+	$url = $host . $item;
+    }
+    
+    my $sections = ();
+    my $response = $ua->get( $url );
+    if ( ! $response->is_success ) {
+	if ($options{'debug'}) {
+	    print "Failed to get MetaData from from $url\n";
+	    print Dumper($response);
+	}
+	return $response->{'_rc'} if $response->{'_rc'} == 404;
+	exit(2);
+    } else {
+	my $content  = $response->decoded_content();
+	#my $vid = XMLin($hash,KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
+	#my $data = XMLin($content, KeyAttr => { Role => ''} );
+	my $data = XMLin($content);
+	return $data->{'Video'} if $data->{'Video'};
+    }
+}
+
 sub GetRecentlyAdded() {
     my $section = shift; ## array ref &GetRecentlyAdded([5,6,7]);
     my $hkey = shift;    ## array ref &GetRecentlyAdded([5,6,7]);
@@ -1601,7 +1701,10 @@ sub GetRecentlyAdded() {
     
     foreach my $section (@$section) {
 	my $url = $host . '/library/sections/'.$section.'/recentlyAdded';
-	my $response = $ua->get( $url );
+	
+	## limit the output to the last 25 added.
+	my $limit = '?query=c&X-Plex-Container-Start=0&X-Plex-Container-Size=25';
+	my $response = $ua->get( $url . $limit);
 	if ( ! $response->is_success ) {
 	    print "Failed to get Library Sections from $url\n";
 	    exit(2);
@@ -1648,6 +1751,118 @@ sub urldecode {
     $s =~ s/\+/ /g;
     return $s;
 }
+
+    
+sub ProcessRAalerts() {
+    my $alerts = shift;
+    my $test_notify = shift;
+    my $count = 0;
+    
+    my $ra_done = &GetRecentlyAddedDB() if !$test_notify;  ## only check if done if this is NOT a test
+    
+    ## used for output
+    my $done_keys = {'1' => 'Already Notified',
+		     '2' => 'Skipped Notify - to many failures',
+		     '3' => 'Skipped Notify - not recent enough to notify',
+		     '404' => 'Not Found - No longer found on PMS',
+    };
+    
+    ## $alerts: keys
+    # item_id
+    # debug_done
+    # alert_tag
+    # alert_url
+    # alert_short
+    my %notseen;
+    foreach my $k ( sort keys %{$alerts}) {
+	$count++;
+	my $is_old = 0;
+	
+	my $alert_options = (); ## container for extra alert info if provider uses it..
+	
+	## VERIFY notification is for content only recently Added -- RA content is not always recent
+	## we will allow for 1 day ( you can set this higher, but shouldn't have to if run on a 5 min cron)
+	my $ra_max_age = 1; ## TODO - advanced config options
+	if ($k =~ /(\d+)\//) {
+	    my $epoch = $1;
+	    my $age = time()-$epoch;
+	    if ($age > 86400*$ra_max_age) { $is_old = 1; }
+	}
+	
+	my $item_id = $alerts->{$k}->{'item_id'};
+	my $debug_done = $alerts->{$k}->{'debug_done'};
+	
+	## add item to DB -- will ignore insert if already insert.. wish sqlite has upsert
+	&ProcessRecentlyAdded($item_id)  if !$test_notify; 
+	
+	my $push_type = 'push_recentlyadded';
+	my $provider;
+
+	$alert_options->{'url'} = $alerts->{$k}->{'alert_url'} if $alerts->{$k}->{'alert_url'};
+	$alert_options->{'push_type'} = $push_type;
+
+	
+	## 'recently_added' table has columns for each provider -- we will notify and verify each provider has success. 
+	## TODO - extend this logic into the normal notifications
+	
+	## new code - iterate through all providers.. same code block
+	
+	foreach my $provider (keys %{$notify}) {
+	    # provider is globaly enable and provider push type is enable or is file
+	    if ( ( $notify->{$provider}->{'enabled'} ) && ( $notify->{$provider}->{$push_type} || $provider =~ /file/)) { 
+		if ($ra_done->{$item_id}->{$provider}) {
+		    printf("%s: %-8s %s [%s]\n", scalar localtime($ra_done->{$item_id}->{'time'}) , uc($provider) , $debug_done, $done_keys->{$ra_done->{$item_id}->{$provider}}) if $debug;
+		} elsif ($is_old) {
+		    &SetNotified_RA($provider,$item_id,3); ## to old - set as old and stop processing
+		}
+		elsif ($notify_func{$provider}->($alerts->{$k}->{'alert'}, $alert_options)) {
+		    &SetNotified_RA($provider,$item_id)   if !$test_notify; 
+		} 
+		else {
+		    if (( $provider_452->{$provider} && $options{'debug'}) || $options{'debug'}) {
+			print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
+		    }
+		}	
+	    }
+	}
+	
+    } # end alerts
+
+}
+
+sub GetNotifyfuncs() {
+    my %notify_func = (
+	prowl => \&NotifyProwl,
+	growl => \&NotifyGrowl,
+	pushover => \&NotifyPushOver,
+	twitter => \&NotifyTwitter,
+	boxcar => \&NotifyBoxcar,
+	file => \&ConsoleLog,
+	);
+    my $error;
+    ## this SHOULD never happen if the code is released -- this is just a reminder for whomever is adding a new provider in config.pl
+    foreach my $provider (keys %{$notify}) {
+	if (!$notify_func{$provider}) {
+	    print "$provider: missing a notify function subroutine (did you add a new provider?) -- check 'sub GetNotifyfuncs()' \n";
+	    $error = 1;
+	}
+    }
+    die if $error;
+    return %notify_func;
+}
+
+sub GetPushTitles() {
+    my  $push_type_display = ();
+    $push_type_display->{'push_watched'} = 'Watched';
+    $push_type_display->{'push_watching'} = 'Watching';
+    $push_type_display->{'push_recentlyadded'} = 'New';
+    
+    foreach my $type (keys %{$push_type_display}) {
+	$push_type_display->{$type} = $push_titles->{$type} if $push_titles->{$type};
+    }
+    return $push_type_display;
+}
+
 
 
 __DATA__

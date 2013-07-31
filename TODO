@@ -1,4 +1,13 @@
-###### DONE 
+######  Long Term
+
+* add more options to --format_options (will probably have to use XML in db going backwards -- maybe even forwards instead of messing with DB table)
+  -- XML is not used to pull info for all alerts and to display cli info. This means the above is now possible without too much work (i think)
+
+* code cleanup - always available
+
+* --watching -- show start time if not at beginning 'user watching movie  (36 minutes / 120 minutes)'
+
+###### DONE  -- cruft -- this is part of the change log
 
 * code cleanup - merge same routines in sub
     -- added &FriendlyName
@@ -15,20 +24,12 @@
 
 * config.pl-dist is included --- one must edit and copy it to config.pl
 
-
-######  Before 0.0.12
-* update alert format to be included in --cli options (--watching, --watched). Currently only works for notifcations
-
-
-
-
-######  Long Term
-
-* add more options to --format_options (will probably have to use XML in db going backwards -- maybe even forwards instead of messing with DB table)
-  -- XML is not used to pull info for all alerts and to display cli info. This means the above is now possible without too much work (i think)
-
 * merge growl changes from forum - http://forums.plexapp.com/index.php/topic/72552-plexwatch-plex-notify-script-send-push-alerts-on-new-sessions-and-stopped/?p=423033
+
+* update alert format to be included in --cli options (--watching, --watched). Currently only works for notifications
 
 * display more info --watching. I.E. durations, 'user watching movie  (36 minutes / 120 minutes) anything else useful?
 
-* code cleanup - always available
+
+
+

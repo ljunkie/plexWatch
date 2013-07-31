@@ -3,8 +3,8 @@ $data_dir = '/opt/plexWatch/'; ## to store the DB, logfile - can be the same as 
 $server = 'localhost'; ## IP of PMS - or localhost
 $port = 32400;         ## port of PMS
 
-$notify_started = 1;   ## notify when a stream is started
-$notify_stopped = 1;   ## notify when a stream is stopped
+$notify_started = 1;   # !deprecated -- does nothing anymore (use push_watched, push_watching in $notify)
+$notify_stopped = 1;   # !deprecated -- does nothing anymore (use push_watched, push_watching in $notify)
 
 $appname = 'plexWatch';
 
@@ -42,7 +42,7 @@ $notify = {
        'application' => $appname,
        'priority' => 0,
        'url' => '',
-       'collapse' => 0, ## will change formating if collapsed notification are set in prowl    
+       'collapse' => 0, ## will change formating if collapsed notification are set in prowl   (deprecated)
     },
     
     'pushover' => {
@@ -91,4 +91,9 @@ $notify = {
 	'provider_secret' => 'h4pJjyBoEMk1rwK2EH3NLemO4fQ0ql9HnRgVfwg4', ## plexWatch app is 'h4pJjyBoEMk1rwK2EH3NLemO4fQ0ql9HnRgVfwg4'. You may supply your own.
 	'icon_url' => '', # Leave empty ('') for plexWatch icon. You may supply your own (57x57)
     },
+};
+
+$push_titles = {'push_watched'    =>  'Watched',
+		'push_watching'    =>  'Watching',
+		'push_recentlyadded'    =>  'New',
 };
