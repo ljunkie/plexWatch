@@ -431,7 +431,7 @@ if ($options{'watched'} || $options{'stats'}) {
 		}
 		my $time = localtime ($is_watched->{$k}->{time} );
 		my $info = &info_from_xml($is_watched->{$k}->{'xml'},$ntype,$is_watched->{$k}->{'time'},$is_watched->{$k}->{'stopped'});
-		my $alert = &Notify($info,1);
+		my $alert = &Notify($info,1); ## only return formated alert
 		printf(" %s: %s\n",$time, $alert);
 	    } else {
 		if (!$seen{$skey}) {
@@ -466,7 +466,7 @@ if ($options{'watched'} || $options{'stats'}) {
 	    }
 	    my $time = localtime ($seen{$k}->{time} );
 	    my $info = &info_from_xml($seen{$k}->{xml},$ntype,$seen{$k}->{'time'},$seen{$k}->{'stopped'},$seen{$k}->{'duration'});
-	    my $alert = &Notify($info,1);
+	    my $alert = &Notify($info,1); ## only return formated alert
 	    printf(" %s: %s\n",$time, $alert);
 	}
     }
@@ -530,7 +530,7 @@ if ($options{'watching'}) {
 	    $info->{'progress'} = &durationrr($live->{$live_key}->{viewOffset}/1000);
 	    $info->{'time_left'} = &durationrr(($info->{raw_length}/1000)-($live->{$live_key}->{viewOffset}/1000));
 	    
-	    my $alert = &Notify($info,1);
+	    my $alert = &Notify($info,1); ## only return formated alert
 	    printf(" %s: %s\n",$time, $alert);
 	}
 	
@@ -1102,10 +1102,12 @@ sub initDBtable() {
 sub NotifyTwitter() {
     #use Net::Twitter::Lite::WithAPIv1_1;
     #use Scalar::Util 'blessed';
-    if ($provider_452->{'twitter'}) {
-	if ($options{'debug'}) { print "Twitter 452: backing off\n"; }
+    my $provider = 'twitter';
+    if ($provider_452->{$provider}) {
+	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
 	return 0;
     }
+    
     my $alert = shift;
     my $alert_options = shift;
 
@@ -1151,14 +1153,17 @@ sub NotifyTwitter() {
     ## try one more time..
     if ( my $err = $@ ) {
 	## my $rl = $nt->rate_limit_status; not useful for writes atm
-	#if ($err->code == 403 && $rl->{'resources'}->{'application'}->{'/application/rate_limit_status'}->{'remaining'} > 1) {
+	# twitter API doesn't publish limits for writes -- we will use this section to try again if they ever do.
+	# if ($err->code == 403 && $rl->{'resources'}->{'application'}->{'/application/rate_limit_status'}->{'remaining'} > 1) {
 	if ($err->code == 403) {
-	    $provider_452->{'twitter'} = 1;
-	    print "Twitter error 403 (You are over the daily limit for sending Tweets. Please wait a few hours and try again.) -- setting twitter to back off additional notifictions\n";
+	    $provider_452->{$provider} = 1;
+	    my $msg452 = uc($provider) . " error 403: $alert - (You are over the daily limit for sending Tweets. Please wait a few hours and try again.) -- setting $provider to back off additional notifictions";
+	    &ConsoleLog($msg452,,1);
 	    return 0;
 	}
     }
     
+    ## if we tried above or error code was not 403 -- continue with error
     if ( my $err = $@ ) {
 	#die $@ unless blessed $err && $err->isa('Net::Twitter::Lite::Error');
 	if ($debug) {
@@ -1176,6 +1181,12 @@ sub NotifyProwl() {
     ## modified from: https://www.prowlapp.com/static/prowl.pl
     my $alert = shift;
     my $alert_options = shift;
+
+    my $provider = 'prowl';
+    if ($provider_452->{$provider}) {
+	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
+	return 0;
+    }
     
     my %prowl = %{$notify->{prowl}};
     
@@ -1231,12 +1242,22 @@ sub NotifyProwl() {
     } else {
 	print STDERR "PROWL - Notification not posted: $prowl{'notification'} " . $response->content . "\n";
     }
+    
+    $provider_452->{$provider} = 1;
+    my $msg452 = uc($provider) . " failed: $alert - setting $provider to back off additional notifictions\n";
+    &ConsoleLog($msg452,,1);
     return 0; # failed
 }
 
 sub NotifyPushOver() {
     my $alert = shift;
     my $alert_options = shift;
+
+    my $provider = 'pushover';
+    if ($provider_452->{$provider}) {
+	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
+	return 0;
+    }
     
     my %po = %{$notify->{pushover}};    
     my $ua      = LWP::UserAgent->new();
@@ -1257,6 +1278,9 @@ sub NotifyPushOver() {
 
     if ($content !~ /\"status\":1/) {
 	print STDERR "Failed to post PushOver notification -- $po{'message'} result:$content\n";
+	$provider_452->{$provider} = 1;
+	my $msg452 = uc($provider) . " failed: $alert -  setting $provider to back off additional notifictions\n";
+	&ConsoleLog($msg452,,1);
 	return 0;
     } 
     
@@ -1269,7 +1293,13 @@ sub NotifyBoxcar() {
     # It will try to subscribe to the plexWatch service on boxcar if we get a 401 and resend the notification
     my $alert = shift;
     my $alert_options = shift;
-    
+
+    my $provider = 'boxcar';
+    if ($provider_452->{$provider}) {
+	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
+	return 0;
+    }
+
     my %bc = %{$notify->{boxcar}};    
     $bc{'message'} = $alert;
     
@@ -1303,8 +1333,10 @@ sub NotifyBoxcar() {
 	    }
 	}
     }
-        
-    print STDERR "Failed to post Boxcar notification - $bc{'message'}\n";
+
+    $provider_452->{$provider} = 1;
+    my $msg452 = uc($provider) . " failed: $alert - setting $provider to back off additional notifictions\n";
+    &ConsoleLog($msg452,,1);
     return 0;
 }
 
@@ -1329,6 +1361,12 @@ sub NotifyGrowl() {
     my $alert = shift;
     my $alert_options = shift;
     my $extra_cmd = '';
+
+    my $provider = 'growl';
+    if ($provider_452->{$provider}) {
+	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
+	return 0;
+    }
     
     my %growl = %{$notify->{growl}};    
     
@@ -1336,7 +1374,9 @@ sub NotifyGrowl() {
     $extra_cmd = " -t $growl{'title'} " if $growl{'title'};
     
     if (!-f  $growl{'script'} ) {
-	print STDERR "\nFailed to send GROWL notification -- $growl{'script'} does not exists\n";
+	$provider_452->{$provider} = 1;
+	print uc($provider) . " failed $alert: setting $provider to back off additional notifictions\n";
+	print STDERR "\n$growl{'script'} does not exists\n";
 	return 0;
     } else {
 	system( $growl{'script'}, "-n", $growl{'application'}, "--image", $growl{'icon'}, "-m", $alert, $extra_cmd); 
@@ -1523,11 +1563,13 @@ sub RunTestNotify() {
 		my $stop_epoch = $info->{$k}->{stopped} if $info->{$k}->{stopped}; ## DB only
 		my $info = &info_from_xml($info->{$k}->{'xml'},$ntype,$start_epoch,$stop_epoch);
 		&Notify($info);
+		## nothing to set as notified - this is a test
 	    }
 	} 
 	## notify the default format if there is not DB log yet.
 	else {
 	    &Notify($format_options);
+	    ## nothing to set as notified - this is a test
 	}
     }
     
@@ -1760,7 +1802,7 @@ sub ProcessRAalerts() {
 		if ($ra_done->{$item_id}->{$provider}) {
 		    printf("%s: %-8s %s [%s]\n", scalar localtime($ra_done->{$item_id}->{'time'}) , uc($provider) , $debug_done, $done_keys->{$ra_done->{$item_id}->{$provider}}) if $debug;
 		} elsif ($is_old) {
-		    &SetNotified_RA($provider,$item_id,3);
+		    &SetNotified_RA($provider,$item_id,3); ## to old - set as old and stop processing
 		}
 		elsif ($notify_func{$provider}->($alerts->{$k}->{'alert'}, $alert_options)) {
 		    &SetNotified_RA($provider,$item_id)   if !$test_notify; 
@@ -1772,111 +1814,6 @@ sub ProcessRAalerts() {
 		}	
 	    }
 	}
-	
-
-	## OLD style - to cleanup
-	## logging to file
-	#
-	#	$provider = 'file';
-	#	## file logging
-	#	if ($notify->{'file'}->{'enabled'}) {	
-	#	    if ($ra_done->{$item_id}->{$provider}) {
-	#		printf("%s: %-8s %s [%s]\n", scalar localtime($ra_done->{$item_id}->{'time'}) , uc($provider) , $debug_done, $done_keys->{$ra_done->{$item_id}->{$provider}}) if $debug;
-	#	    } elsif ($is_old) {
-	#		&SetNotified_RA($provider,$item_id,3);
-	#	    } else {
-	#		&ConsoleLog($alerts->{$k}->{'alert'});
-	#		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
-	#	    }
-	#	}
-	#	####
-	#	
-	#	$provider = 'prowl';
-	#	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
-	#	    if ($ra_done->{$item_id}->{$provider}) {
-	#		printf("%s: %-8s %s [%s]\n", scalar localtime($ra_done->{$item_id}->{'time'}) , uc($provider) , $debug_done, $done_keys->{$ra_done->{$item_id}->{$provider}}) if $debug;
-	#	    } elsif ($is_old) {
-	#		&SetNotified_RA($provider,$item_id,3);
-	#	    }
-	#	    elsif (&NotifyProwl($alerts->{$k}->{'alert'},'',$alerts->{$k}->{'alert_short'})) {
-	#		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
-	#	    } 
-	#	    else {
-	#		if (( $provider_452->{$provider} && $options{'debug'}) || $options{'debug'}) {
-	#		    print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
-	#		}
-	#	    }
-	#	}
-	#	
-	#	$provider = 'pushover';
-	#	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
-	#	    if ($ra_done->{$item_id}->{$provider}) {
-	#		printf("%s: %-8s %s [%s]\n", scalar localtime($ra_done->{$item_id}->{'time'}) , uc($provider) , $debug_done, $done_keys->{$ra_done->{$item_id}->{$provider}}) if $debug;
-	#	    } elsif ($is_old) {
-	#		&SetNotified_RA($provider,$item_id,3);
-	#	    }
-	#	    elsif (&NotifyPushOver($alerts->{$k}->{'alert'})) {
-	#		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
-	#	    } 
-	#	    else {
-	#		if (( $provider_452->{$provider} && $options{'debug'}) || $options{'debug'}) {
-	#		    print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
-	#		}
-	#	    }
-	#	}
-	#	
-	#	$provider = 'growl';
-	#	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
-	#	    if ($ra_done->{$item_id}->{$provider}) {
-	#		printf("%s: %-8s %s [%s]\n", scalar localtime($ra_done->{$item_id}->{'time'}) , uc($provider) , $debug_done, $done_keys->{$ra_done->{$item_id}->{$provider}}) if $debug;
-	#	    } elsif ($is_old) {
-	#		&SetNotified_RA($provider,$item_id,3);
-	#	    } 
-	#	    elsif (&NotifyGrowl($alerts->{$k}->{'alert'})) {
-	#		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
-	#	    } 
-	#	    else {
-	#		if (( $provider_452->{$provider} && $options{'debug'}) || $options{'debug'}) {
-	#		    print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
-	#		}
-	#	    }
-	#	}
-	#	
-	#	$provider = 'twitter';
-	#	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
-	#	    if ($ra_done->{$item_id}->{$provider}) {
-	#		printf("%s: %-8s %s [%s]\n", scalar localtime($ra_done->{$item_id}->{'time'}) , uc($provider) , $debug_done, $done_keys->{$ra_done->{$item_id}->{$provider}}) if $debug;
-	#	    } elsif ($is_old) {
-	#		&SetNotified_RA($provider,$item_id,3);
-	#	    }
-	#	    elsif (&NotifyTwitter($alerts->{$k}->{'alert'},$alerts->{$k}->{'alert_tag'},$alerts->{$k}->{'alert_url'})) {
-	#		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
-	#	    } 
-	#	    else {
-	#		if (( $provider_452->{$provider} && $options{'debug'}) || $options{'debug'}) {
-	#		    print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
-	#		}
-	#	    }
-	#	}
-	#	
-	#	$provider = 'boxcar';
-	#	if ($notify->{$provider}->{'enabled'} && $notify->{$provider}->{$push_type}) { 
-	#	    if ($ra_done->{$item_id}->{$provider}) {
-	#		printf("%s: %-8s %s [%s]\n", scalar localtime($ra_done->{$item_id}->{'time'}) , uc($provider) , $debug_done, $done_keys->{$ra_done->{$item_id}->{$provider}}) if $debug;
-	#	    } elsif ($is_old) {
-	#		&SetNotified_RA($provider,$item_id,3);
-	#	    }
-	#	    elsif (&NotifyBoxcar($alerts->{$k}->{'alert'})) {
-	#		&SetNotified_RA($provider,$item_id)   if !$test_notify; 
-	#	    } 
-	#	    else {
-	#		if (( $provider_452->{$provider} && $options{'debug'}) || $options{'debug'}) {
-	#		    print "$provider Failed: we will try again next time.. $alerts->{$k}->{'alert'} \n";
-	#		}
-	#	    }
-	#	}
-	#	
-	## END OLD STYLE
 	
     } # end alerts
 
