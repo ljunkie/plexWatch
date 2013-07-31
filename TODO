@@ -1,3 +1,6 @@
+# ADD OSX instructions: http://forums.plexapp.com/index.php/topic/72552-plexwatch-plex-notify-script-send-push-alerts-on-new-sessions-and-stopped/?p=436554
+#
+#
 ### TODO
 # * Add titles to notification -- i.e. pass the notification type (push_watched, push_watching, push_recently_added) to the sub routines 
 # * Paused status:  ?? to add ( every run update XML ) -- some DB changes needed too
