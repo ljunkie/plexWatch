@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!/usr/bin/perl
 
 my $version = '0.0.15-2';
 my $author_info = <<EOF;
