@@ -13,7 +13,7 @@
 #     -- pushover: ?
 #     -- gntp: haven't added GNTP -- but shouldn't have limits
 
-# 0.0.16-1-dev
+# 0.0.16
 # * rate limiting: provide mechinisms to back off notifications if provider fails (mainly due to --recently_added)
 #     -- twitter: no api for writes. If we recieve 403, we assume user hit daily limits (unknown hourly limit). Do not process additional notification until next run.
 #     -- boxcar: on failure -- back of the rest of alerts for provider until next run
