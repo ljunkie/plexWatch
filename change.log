@@ -4,7 +4,14 @@
 # * Add GNTP: ?
 # * failed,452 status for --watching, --watched ( keep trying notification if failed... set failed and skip after X number of failures or if notification is X old)
 #      --- show current time if notification is OLD  'user watching movie  (36 minutes / 120 minutes)' -- requires the pause status update
-
+# * rate limiting: provide mechinisms to back off notifications if provider fails (mainly due to --recently_added)
+#     -- twitter: DONE 0.0.16
+#     -- boxcar: ?
+#     -- prowl: ?
+#     -- growl: should not have limits
+#     -- pushover: ?
+#     -- gntp: haven't added GNTP -- but shouldn't have limits
+	
 # 0.0.16-1-dev
 # * rate limiting: provide mechinisms to back off notifications if provider fails (mainly due to --recently_added)
 #     -- twitter: no api for writes. If we recieve 403, we assume user hit daily limits (unknown hourly limit). Do not process additional notification until next run.
@@ -18,8 +25,9 @@
 # * --recently_added: process backlog of recently added ( if notification failed and more videos were added before we could process video, keep trying -- but only for 2 days)
 # * test_notify=recently_added  -- option to test notification for recently added content (verify provider even works)
 # * config.pl: $notify_started and $notify_stopped deprecated: use per provider settings globally (i.e. push_watched, push_watching)
-# * recently_added: bugfix - failed when section only have 1 video.
-
+# * recently_added: bugfix - failed when a section only have 1 video.
+# * titles added to notifications ( change titles per type in config.pl $push_titles ) prowl, growl, pushover supported
+	
 # 0.0.15
 # * added recently_added=[movie,show]  -- notify on recently added items to PMS
 # * Twitter added as a provider

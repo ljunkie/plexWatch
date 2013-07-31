@@ -36,7 +36,7 @@ if (!-e $dirname .'/config.pl') {
     exit;
 }
 do $dirname.'/config.pl';
-use vars qw/$data_dir $server $port $appname $user_display $alert_format $notify/; 
+use vars qw/$data_dir $server $port $appname $user_display $alert_format $notify $push_titles/; 
 if (!$data_dir || !$server || !$port || !$appname || !$alert_format || !$notify) {
     print "config file missing data\n";
     exit;
@@ -154,6 +154,7 @@ if  ($options{test_notify}) {
 
 
 my %notify_func = &GetNotifyfuncs();
+my $push_type_titles = &GetPushTitles();
 
 ########################################## START MAIN #######################################################
 
@@ -236,7 +237,7 @@ if ($options{'recently_added'}) {
 		if ($age > 86400*$ra_max_fail_days) {
 		    ## notification is OLD .. set notify = 2 to exclude from processing
 		    my $msg = "Could not notify $provider on [$key] $item->{'title'} for " . &durationrr($age) . " -- setting as old notification/done";
-		    &ConsoleLog($msg,1);
+		    &ConsoleLog($msg,,1);
 		    &SetNotified_RA($provider,$key,2);
 		}
 		
@@ -668,7 +669,9 @@ sub formatAlert() {
 
 sub ConsoleLog() {
     my $msg = shift;
+    my $alert_options = shift;
     my $print = shift;
+    
     my $console;
     if ($debug || $print) {
 	$console = &consoletxt("$date: DEBUG: $msg"); 
@@ -706,56 +709,13 @@ sub Notify() {
     if ($type =~ /start/) {	$push_type = 'push_watching';    } 
     if ($type =~ /stop/) {	$push_type = 'push_watched';    } 
     
+    my $alert_options = ();
+    $alert_options->{'push_type'} = $push_type;
     foreach my $provider (keys %{$notify}) {
 	if ( ( $notify->{$provider}->{'enabled'} ) && ( $notify->{$provider}->{$push_type} || $provider =~ /file/)) { 
-	    $notify_func{$provider}->($alert);
+	    $notify_func{$provider}->($alert,$alert_options);
 	}
     }
-
-    ## OLD STYLE - to remove at a later date
-    ## file logging
-    #&ConsoleLog($alert);
-    
-    ## started :: watching
-    #    if ($notify_started && $type =~ /start/) {
-    #	my $push_type = 'push_watching';
-    #	if ($notify->{'prowl'}->{'enabled'} && $notify->{'prowl'}->{$push_type})       { &NotifyProwl($alert); }
-    #	if ($notify->{'pushover'}->{'enabled'} && $notify->{'pushover'}->{$push_type}) { &NotifyPushOver($alert);          }
-    #	if ($notify->{'growl'}->{'enabled'} && $notify->{'growl'}->{$push_type})       { &NotifyGrowl($alert);             }
-    #	if ($notify->{'twitter'}->{'enabled'} && $notify->{'twitter'}->{$push_type})   { &NotifyTwitter($alert);             }
-    #	if ($notify->{'boxcar'}->{'enabled'} && $notify->{'boxcar'}->{$push_type})     { &NotifyBoxcar($alert);             }
-    #    }
-    #    
-    #    ## stopped :: watched
-    #    if ($notify_stopped && $type =~ /stop/) {    
-    #	my $push_type = 'push_watched';
-    #	if ($notify->{'prowl'}->{'enabled'} && $notify->{'prowl'}->{$push_type})       { &NotifyProwl($alert); }
-    #	if ($notify->{'pushover'}->{'enabled'} && $notify->{'pushover'}->{$push_type}) { &NotifyPushOver($alert);          }
-    #	if ($notify->{'growl'}->{'enabled'} && $notify->{'growl'}->{$push_type})       { &NotifyGrowl($alert);             }
-    #	if ($notify->{'twitter'}->{'enabled'} && $notify->{'twitter'}->{$push_type})   { &NotifyTwitter($alert);             }
-    #	if ($notify->{'boxcar'}->{'enabled'} && $notify->{'boxcar'}->{$push_type})     { &NotifyBoxcar($alert);             }
-    #    }
-    ## end OLD STYLE
-}
-
-sub RawNotify() {
-    ### not used yet... probably never will be. -- to remove later
-    my $alert = shift;
-    my $push_type = shift; #[push_watched, push_watching or push_recently_added]
-    
-    my $ret_alert = shift;
-    
-    ## only return the alert - do not notify -- used for CLI to keep formatting the same
-    return &consoletxt($alert) if $ret_alert;
-    
-    if ($notify->{'prowl'}->{'enabled'} && $notify->{'prowl'}->{$push_type})       { &NotifyProwl($alert);    }
-    if ($notify->{'pushover'}->{'enabled'} && $notify->{'pushover'}->{$push_type}) { &NotifyPushOver($alert); }
-    if ($notify->{'growl'}->{'enabled'} && $notify->{'growl'}->{$push_type})       { &NotifyGrowl($alert);    }
-    if ($notify->{'twitter'}->{'enabled'} && $notify->{'twitter'}->{$push_type})   { &NotifyTwitter($alert);  }
-    if ($notify->{'boxcar'}->{'enabled'} && $notify->{'boxcar'}->{$push_type})     { &NotifyBoxcar($alert);             }
-    
-    ## file logging
-    &ConsoleLog($alert);
 }
 
 sub ProcessStart() {
@@ -1145,10 +1105,9 @@ sub NotifyTwitter() {
 	return 0;
     }
     my $alert = shift;
-    my $tag = shift;
-    my $url = shift;
+    my $options = shift;
+    my $url = $options->{'url'} if $options->{'url'};
     
-    if ($tag) {	$alert .= ' #'.$appname.'_'.$tag;    }
     
     ## trim down alert..
     if (length($alert) > 139) {	$alert = substr($alert,0,140);    }
@@ -1208,10 +1167,15 @@ sub NotifyTwitter() {
 
 sub NotifyProwl() {
     ## modified from: https://www.prowlapp.com/static/prowl.pl
+    my $alert = shift;
+    my $alert_options = shift;
+    
     my %prowl = %{$notify->{prowl}};
     
     $prowl{'event'} = '';
-    $prowl{'notification'} = shift;    
+    $prowl{'event'} = $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};
+    
+    $prowl{'notification'} = $alert;
     
     #if ($prowl{'collapse'}) {
     #	my $orig = shift;
@@ -1264,9 +1228,16 @@ sub NotifyProwl() {
 }
 
 sub NotifyPushOver() {
+    my $alert = shift;
+    my $alert_options = shift;
+    
     my %po = %{$notify->{pushover}};    
     my $ua      = LWP::UserAgent->new();
-    $po{'message'} = shift;
+    $po{'message'} = $alert;
+    	    
+    ## PushOver title is AppName by default. If there is a real title for push type, It's 'AppName: push_type'
+    $po{'title'} .= ': ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
+    
     
     my $response = $ua->post( "https://api.pushover.net/1/messages.json", [
 				  "token" => $po{'token'},
@@ -1289,9 +1260,14 @@ sub NotifyPushOver() {
 sub NotifyBoxcar() {
     ## this will try to notifiy via box car 
     # It will try to subscribe to the plexWatch service on boxcar if we get a 401 and resend the notification
+    my $alert = shift;
+    my $alert_options = shift;
     
     my %bc = %{$notify->{boxcar}};    
-    $bc{'message'} = shift;
+    $bc{'message'} = $alert;
+    
+    ## BoxCars title [from name] is set in config.pl. If there is a real title for push type, It's 'From: push_type_title'
+    $bc{'from'} .= ': ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
     
     if (!$bc{'email'}) {
 	my $msg = "Please specify and email address for boxcar in config.pl";
@@ -1344,12 +1320,19 @@ sub NotifyBoxcarPOST() {
 
 sub NotifyGrowl() { 
     my $alert = shift;
+    my $alert_options = shift;
+    my $extra_cmd = '';
+    
     my %growl = %{$notify->{growl}};    
+    
+    $growl{'title'} = $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
+    $extra_cmd = " -t $growl{'title'} " if $growl{'title'};
+    
     if (!-f  $growl{'script'} ) {
 	print STDERR "\nFailed to send GROWL notification -- $growl{'script'} does not exists\n";
 	return 0;
     } else {
-	system( $growl{'script'}, "-n", $growl{'application'}, "--image", $growl{'icon'}, "-m", $alert); 
+	system( $growl{'script'}, "-n", $growl{'application'}, "--image", $growl{'icon'}, "-m", $alert, $extra_cmd); 
 	return 1; ## need better error checking here -- no mac, so I can't test it.
     }
 }
@@ -1733,7 +1716,9 @@ sub ProcessRAalerts() {
     foreach my $k ( sort keys %{$alerts}) {
 	$count++;
 	my $is_old = 0;
-
+	
+	my $alert_options = (); ## container for extra alert info if provider uses it..
+	
 	## VERIFY notification is for content only recently Added -- RA content is not always recent
 	## we will allow for 1 day ( you can set this higher, but shouldn't have to if run on a 5 min cron)
 	my $ra_max_age = 1; ## TODO - advanced config options
@@ -1751,6 +1736,10 @@ sub ProcessRAalerts() {
 	
 	my $push_type = 'push_recentlyadded';
 	my $provider;
+
+	$alert_options->{'url'} = $alerts->{$k}->{'alert_url'} if $alerts->{$k}->{'alert_url'};
+	$alert_options->{'push_type'} = $push_type;
+
 	
 	## 'recently_added' table has columns for each provider -- we will notify and verify each provider has success. 
 	## TODO - extend this logic into the normal notifications
@@ -1759,18 +1748,13 @@ sub ProcessRAalerts() {
 	
 	foreach my $provider (keys %{$notify}) {
 	    # provider is globaly enable and provider push type is enable or is file
-
-	    #elsif (&NotifyProwl($alerts->{$k}->{'alert'},'',$alerts->{$k}->{'alert_short'})) {
-	    #    &SetNotified_RA($provider,$item_id)   if !$test_notify; 
-	    #} 
-
 	    if ( ( $notify->{$provider}->{'enabled'} ) && ( $notify->{$provider}->{$push_type} || $provider =~ /file/)) { 
 		if ($ra_done->{$item_id}->{$provider}) {
 		    printf("%s: %-8s %s [%s]\n", scalar localtime($ra_done->{$item_id}->{'time'}) , uc($provider) , $debug_done, $done_keys->{$ra_done->{$item_id}->{$provider}}) if $debug;
 		} elsif ($is_old) {
 		    &SetNotified_RA($provider,$item_id,3);
 		}
-		elsif ($notify_func{$provider}->($alerts->{$k}->{'alert'})) {
+		elsif ($notify_func{$provider}->($alerts->{$k}->{'alert'}, $alert_options)) {
 		    &SetNotified_RA($provider,$item_id)   if !$test_notify; 
 		} 
 		else {
@@ -1911,7 +1895,17 @@ sub GetNotifyfuncs() {
     return %notify_func;
 }
 
-
+sub GetPushTitles() {
+    my  $push_type_display = ();
+    $push_type_display->{'push_watched'} = 'Watched';
+    $push_type_display->{'push_watching'} = 'Watching';
+    $push_type_display->{'push_recentlyadded'} = 'New Content';
+    
+    foreach my $type (keys %{$push_type_display}) {
+	$push_type_display->{$type} = $push_titles->{$type} if $push_titles->{$type};
+    }
+    return $push_type_display;
+}
 
 
 

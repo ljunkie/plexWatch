@@ -92,3 +92,8 @@ $notify = {
 	'icon_url' => '', # Leave empty ('') for plexWatch icon. You may supply your own (57x57)
     },
 };
+
+$push_titles = {'push_watched'    =>  'Watched',
+		'push_watching'    =>  'Watching',
+		'push_recentlyadded'    =>  'New Content',
+};
