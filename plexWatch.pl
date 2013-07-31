@@ -1,11 +1,11 @@
 #!/usr/bin/perl
 
-my $version = '0.0.15';
+my $version = '0.0.16';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-07-29 08:00 PST
+# Modified: 2013-07-31 14:13 PST
 #
 #  Version: $version
 # https://github.com/ljunkie/plexWatch
