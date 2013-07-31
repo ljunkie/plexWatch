@@ -1,3 +1,19 @@
+### TODO
+# * Add titles to notification -- i.e. pass the notification type (push_watched, push_watching, push_recently_added) to the sub routines 
+# * Paused status:  ?? to add ( every run update XML ) -- some DB changes needed too
+# * Add GNTP: ?
+# * failed,452 status for --watching, --watched ( keep trying notification if failed... set failed and skip after X number of failures or if notification is X old)
+#      --- show current time if notification is OLD  'user watching movie  (36 minutes / 120 minutes)' -- requires the pause status update
+#      --- this is already true for --recenlty_added ( we need to keep status per provider for --watched,--watching: db changes)
+# * rate limiting: provide mechinisms to back off notifications if provider fails (mainly due to --recently_added)
+#     -- twitter: DONE 0.0.16
+#     -- boxcar: ?
+#     -- prowl: ?
+#     -- growl: should not have limits
+#     -- pushover: ?
+#     -- gntp: haven't added GNTP -- but shouldn't have limits
+
+
 ######  Long Term
 
 * add more options to --format_options (will probably have to use XML in db going backwards -- maybe even forwards instead of messing with DB table)
