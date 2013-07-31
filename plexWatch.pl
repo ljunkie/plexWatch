@@ -249,7 +249,7 @@ if ($options{'recently_added'}) {
 		    ## redundant code from above hash %seen 
 		    #print "$item->{'title'} is already in current releases... nothing missed\n";
 		} else {
-		    print "$item->{'title'} is NOT in current releases -- we failed to notify previouly, so trying again\n" if $options{'debug'};
+		    print "$item->{'title'} is NOT in current releases -- we failed to notify previously, so trying again\n" if $options{'debug'};
 		    my $res = &RAdataAlert($key,$item,$want);
 		    $alerts->{$item->{addedAt}.$key} = $res;
 		}
@@ -540,7 +540,7 @@ if ($options{'watching'}) {
 
 ## no options -- we can continue.. otherwise --stats, --watched, --watching or --notify MUST be specified
 if (%options && !$options{'notify'} && !$options{'stats'} && !$options{'watched'} && !$options{'watching'} && !$options{'recently_added'} ) {
-    print "\n* Skipping any Notifictions -- command line options set, use '--notify' or supply no options to enable notifications\n";
+    print "\n* Skipping any Notifications -- command line options set, use '--notify' or supply no options to enable notifications\n";
     exit;
 }
 
@@ -968,7 +968,7 @@ sub initDB() {
 	    $dbh->commit; 
 	};
 	if ($@) {
-	    print "Could not upgrade table defintions - Transaction aborted because $@\n";
+	    print "Could not upgrade table definitions - Transaction aborted because $@\n";
 	    eval { $dbh->rollback };
 	}
 	print "DB update DONE\n";
@@ -1054,7 +1054,7 @@ sub DB_ra_table() {
 	    $dbh->commit; 
 	};
 	if ($@) {
-	    print "Could not upgrade table defintions - Transaction aborted because $@\n";
+	    print "Could not upgrade table definitions - Transaction aborted because $@\n";
 	    eval { $dbh->rollback };
 	}
 	print "DB update DONE\n";
@@ -1157,7 +1157,7 @@ sub NotifyTwitter() {
 	# if ($err->code == 403 && $rl->{'resources'}->{'application'}->{'/application/rate_limit_status'}->{'remaining'} > 1) {
 	if ($err->code == 403) {
 	    $provider_452->{$provider} = 1;
-	    my $msg452 = uc($provider) . " error 403: $alert - (You are over the daily limit for sending Tweets. Please wait a few hours and try again.) -- setting $provider to back off additional notifictions";
+	    my $msg452 = uc($provider) . " error 403: $alert - (You are over the daily limit for sending Tweets. Please wait a few hours and try again.) -- setting $provider to back off additional notifications";
 	    &ConsoleLog($msg452,,1);
 	    return 0;
 	}
@@ -1244,7 +1244,7 @@ sub NotifyProwl() {
     }
     
     $provider_452->{$provider} = 1;
-    my $msg452 = uc($provider) . " failed: $alert - setting $provider to back off additional notifictions\n";
+    my $msg452 = uc($provider) . " failed: $alert - setting $provider to back off additional notifications\n";
     &ConsoleLog($msg452,,1);
     return 0; # failed
 }
@@ -1277,14 +1277,14 @@ sub NotifyPushOver() {
     my $content  = $response->decoded_content();
 
     if ($content !~ /\"status\":1/) {
-	print STDERR "Failed to post PushOver notification -- $po{'message'} result:$content\n";
+	print STDERR "Failed to post Pushover notification -- $po{'message'} result:$content\n";
 	$provider_452->{$provider} = 1;
-	my $msg452 = uc($provider) . " failed: $alert -  setting $provider to back off additional notifictions\n";
+	my $msg452 = uc($provider) . " failed: $alert -  setting $provider to back off additional notifications\n";
 	&ConsoleLog($msg452,,1);
 	return 0;
     } 
     
-    if ($debug) { print "PushOver - Notification successfully posted. $content\n";}
+    if ($debug) { print "Pushover - Notification successfully posted. $content\n";}
     return 1;     ## success
 }
 
@@ -1322,7 +1322,7 @@ sub NotifyBoxcar() {
 					  "email" => $bc{'email'},#
 				      ]);
 	    if (!$response->is_success) {
-		my $msg = "$bc{'email'} subscription to plexWatch service failed. Is $bc{'email'} email registerd to your boxcar account?";
+		my $msg = "$bc{'email'} subscription to plexWatch service failed. Is $bc{'email'} email registered to your boxcar account?";
 		&ConsoleLog($msg);
 	    } else {
 		## try notification again now that we are subscribed
@@ -1335,7 +1335,7 @@ sub NotifyBoxcar() {
     }
 
     $provider_452->{$provider} = 1;
-    my $msg452 = uc($provider) . " failed: $alert - setting $provider to back off additional notifictions\n";
+    my $msg452 = uc($provider) . " failed: $alert - setting $provider to back off additional notifications\n";
     &ConsoleLog($msg452,,1);
     return 0;
 }
@@ -1375,7 +1375,7 @@ sub NotifyGrowl() {
     
     if (!-f  $growl{'script'} ) {
 	$provider_452->{$provider} = 1;
-	print uc($provider) . " failed $alert: setting $provider to back off additional notifictions\n";
+	print uc($provider) . " failed $alert: setting $provider to back off additional notifications\n";
 	print STDERR "\n$growl{'script'} does not exists\n";
 	return 0;
     } else {
@@ -1674,7 +1674,7 @@ sub GetItemMetadata() {
     my $response = $ua->get( $url );
     if ( ! $response->is_success ) {
 	if ($options{'debug'}) {
-	    print "Failed to get MetaData from from $url\n";
+	    print "Failed to get Metadata from from $url\n";
 	    print Dumper($response);
 	}
 	return $response->{'_rc'} if $response->{'_rc'} == 404;
