@@ -1371,7 +1371,7 @@ sub NotifyGrowl() {
     my %growl = %{$notify->{growl}};    
     
     $growl{'title'} = $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
-    $extra_cmd = " -t $growl{'title'} " if $growl{'title'};
+    $extra_cmd = "$growl{'title'}" if $growl{'title'};
     
     if (!-f  $growl{'script'} ) {
 	$provider_452->{$provider} = 1;
