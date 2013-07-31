@@ -312,8 +312,10 @@ sub RAdataAlert() {
 	$alert_url .= ' http://www.imdb.com/find?s=tt&q=' . urlencode($item->{'imdb_title'});
     }
     
-    $result->{'alert'} = 'NEW: '.$alert;
-    $result->{'alert_short'} = 'NEW: '.$alert_short;
+    $result->{'alert'} = $alert;
+    $result->{'alert_short'} = $alert_short;
+    #$result->{'alert'} = 'NEW: '.$alert;
+    #$result->{'alert_short'} = 'NEW: '.$alert_short;
     $result->{'item_id'} = $item_id;
     $result->{'debug_done'} = $debug_done;
     $result->{'alert_url'} = $alert_url;
@@ -1105,27 +1107,32 @@ sub NotifyTwitter() {
 	return 0;
     }
     my $alert = shift;
-    my $options = shift;
-    my $url = $options->{'url'} if $options->{'url'};
-    
+    my $alert_options = shift;
+
+    my $url = $alert_options->{'url'} if $alert_options->{'url'};
+    $alert = $push_type_titles->{$alert_options->{'push_type'}} . ': ' . $alert if $alert_options->{'push_type'};        
     
     ## trim down alert..
-    if (length($alert) > 139) {	$alert = substr($alert,0,140);    }
+    if (length($alert) > 139) {	
+	$alert = substr($alert,0,140);  ## strip down to 140 chars
+	if ($alert =~ /(.*)\[.*/g) { $alert = $1; } ## cut at last brackets to clean up a little
+    }
     
     ## url can be appended - twitter allows it even if the alert is 140 chars -- well it looks like 115 is max if URL is included..
     my $non_url_alert = $alert;
     if ($url) {
-	if (length($alert) > 114) {	$alert = substr($alert,0,114);    }
+	if (length($alert) > 114) {
+	    $alert = substr($alert,0,114);   
+	    if ($alert =~ /(.*)\[.*/g) { $alert = $1; } ## cut at last brackets to clean up a little
+	}
 	$alert .= ' '. $url;   
     }
     
-    
-
-    
     ## cleanup spaces
-    $alert =~ s/\s+$//g;
-    $alert =~ s/\s\s/ /g;
-
+    $alert =~ s/\s+$//g; ## trim any spaces from END
+    $alert =~ s/^\s+//g; ## trim any spaces from START
+    $alert =~ s/\s+/ /g; ## replace multiple spaced with ONE
+    
     if ($debug) {
 	print "Twitter Alert: $alert\n";
     }
@@ -1498,8 +1505,9 @@ sub RunTestNotify() {
     $ntype = 'push_recently_added' if $options{test_notify} =~ /recent/;
     if ($ntype =~ /push_recently_added/) {
 	my $alerts = ();
-	$alerts->{'test'}->{'alert'} = 'NEW: '. ' test recently added alert';
-	$alerts->{'test'}->{'alert_short'} = 'NEW: '. 'test recently added alert (short version)';
+
+	$alerts->{'test'}->{'alert'} = $push_type_titles->{$ntype} .' test recently added alert';
+	$alerts->{'test'}->{'alert_short'} = $push_type_titles->{$ntype} .'test recently added alert (short version)';
 	$alerts->{'test'}->{'item_id'} = 'test_item_id';
 	$alerts->{'test'}->{'debug_done'} = 'testing alert already done';
 	$alerts->{'test'}->{'alert_url'} = 'https://github.com/ljunkie/plexWatch';
@@ -1899,7 +1907,7 @@ sub GetPushTitles() {
     my  $push_type_display = ();
     $push_type_display->{'push_watched'} = 'Watched';
     $push_type_display->{'push_watching'} = 'Watching';
-    $push_type_display->{'push_recentlyadded'} = 'New Content';
+    $push_type_display->{'push_recentlyadded'} = 'New';
     
     foreach my $type (keys %{$push_type_display}) {
 	$push_type_display->{$type} = $push_titles->{$type} if $push_titles->{$type};

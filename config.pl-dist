@@ -95,5 +95,5 @@ $notify = {
 
 $push_titles = {'push_watched'    =>  'Watched',
 		'push_watching'    =>  'Watching',
-		'push_recentlyadded'    =>  'New Content',
+		'push_recentlyadded'    =>  'New',
 };
