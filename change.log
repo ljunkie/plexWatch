@@ -1,3 +1,9 @@
+# 0.0.17-1-dev
+# GNTP: centos ( yum install perl\(Data::UUID\) , cpan Growl::GNTP )
+	ubuntu ( cpan Growl::GNTP )
+# TEST_notify broken?   $notify_func{$provider}->($alert,$alert_options); -- to fix
+
+
 # 0.0.16
 # * rate limiting: provide mechinisms to back off notifications if provider fails (mainly due to --recently_added)
 #     -- twitter: no api for writes. If we recieve 403, we assume user hit daily limits (unknown hourly limit). Do not process additional notification until next run.

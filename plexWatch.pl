@@ -1,11 +1,11 @@
 #!/usr/bin/perl
 
-my $version = '0.0.16';
+my $version = '0.0.17-1-dev';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-07-31 14:13 PST
+# Modified: 2013-08-01 00:45 PST
 #
 #  Version: $version
 # https://github.com/ljunkie/plexWatch
@@ -52,6 +52,11 @@ if ($notify->{'twitter'}->{'enabled'}) {
     Net::OAuth->import();
     Scalar::Util->import('blessed');
 
+}
+
+if ($notify->{'GNTP'}->{'enabled'}) {
+    require Growl::GNTP;
+    Growl::GNTP->import();
 }
 
 ## used for later..
@@ -120,6 +125,8 @@ my $debug_xml = $options{'show_xml'};
 if ($options{debug}) {
     require Data::Dumper;
     Data::Dumper->import(); 
+    require diagnostics;
+    diagnostics->import();
 }
 
 my $date = localtime;
@@ -154,6 +161,7 @@ if  ($options{test_notify}) {
 
 
 my %notify_func = &GetNotifyfuncs();
+
 my $push_type_titles = &GetPushTitles();
 
 ########################################## START MAIN #######################################################
@@ -710,7 +718,9 @@ sub Notify() {
     my $push_type;
     if ($type =~ /start/) {	$push_type = 'push_watching';    } 
     if ($type =~ /stop/) {	$push_type = 'push_watched';    } 
-    
+
+
+
     my $alert_options = ();
     $alert_options->{'push_type'} = $push_type;
     foreach my $provider (keys %{$notify}) {
@@ -1340,6 +1350,90 @@ sub NotifyBoxcar() {
     return 0;
 }
 
+
+
+
+sub NotifyGNTP() {
+    ## this will try to notifiy via box car 
+    # It will try to subscribe to the plexWatch service on boxcar if we get a 401 and resend the notification
+    my $alert = shift;
+    my $alert_options = shift;
+    
+    my $provider = 'GNTP';
+    if ($provider_452->{$provider}) {
+	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
+	return 0;
+    }
+    
+    my %gntp = %{$notify->{GNTP}};    
+    $gntp{'message'} = $alert;
+    
+    $gntp{'title'} =  $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
+    
+    if (!$gntp{'server'} || !$gntp{'port'} ) {
+	my $msg = "Please specify a server and port for GNTP (growl) in config.pl";
+	&ConsoleLog($msg,,1);
+    } else {
+	
+	my $growl = Growl::GNTP->new(
+	    AppName => $gntp{'application'},
+	    PeerHost => $gntp{'server'},
+	    PeerPort => $gntp{'port'},
+	    Password => $gntp{'password'},
+	    Timeout  =>  $gntp{'timeout'},
+	    AppIcon => $gntp{'icon'},
+	    );
+    
+    
+    
+    eval { 
+	$growl->register(
+		[
+		 { Name => 'push_watching',
+		   DisplayName => 'push_watching',
+		   Enabled     => 'True',
+		   Icon => $gntp{'icon'},
+		 },
+		 
+		 { Name => 'push_watched',
+		   DisplayName => 'push_watched',
+		   Enabled     => 'True',
+		   Icon => $gntp{'icon'},
+		 },
+		 
+		 { Name => 'push_recently_added',
+		   DisplayName => 'push_recently_added',
+		   Enabled     => 'True',
+		   Icon => $gntp{'icon'},
+		 },
+		 
+		]);
+	};
+	
+	if (!$@) {
+	    $growl->notify(
+		Priotity => 0,
+		Sticky => 'false',
+		Name => $alert_options->{'push_type'},
+		Title => $gntp{'title'},
+		Message => $alert,
+		ID => time(),
+		Icon => $gntp{'icon'},
+		);
+	    
+	    
+	    if ($debug) { 	    print "PROWL - Notification successfully posted.\n";}
+	    return 1;     ## success
+	}
+    }
+    $provider_452->{$provider} = 1;
+    my $msg452 = uc($provider) . " failed: $alert - setting $provider to back off additional notifications\n";
+    &ConsoleLog($msg452,,1);
+    return 0;
+    
+}
+
+
 sub NotifyBoxcarPOST() {
     ## the actual post to boxcar
     my %bc = %{$_[0]};
@@ -1833,11 +1927,13 @@ sub ProcessRAalerts() {
 sub GetNotifyfuncs() {
     my %notify_func = (
 	prowl => \&NotifyProwl,
-	growl => \&NotifyGrowl,
+	growl => \&NotifyGrowl,	
 	pushover => \&NotifyPushOver,
 	twitter => \&NotifyTwitter,
 	boxcar => \&NotifyBoxcar,
 	file => \&ConsoleLog,
+	GNTP => \&NotifyGNTP,
+	
 	);
     my $error;
     ## this SHOULD never happen if the code is released -- this is just a reminder for whomever is adding a new provider in config.pl

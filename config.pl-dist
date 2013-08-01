@@ -91,6 +91,20 @@ $notify = {
 	'provider_secret' => 'h4pJjyBoEMk1rwK2EH3NLemO4fQ0ql9HnRgVfwg4', ## plexWatch app is 'h4pJjyBoEMk1rwK2EH3NLemO4fQ0ql9HnRgVfwg4'. You may supply your own.
 	'icon_url' => '', # Leave empty ('') for plexWatch icon. You may supply your own (57x57)
     },
+
+    'GNTP' => {
+        'enabled' => 0, ## set to 1 to enable local growl
+	'push_recentlyadded'  => 0,
+	'push_watched'        => 0,
+	'push_watching'       => 0,
+        'application' => $appname,
+	'server' => 'localhost',
+	'port' => '23053', # default 23053
+	'password' => 'test', # '' for no pass
+	'icon_url' => 'https://rarforge.com/images/plexWatch.57x57.png',
+	'timeout' => '10', ## not always allowd
+    },
+
 };
 
 $push_titles = {'push_watched'    =>  'Watched',
