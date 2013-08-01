@@ -9,7 +9,6 @@
 * ADD OSX instructions: http://forums.plexapp.com/index.php/topic/72552-plexwatch-plex-notify-script-send-push-alerts-on-new-sessions-and-stopped/?p=436554
 * not happy with locking
 * known issue: --test_notify broken 
-* code for --recently_added=movie,show 
 ###
 ###########################################################################################
 
@@ -45,6 +44,7 @@
 
 
 ###### DONE  -- cruft -- this is part of the change log (verify and remove)
+* code for --recently_added=movie,show 
 
 * code cleanup - merge same routines in sub
     -- added &FriendlyName

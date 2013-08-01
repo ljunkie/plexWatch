@@ -1,9 +1,12 @@
-# 0.0.17-2-dev
-
-# GNTP: Provider added. Supports multiple destinations. Currenlty tested with Growl For Windows as I don't have OSX available. Need to test with others
-	-- install centos ( yum install perl\(Data::UUID\) , cpan Growl::GNTP )   -- CPAN install failed until I installed perl\(Data::UUID\)
-	-- install ubuntu ( cpan Growl::GNTP )
-
+# 0.0.17-3-dev
+# * GNTP: Provider added.
+#       -- Supports multiple destinations.
+#	-- Currenlty tested with Growl For Windows as I don't have OSX available. Need to test with others
+#	-- install centos ( yum install perl\(Data::UUID\) , cpan Growl::GNTP )   -- CPAN install failed until I installed perl\(Data::UUID\)
+#	-- install ubuntu ( cpan Growl::GNTP )
+# * --recently_added allows comma separated list. --recently_added=movie,show   ( preferred way if you are running multiple cron jobs for RA )
+#      -- fixes some sqlite lock issues by running it once
+#      -- fixes out of order content when running shows/movies
 
 # 0.0.16
 # * rate limiting: provide mechinisms to back off notifications if provider fails (mainly due to --recently_added)
