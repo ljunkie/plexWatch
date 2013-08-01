@@ -1,22 +1,23 @@
-plexWatch - 0.0.16
+plexWatch - 0.0.17-3-dev
 =========
 
 ***Notify*** and Log ***'Now Playing'*** content from a Plex Media Server
 
-**Suported Push Notifications** 
+**Supported Push Notifications** 
 * https://pushover.net
 * https://prowlapp.com
 * http://growl.info/ (via GrowlInotify @ http://growl.info/downloads#generaldownloads)
 * https://twitter.com/ (create a new app @ https://dev.twitter.com/apps)
 * https://boxcar.io/ 
+* SNARL/GROWL: GNTP notifications supported. Anything that uses GNTP *should* work
 
 **What it does**
 * notify when a user starts watching a video
 * notify when a user stop watching a video
 * notify on recently added content to a PMS server
 * notifies via prowl, pushover, growl, twitter, boxcar and/or a log file
-* notifications per provider enabled/disabled per notifiation type (watching, watched, recently added)
-* backed by a sqlite DB (for state and history)
+* notifications per provider enabled/disabled per notification type (watching, watched, recently added)
+* backed by a SQLite DB (for state and history)
 * CLI to query watched videos, videos being watched and stats on time watched per user
 * Limit output per user or exclude users
 * ...more to come
@@ -29,13 +30,13 @@ plexWatch - 0.0.16
 * Time::Duration;
 * Time::ParseDate;
 
-#### These should be part of the bast perl install
+#### These should be part of the bast Perl install
 
-* Pod::Usage;        (perl base on rhel/centos)
-* Fcntl qw(:flock);  (perl base)
-* Getopt::Long;      (perl base)
-* POSIX qw(strftime) (perl base)
-* File::Basename     (perl base)
+* Pod::Usage;        (Perl base on rhel/centos)
+* Fcntl qw(:flock);  (Perl base)
+* Getopt::Long;      (Perl base)
+* POSIX qw(strftime) (Perl base)
+* File::Basename     (Perl base)
 
 #### Required ONLY if you use twitter
 
@@ -68,7 +69,7 @@ $notify = {...
    set 'enabled' => 1, under selected provider
 
 * Prowl     : 'apikey' required
-* PushOver  : 'token' and 'user' required
+* Pushover  : 'token' and 'user' required
 * Growl     : 'script' required :: GrowlNotify from http://growl.info/downloads
 * twitter   : 'consumer_key', 'consumer_secret', 'access_token', 'access_token_secret' required
 * boxcar    : 'email' required
@@ -113,7 +114,7 @@ yum -y install perl\(LWP::UserAgent\) perl\(XML::Simple\) \
 ```
 
 ### Twitter integration 
-If you want to use twitter, you will need to install two more perl modules
+If you want to use twitter, you will need to install two more Perl modules
 
 *  requires Net::Twitter::Lite::WithAPIv1_1  
 ```
@@ -246,7 +247,7 @@ user: Franks's total duration 2 hours, 43 minutes, and 2 seconds
 
  --format_start=".."     : modify start notification :: --format_start='{user} watching {title} on {platform}'
 
- --format_stop=".."      : modify stop nottification :: --format_stop='{user} watched {title} on {platform} for {duration}'
+ --format_stop=".."      : modify stop notification :: --format_stop='{user} watched {title} on {platform} for {duration}'
 
  --format_watched=".."   : modify cli output for --watched  :: --format_watched='{user} watched {title} on {platform} for {duration}'
 
@@ -322,7 +323,7 @@ SYNOPSIS
 
           --format_start=".."     : modify start notification :: --format_start='{user} watching {title} on {platform}'
 
-          --format_stop=".."      : modify stop nottification :: --format_stop='{user} watched {title} on {platform} for {duration}'
+          --format_stop=".."      : modify stop notification :: --format_stop='{user} watched {title} on {platform} for {duration}'
 
           --format_watched=".."   : modify cli output for --watched  :: --format_watched='{user} watched {title} on {platform} for {duration}'
 
@@ -332,7 +333,7 @@ SYNOPSIS
 
           * Debug Options
 
-          -test_notify=start        send a test notifcation for a start event. To test a stop event use -test_notify=stop
+          -test_notify=start        send a test notification for a start event. To test a stop event use -test_notify=stop
           -show_xml                 show xml result from api query
           -debug                    hit and miss - not very useful
 
