@@ -1,16 +1,16 @@
 # 0.0.17-3-dev
 # * GNTP: Provider added.
 #       -- Supports multiple destinations.
-#	-- Currenlty tested with Growl For Windows as I don't have OSX available. Need to test with others
+#	-- Currently tested with Growl For Windows as I don't have OSX available. Need to test with others
 #	-- install centos ( yum install perl\(Data::UUID\) , cpan Growl::GNTP )   -- CPAN install failed until I installed perl\(Data::UUID\)
-#	-- install ubuntu ( cpan Growl::GNTP )
+#	-- install Ubuntu ( cpan Growl::GNTP )
 # * --recently_added allows comma separated list. --recently_added=movie,show   ( preferred way if you are running multiple cron jobs for RA )
-#      -- fixes some sqlite lock issues by running it once
+#      -- fixes some SQLite lock issues by running it once
 #      -- fixes out of order content when running shows/movies
 
 # 0.0.16
-# * rate limiting: provide mechinisms to back off notifications if provider fails (mainly due to --recently_added)
-#     -- twitter: no api for writes. If we recieve 403, we assume user hit daily limits (unknown hourly limit). Do not process additional notification until next run.
+# * rate limiting: provide mechanisms to back off notifications if provider fails (mainly due to --recently_added)
+#     -- twitter: no api for writes. If we receive 403, we assume user hit daily limits (unknown hourly limit). Do not process additional notification until next run.
 #     -- boxcar: on failure -- back of the rest of alerts for provider until next run
 #     -- prowl: on failure -- back of the rest of alerts for provider until next run
 #     -- growl: on failure -- back of the rest of alerts for provider until next run
@@ -32,7 +32,7 @@
     -  twitter OAUTH required - create a new app @ https://dev.twitter.com/apps
      -- make sure to set set ApplicationType to read/write
 # *  config.pl: added  push_watched => 1, push_watching => 1, push_recently_added => 1 to all providers. Enable to disable specific notify types
-# * --exclude_user added to all functions. You can specifiy --exclude_user multiple times.. i.e --exclude_user=user1 --exclude_user=otherUsername
+# * --exclude_user added to all functions. You can specify --exclude_user multiple times.. i.e --exclude_user=user1 --exclude_user=otherUsername
 # * Boxcar added as provider
 #   - All you need is a registered account on boxcar (valid email)
 #   - If enabled, this script with register your boxcar account to the plexWatch service -- simple right?
@@ -43,18 +43,18 @@
 	
 # 0.0.14
 # * --watched -- join the same show title in one line if it was watched into the next day. 
-#	I.E. Movie1 watdched from 11pm - 1am:  would noramlly show two lines.. 1 from 11pm-11:59pm and 2 from 12am-1am. Now it will just show one
+#	I.E. Movie1 watched from 11pm - 1am:  would normally show two lines.. 1 from 11pm-11:59pm and 2 from 12am-1am. Now it will just show one
 #
 
 # 0.0.13
-# * duation_exact change to durationrr (time precision will be in minutes)
+# * duration_exact change to durationrr (time precision will be in minutes)
 # * --stats time precision will still be seconds
 # * formatting options added
 #   {time_left}   :: time left until video is done. works only on --watching 
 #   - {length}    :: length of video (works for any)
 #   - {progress} :: current time watched in video
 # * --stats can be used by itself now. No longer required to have --watched
-# * Growl added to config.pl -- requires growlnotify from http://growl.info/downloads
+# * Growl added to config.pl -- requires GrowlNotify from http://growl.info/downloads
 
 # 0.0.12
 # * code cleanup - merge same routines in sub (&FriendlyName)
@@ -63,7 +63,7 @@
    -- can override on cli with --format_stop="..." and --format_start="..."
    -- list available format options with --format_options
 # * cli --watching --watched format can now be edited by the user or specified on the cli
-# * config options moved into config.pl -- should be easier to upgrade version without having to edit the perl script each time
+# * config options moved into config.pl -- should be easier to upgrade version without having to edit the Perl script each time
 # * config.pl-dist is included --- one must edit and copy it to config.pl
 # * File::Basename required -- to load config.pl
 
@@ -74,7 +74,7 @@
 # 0.0.10
 # * '-stats' option added to '-watched' - show total watched time per user -- total time and per day
 # * '-user' option added to '-watched' and '-watching' -- limit output to a specific user
-# * $user_display hashref added to config - you can now show a 'friendly' username instead of the users email address [excluding @domain.tld]
+# * $user_display hash ref added to config - you can now show a 'friendly' username instead of the users email address [excluding @domain.tld]
 # * platform title used if exists over platform. I.E. Chrome - Plex/Web (Chrome) will not show 'Plex/Web (Chrome)' -- it was redundant. Roku will still be Roku
 # * log file is now hard coded to $data_dir/plexWatch.log instead of $data_dir/$appname.log. Allows users to change $appname to anything or nothing for notification
 
@@ -89,7 +89,7 @@
 # -- this might fix the dupe stopped notifications.
 
 # 0.0.7
-# * added 'on platform' tto alert - i.e. user is watching: movie name on Roku'
+# * added 'on platform' for alert - i.e. user is watching: movie name on Roku'
 # * fixed alerts for prowl when movie has a colon. It was discarding anything after the first colon.
 
 # 0.0.6
@@ -98,9 +98,9 @@
 # 0.0.5
 # info: little bugs, nothing major
 #
-# * updated perl doc
+# * updated Perl doc
 # * fixed --show_xml to actually show url when no options are given
-# * README.md - Fix install instructions and supply yum/apt-get perl module howto
+# * README.md - Fix install instructions and supply yum/apt-get Perl module howto
 
 # 0.0.4
 # * added data_dir in config. Defaults to /opt/plexWeb/ -- this way the script can be run from any location.
@@ -113,7 +113,7 @@
 # 0.0.2;
 # * new requirement: use Getopt::Long, Pod::Usage, Fcntl qw(:flock), Fcntl qw(:flock)
 # * modified DB insert - using Placeholders and Bind Values
-# * added 'xml column' to db - if any info is need later or for easier debuging
+# * added 'xml column' to db - if any info is need later or for easier debugging
 # * changed stopped from a boolean to actual epoch - used for duration of watched
 # * changed sub InitialzeDB (now initDB) and added initDBtable - ability to add/modify column definitions when needed
 # * added use Time::Duration -- duration for watched status
