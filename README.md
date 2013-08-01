@@ -6,7 +6,7 @@ plexWatch - 0.0.17-3-dev
 **Supported Push Notifications** 
 * https://pushover.net
 * https://prowlapp.com
-* http://growl.info/ (via GrowlInotify @ http://growl.info/downloads#generaldownloads)
+* http://growl.info/ (via GrowlNotify @ http://growl.info/downloads#generaldownloads)
 * https://twitter.com/ (create a new app @ https://dev.twitter.com/apps)
 * https://boxcar.io/ 
 * SNARL/GROWL: GNTP notifications supported. Anything that uses GNTP *should* work

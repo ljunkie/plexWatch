@@ -16,8 +16,8 @@ $user_display = {'REAL_USER1' => 'Frank',
 ## format of alert - default. You can also override this per provider  ($notify below)
 ## run ./plexWatch.pl --format_options -- to see all
 #
-#       start = notificaion for start of video
-#       stop = notificaion for stop of video
+#       start = notification for start of video
+#       stop = notification for stop of video
 #       watched = cli output for watched content
 #       watching = cli output content being watched
 $alert_format = {'start'    =>  '{user} watching {title} [{year}] [{rating}] on {platform}',
@@ -42,11 +42,11 @@ $notify = {
        'application' => $appname,
        'priority' => 0,
        'url' => '',
-       'collapse' => 0, ## will change formating if collapsed notification are set in prowl   (deprecated)
+       'collapse' => 0, ## will change for mating if collapsed notification are set in prowl   (deprecated)
     },
     
     'pushover' => {
-       'enabled' => 0, ## set to 1 to enable PushOver
+       'enabled' => 0, ## set to 1 to enable Pushover
        'push_recentlyadded'  => 0,
        'push_watched'        => 0,
        'push_watching'       => 0,
@@ -85,7 +85,7 @@ $notify = {
 	'push_watched'        => 0,
 	'push_watching'       => 0,
         'application' => $appname,
-	'email' => '',                          ## YOUR email address registered ot boxcar
+	'email' => '',                          ## YOUR email address registered at boxcar
 	'from' => 'Your From Name',              ## From Name displayed on boxcar
 	'provider_key' => 'o2eI7rcwya5XFETaXdlh',                        ## plexWatch app is 'o2eI7rcwya5XFETaXdlh'. You may supply your own.
 	'provider_secret' => 'h4pJjyBoEMk1rwK2EH3NLemO4fQ0ql9HnRgVfwg4', ## plexWatch app is 'h4pJjyBoEMk1rwK2EH3NLemO4fQ0ql9HnRgVfwg4'. You may supply your own.
