@@ -168,12 +168,15 @@ my $push_type_titles = &GetPushTitles();
 ####################################################################
 ## RECENTLY ADDED 
 if ($options{'recently_added'}) {
-    my ($want,$hkey);
+    my ($hkey);
+    my @want;
+    ## TO NOTE: plex used show and episode off an on. code for both
     if ($options{'recently_added'} =~ /movie/i) {
-	$want = 'movie';
+	push @want , 'movie';
 	$hkey = 'Video';
-    } elsif ($options{'recently_added'} =~ /show|tv/i) {
-	$want = 'show';
+    } 
+    if ($options{'recently_added'} =~ /show|tv|episode/i) {
+	push @want , 'show';
 	$hkey = 'Video';
     }
     
@@ -182,19 +185,24 @@ if ($options{'recently_added'}) {
     #	$want = 'artist';
     #	$hkey = 'Directory';
     
-    if (!$want) {
+    if (!@want) {
 	#print "\n 'recently_added' must be: movie, show or artist\n\n";
-	print "\n 'recently_added' must be: 'movie' or 'show' \n\n";
+	print "\n 'recently_added' must be: 'movie' or 'show' -- or a comma separated list \n\n";
 	exit;
     }
     
-    my $plex_sections = &GetSectionsIDs(); ## allow for multiple sections with the same type (movie, show, etc)
+    my $plex_sections = &GetSectionsIDs(); ## allow for multiple sections with the same type (movie, show, etc) -- or different types (2013-08-01)
+    my @merged = ();
+    foreach my $w (@want) {
+	foreach my $v (@{$plex_sections->{'types'}->{$w}}) {   push (@merged, $v); }
+    }
     
-    my $info = &GetRecentlyAdded($plex_sections->{'types'}->{$want},$hkey);
+    my $info = &GetRecentlyAdded(\@merged,$hkey);
     my $alerts = (); # containers to push alerts from oldest -> newest
     
     my %seen;
     foreach my $k (keys %{$info}) {
+	
 	$seen{$k} = 1; ## alert seen
 	if (!ref($info->{$k})) {
 	    if ($debug) {
@@ -205,8 +213,8 @@ if ($options{'recently_added'}) {
 	    next;
 	}
 	
-	my $item = &ParseDataItem($info->{$k},$want);
-	my $res = &RAdataAlert($k,$item,$want);
+	my $item = &ParseDataItem($info->{$k});
+	my $res = &RAdataAlert($k,$item);
 	$alerts->{$item->{addedAt}.$k} = $res;
     }
 
@@ -224,7 +232,7 @@ if ($options{'recently_added'}) {
 	    ## we passed checks -- let's process this old/failed notification
 	    my $data = &GetItemMetadata($key,1);
 	    
-	    ## if result is not a ref 
+	    ## if result is not a href ( it's possible the video has been removed from the PMS ) 
 	    if (!ref($data)) {
 		##  maybe we got 404 -- I.E. old/removed video.. set at 404 -> not found
 		if ($data =~ /404/) {
@@ -235,8 +243,13 @@ if ($options{'recently_added'}) {
 	    }
 	    
 	    else {
-		my $item = &ParseDataItem($data,$want);
+		my $item = &ParseDataItem($data);
 		
+		## for back log -- verify we are only checking the type we have specified
+		my %wmap = map { $_ => 1 } @want;
+		next if $data->{'type'} =~ /episode/ && !exists($wmap{'show'}); ## next if episode and current task is not a show
+		next if $data->{'type'} =~ /movie/ && !exists($wmap{'movie'}); ## next if episode and current task is not a show
+
 		## check age of notification. -- allow two days ( we will keep trying to notify for 2 days.. if we keep failing.. we need to skip this)
 		my $age = time()-$ra_done->{$key}->{'time'};
 		my $ra_max_fail_days = 2; ## TODO: advanced config options?
@@ -247,16 +260,12 @@ if ($options{'recently_added'}) {
 		    &SetNotified_RA($provider,$key,2);
 		}
 		
-		next if $data->{'type'} =~ /episode/ && $want !~ /show/; ## next if episode and current task is not a show
-		next if $data->{'type'} =~ /movie/ && $want !~ /movie/;  ## next if movie and current task is not a movie
-		
-		
 		if ($alerts->{$item->{addedAt}.$key}) {
 		    ## redundant code from above hash %seen 
 		    #print "$item->{'title'} is already in current releases... nothing missed\n";
 		} else {
 		    print "$item->{'title'} is NOT in current releases -- we failed to notify previously, so trying again\n" if $options{'debug'};
-		    my $res = &RAdataAlert($key,$item,$want);
+		    my $res = &RAdataAlert($key,$item);
 		    $alerts->{$item->{addedAt}.$key} = $res;
 		}
 	    }
@@ -265,7 +274,6 @@ if ($options{'recently_added'}) {
 	
     }
 
-
     &ProcessRAalerts($alerts) if ref($alerts);
 }
 
@@ -273,10 +281,9 @@ if ($options{'recently_added'}) {
 sub RAdataAlert() {
     my $item_id = shift;
     my $item = shift;
-    my $want = shift;
-    
-    my $result;
 
+    my $result;
+    
     my $add_date = &twittime($item->{addedAt});
     
     my $debug_done = '';
@@ -284,14 +291,14 @@ sub RAdataAlert() {
     $debug_done .= $item->{'title'} if $item->{'title'};
     $debug_done .= " [$add_date]";
     
-    
+
     my $alert = 'unknown type';
     my ($alert_url,$alert_short);
     my $media;
     $media .= $item->{'videoResolution'}.'p ' if $item->{'videoResolution'};
     $media .= $item->{'audioChannels'}.'ch' if $item->{'audioChannels'};
     ##my $twitter; #twitter sucks... has to be short. --- might use this later.
-    if ($want eq 'show') {
+    if ($item->{'type'} eq 'show' || $item->{'type'} eq 'episode') {
 	$alert = $item->{'title'};
 	$alert_short = $item->{'title'};
 	$alert .= " [$item->{'contentRating'}]" if $item->{'contentRating'};
@@ -306,7 +313,7 @@ sub RAdataAlert() {
 	#$twitter .= " [$add_date]";
 	$alert_url .= ' http://www.imdb.com/find?s=tt&q=' . urlencode($item->{'imdb_title'});
     }
-    if ($want eq 'movie') {
+    if ($item->{'type'} eq 'movie') {
 	$alert = $item->{'title'};
 	$alert_short = $item->{'title'};
 	$alert .= " [$item->{'contentRating'}]" if $item->{'contentRating'};
@@ -1048,6 +1055,7 @@ sub DB_ra_table() {
 	{ 'name' => 'twitter', 'definition' => 'INTEGER',},
 	{ 'name' => 'growl', 'definition' => 'INTEGER',},
 	{ 'name' => 'prowl', 'definition' => 'INTEGER',},
+	{ 'name' => 'GNTP', 'definition' => 'INTEGER',},
 	{ 'name' => 'pushover', 'definition' => 'INTEGER',},
 	{ 'name' => 'boxcar', 'definition' => 'INTEGER',},
 	
@@ -1396,6 +1404,12 @@ sub NotifyGNTP() {
 	$gntp{'message'} = $alert;
 	
 	$gntp{'title'} =  $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
+
+	if ($gntp{'sticky'} =~ /1/) {
+	    $gntp{'sticky'} = 'true'; 
+	} else {
+	    $gntp{'sticky'} = 'false'; 
+	}
 	
 	if (!$gntp{'server'} || !$gntp{'port'} ) {
 	    my $msg = "Please specify a server and port for GNTP (growl) in config.pl";
@@ -1408,10 +1422,8 @@ sub NotifyGNTP() {
 		PeerPort => $gntp{'port'},
 		Password => $gntp{'password'},
 		Timeout  =>  $gntp{'timeout'},
-		AppIcon => $gntp{'icon'},
+		AppIcon => $gntp{'icon_url'},
 		);
-	    
-	    
 	    
 	    eval { 
 		$growl->register(
@@ -1419,19 +1431,19 @@ sub NotifyGNTP() {
 		     { Name => 'push_watching',
 		       DisplayName => 'push_watching',
 		       Enabled     => 'True',
-		       Icon => $gntp{'icon'},
+		       Icon => $gntp{'icon_url'},
 		     },
 		     
 		     { Name => 'push_watched',
 		       DisplayName => 'push_watched',
 		       Enabled     => 'True',
-		       Icon => $gntp{'icon'},
+		       Icon => $gntp{'icon_url'},
 		     },
 		     
-		     { Name => 'push_recently_added',
-		       DisplayName => 'push_recently_added',
+		     { Name => 'push_recentlyadded',
+		       DisplayName => 'push_recentlyadded',
 		       Enabled     => 'True',
-		       Icon => $gntp{'icon'},
+		       Icon => $gntp{'icon_url'},
 		     },
 		     
 		    ]);
@@ -1445,11 +1457,11 @@ sub NotifyGNTP() {
 		    Title => $gntp{'title'},
 		    Message => $alert,
 		    ID => time(),
-		    Icon => $gntp{'icon'},
+		    Icon => $gntp{'icon_url'},
+		    Sticky => $gntp{'sticky'},
 		    );
 		
-		
-		if ($debug) { 	    print "GNTP - Notification successfully posted.\n";}
+		if ($debug) { 	    print "GNTP - $alert - Notification successfully posted.\n";}
 		#return 1;     ## success
 		$success++; ## increment success -- can't return as we might have multiple destinations
 	    }
@@ -1670,8 +1682,8 @@ sub RunTestNotify() {
     $ntype = 'stop' if $options{test_notify} =~ /watched/;
     
     
-    $ntype = 'push_recently_added' if $options{test_notify} =~ /recent/;
-    if ($ntype =~ /push_recently_added/) {
+    $ntype = 'push_recentlyadded' if $options{test_notify} =~ /recent/;
+    if ($ntype =~ /push_recentlyadded/) {
 	my $alerts = ();
 
 	$alerts->{'test'}->{'alert'} = $push_type_titles->{$ntype} .' test recently added alert';
@@ -1730,10 +1742,9 @@ sub suffer {
 
 sub ParseDataItem() {
     my $data = shift;
-    my $type = shift;
     my $info = $data; ## fallback
-    
-    if ($type =~ /movie/i || $type=~/show/) {
+
+    if ($data->{'type'} =~ /movie/i || $data->{'type'} =~ /show/ || $data->{'type'} =~ /episode/) {
 	$info = ();    	
 	$info->{'originallyAvailableAt'} = $data->{'originallyAvailableAt'};
 	$info->{'titleSort'} = $data->{'titleSort'};
@@ -1756,7 +1767,7 @@ sub ParseDataItem() {
 	$info->{'imdb_title'} = $data->{'title'};
 	$info->{'imdb_title'} .= ' ' . $data->{'year'} if $data->{'year'};
     }
-    if ($type =~ /show/) {
+    if ($data->{'type'} =~ /show/ || $data->{'type'} =~ /episode/) {
 	$info->{'episode'} = $data->{index};
 	$info->{'season'} = $data->{parentIndex};
 	if ($info->{'episode'} < 10) { $info->{'episode'} = 0 . $info->{'episode'};}
@@ -1765,6 +1776,9 @@ sub ParseDataItem() {
 	$info->{'imdb_title'} = $data->{'grandparentTitle'} . ': '.  $data->{'title'};
 	
     }
+    ## everything gets these
+    $info->{'type'} = $data->{'type'};
+    
     return $info;
 }
 

@@ -104,7 +104,7 @@ $notify = {
 	    'port' => '23053',      # default 23053
 	    'password' => '',       # '' for no pass
 	    'icon_url' => 'https://rarforge.com/images/plexWatch.57x57.png',
-	    'timeout' => '10',      # not always used
+	    'sticky' => 1,
 	},
 	
 	'2' => 	{
@@ -117,7 +117,7 @@ $notify = {
 	    'port' => '23053',      # default 23053
 	    'password' => '',       # '' for no pass
 	    'icon_url' => 'https://rarforge.com/images/plexWatch.57x57.png',
-	    'timeout' => '10',      # not always used
+	    'sticky' => 0,
 	},
     },
 
