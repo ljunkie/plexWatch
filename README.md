@@ -43,6 +43,10 @@ plexWatch - 0.0.17-3-dev
 * Net::Twitter::Lite::WithAPIv1_1
 * Net::OAuth
 
+#### Required ONLY if you use GNTP
+
+* Growl::GNTP
+
 ### Install 
 
 1) sudo wget -P /opt/plexWatch/ https://raw.github.com/ljunkie/plexWatch/master/plexWatch.pl
@@ -131,6 +135,19 @@ cpan Net::OAuth
 * create a new app @ https://dev.twitter.com/apps
 * make sure to set set ApplicationType to read/write
 * enable notification for twitter in config.pl
+
+
+
+### GNTP integration
+If you want to use GNTP (growl), you will need to install a module
+
+*  requires Growl::GNTP
+```
+cpan Growl::GNTP
+```
+
+* Note: CPAN install failed on centos until I installed perl\(Data::UUID\)
+
 
 
 ## Using the script
