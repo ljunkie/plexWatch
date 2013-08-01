@@ -1,7 +1,8 @@
-# 0.0.17-1-dev
-# GNTP: centos ( yum install perl\(Data::UUID\) , cpan Growl::GNTP )
-	ubuntu ( cpan Growl::GNTP )
-# TEST_notify broken?   $notify_func{$provider}->($alert,$alert_options); -- to fix
+# 0.0.17-2-dev
+
+# GNTP: Provider added. Supports multiple destinations. Currenlty tested with Growl For Windows as I don't have OSX available. Need to test with others
+	-- install centos ( yum install perl\(Data::UUID\) , cpan Growl::GNTP )   -- CPAN install failed until I installed perl\(Data::UUID\)
+	-- install ubuntu ( cpan Growl::GNTP )
 
 
 # 0.0.16

@@ -57,7 +57,7 @@ $notify = {
     },
 
     'growl' => {
-       'enabled' => 0, ## set to 1 to enable local growl
+       'enabled' => 0, ## set to 1 to enable local growl (You should probably used GNTP - growl supported for multiple platforms - below)
        'push_recentlyadded'  => 0,
        'push_watched'        => 0,
        'push_watching'       => 0,
@@ -92,22 +92,41 @@ $notify = {
 	'icon_url' => '', # Leave empty ('') for plexWatch icon. You may supply your own (57x57)
     },
 
-    'GNTP' => {
-        'enabled' => 0, ## set to 1 to enable local growl
-	'push_recentlyadded'  => 0,
-	'push_watched'        => 0,
-	'push_watching'       => 0,
-        'application' => $appname,
-	'server' => 'localhost',
-	'port' => '23053', # default 23053
-	'password' => 'test', # '' for no pass
-	'icon_url' => 'https://rarforge.com/images/plexWatch.57x57.png',
-	'timeout' => '10', ## not always allowd
+    ## GNTP (GROWL) -- multiple destinations are supported 
+    'GNTP' => { 
+	'1' => 	{
+	    'enabled' => 0, ## set to 1 to enable local growl
+	    'push_recentlyadded'  => 0,
+	    'push_watched'        => 0,
+	    'push_watching'       => 0,
+	    'application' => $appname,
+	    'server' => '10.0.0.1', # destination ip/host
+	    'port' => '23053',      # default 23053
+	    'password' => '',       # '' for no pass
+	    'icon_url' => 'https://rarforge.com/images/plexWatch.57x57.png',
+	    'timeout' => '10',      # not always used
+	},
+	
+	'2' => 	{
+	    'enabled' => 0, ## set to 1 to enable local growl
+	    'push_recentlyadded'  => 0,
+	    'push_watched'        => 0,
+	    'push_watching'       => 0,
+	    'application' => $appname,
+	    'server' => '192.168.10.100', # destination ip/host
+	    'port' => '23053',      # default 23053
+	    'password' => '',       # '' for no pass
+	    'icon_url' => 'https://rarforge.com/images/plexWatch.57x57.png',
+	    'timeout' => '10',      # not always used
+	},
     },
+
 
 };
 
-$push_titles = {'push_watched'    =>  'Watched',
-		'push_watching'    =>  'Watching',
-		'push_recentlyadded'    =>  'New',
+
+$push_titles = {
+    'push_watched'        =>  'Watched',
+    'push_watching'       =>  'Watching',
+    'push_recentlyadded'  =>  'New',
 };

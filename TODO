@@ -1,23 +1,27 @@
-# ADD OSX instructions: http://forums.plexapp.com/index.php/topic/72552-plexwatch-plex-notify-script-send-push-alerts-on-new-sessions-and-stopped/?p=436554
-#
-#
-### TODO
-# * Add titles to notification -- i.e. pass the notification type (push_watched, push_watching, push_recently_added) to the sub routines 
-# * Paused status:  ?? to add ( every run update XML ) -- some DB changes needed too
-# * Add GNTP: ?
-# * failed,452 status for --watching, --watched ( keep trying notification if failed... set failed and skip after X number of failures or if notification is X old)
-#      --- show current time if notification is OLD  'user watching movie  (36 minutes / 120 minutes)' -- requires the pause status update
-#      --- this is already true for --recenlty_added ( we need to keep status per provider for --watched,--watching: db changes)
-# * rate limiting: provide mechinisms to back off notifications if provider fails (mainly due to --recently_added)
-#     -- twitter: DONE 0.0.16
-#     -- boxcar: ?
-#     -- prowl: ?
-#     -- growl: should not have limits
-#     -- pushover: ?
-#     -- gntp: haven't added GNTP -- but shouldn't have limits
 
 
-######  Long Term
+###########################################################################################
+###  TODO
+
+* Paused status:  ?? to add ( every run update XML ) -- some DB changes needed too
+* re-work plexWatch.log: only include --recently_added, --watched, --watching
+    --  create plexWatch.debug to include ALL actions - failures and success. Easier to ... debug
+* ADD OSX instructions: http://forums.plexapp.com/index.php/topic/72552-plexwatch-plex-notify-script-send-push-alerts-on-new-sessions-and-stopped/?p=436554
+* not happy with locking
+* known issue: --test_notify broken 
+* code for --recently_added=movie,show 
+###
+###########################################################################################
+
+
+
+###########################################################################################
+###  Long Term
+* failed,452 status for --watching, --watched ( keep trying notification if failed... set failed and skip after X number of failures or if notification is X old)
+     --- show current time if notification is OLD  'user watching movie  (36 minutes / 120 minutes)' -- requires the pause status update
+     --- this is already true for --recenlty_added ( we need to keep status per provider for --watched,--watching: db changes)
+
+* rate limiting: slow down before 452.. not a high priority as the current version works
 
 * add more options to --format_options (will probably have to use XML in db going backwards -- maybe even forwards instead of messing with DB table)
   -- XML is not used to pull info for all alerts and to display cli info. This means the above is now possible without too much work (i think)
@@ -26,7 +30,21 @@
 
 * --watching -- show start time if not at beginning 'user watching movie  (36 minutes / 120 minutes)'
 
-###### DONE  -- cruft -- this is part of the change log
+###
+###########################################################################################
+
+
+
+
+
+
+
+
+
+
+
+
+###### DONE  -- cruft -- this is part of the change log (verify and remove)
 
 * code cleanup - merge same routines in sub
     -- added &FriendlyName

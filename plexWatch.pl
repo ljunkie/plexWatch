@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-my $version = '0.0.17-1-dev';
+my $version = '0.0.17-2-dev';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
@@ -25,10 +25,6 @@ use POSIX qw(strftime);
 use File::Basename;
 use warnings;
 
-## removed modules
-#use WWW::Curl::Easy; #removed -- using LWP
-#use URI::Escape; ## now using subroutine
-
 ## load config file
 my $dirname = dirname(__FILE__);
 if (!-e $dirname .'/config.pl') {
@@ -43,18 +39,18 @@ if (!$data_dir || !$server || !$port || !$appname || !$alert_format || !$notify)
 }
 ## end
 
+
 ## ONLY Load modules if used
-if ($notify->{'twitter'}->{'enabled'}) {
+if (&ProviderEnabled('twitter')) {
     require Net::Twitter::Lite::WithAPIv1_1;
     require Net::OAuth;
     require Scalar::Util;
     Net::Twitter::Lite::WithAPIv1_1->import(); 
     Net::OAuth->import();
     Scalar::Util->import('blessed');
-
 }
 
-if ($notify->{'GNTP'}->{'enabled'}) {
+if (&ProviderEnabled('GNTP')) {
     require Growl::GNTP;
     Growl::GNTP->import();
 }
@@ -128,6 +124,7 @@ if ($options{debug}) {
     require diagnostics;
     diagnostics->import();
 }
+
 
 my $date = localtime;
 my $dbh = &initDB(); ## Initialize sqlite db
@@ -218,7 +215,8 @@ if ($options{'recently_added'}) {
     my $ra_done = &GetRecentlyAddedDB();
     my $push_type = 'push_recentlyadded';
     foreach my $provider (keys %{$notify}) {
-	next if ( !$notify->{$provider}->{'enabled'} || !$notify->{$provider}->{$push_type}); ## skip provider if not enabled
+	next if (!&ProviderEnabled($provider,$push_type));
+	#next if ( !$notify->{$provider}->{'enabled'} || !$notify->{$provider}->{$push_type}); ## skip provider if not enabled
 	foreach my $key (keys %{$ra_done}) {
 	    next if $seen{$key}; ## already in alerts hash
 	    next if ($ra_done->{$key}->{$provider}); ## provider already notified
@@ -694,7 +692,7 @@ sub ConsoleLog() {
     }
     
     ## file logging
-    if ($notify->{'file'}->{'enabled'}) {	
+    if (&ProviderEnabled('file')) {
 	open FILE, ">>", $notify->{'file'}->{'filename'}  or die $!;
 	print FILE "$console\n";
 	close(FILE);
@@ -724,10 +722,35 @@ sub Notify() {
     my $alert_options = ();
     $alert_options->{'push_type'} = $push_type;
     foreach my $provider (keys %{$notify}) {
-	if ( ( $notify->{$provider}->{'enabled'} ) && ( $notify->{$provider}->{$push_type} || $provider =~ /file/)) { 
+	if (&ProviderEnabled($provider,$push_type)) {
 	    $notify_func{$provider}->($alert,$alert_options);
 	}
     }
+}
+
+sub ProviderEnabled() {
+    my ($provider,$push_type) = @_;
+    if (!$push_type) {
+	## provider is multi ( GNTP )
+	foreach my $k (keys %{$notify->{$provider}}) {
+	    return 1 if (ref $notify->{$provider}->{$k} && $notify->{$provider}->{$k}->{'enabled'});
+	}
+	## provider is non-multi
+	return 1 if $notify->{$provider}->{'enabled'};
+    } 
+    
+    ## check provider and push type if supplied
+    else {
+	## provider is multi ( GNTP )
+        foreach my $k (keys %{$notify->{$provider}}) {
+	    ## for now - we will just return 1 if any of them are enabled --- the NotifySUB of the provider will handle the multiple values
+	    return 1 if (ref $notify->{$provider}->{$k} && $notify->{$provider}->{$k}->{'enabled'}  &&  $notify->{$provider}->{$k}->{$push_type});
+	}
+	## provider is non-multi
+	return 1 if ( ( $notify->{$provider}->{'enabled'} ) && ( $notify->{$provider}->{$push_type} || $provider =~ /file/));
+    }
+    
+    return 0;
 }
 
 sub ProcessStart() {
@@ -1360,72 +1383,83 @@ sub NotifyGNTP() {
     my $alert_options = shift;
     
     my $provider = 'GNTP';
+    ## TODO -- make the 452 per multi provider
     if ($provider_452->{$provider}) {
 	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
 	return 0;
     }
     
-    my %gntp = %{$notify->{GNTP}};    
-    $gntp{'message'} = $alert;
-    
-    $gntp{'title'} =  $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
-    
-    if (!$gntp{'server'} || !$gntp{'port'} ) {
-	my $msg = "Please specify a server and port for GNTP (growl) in config.pl";
-	&ConsoleLog($msg,,1);
-    } else {
+    my $success;
+    foreach my $k (keys %{$notify->{$provider}}) {
 	
-	my $growl = Growl::GNTP->new(
-	    AppName => $gntp{'application'},
-	    PeerHost => $gntp{'server'},
-	    PeerPort => $gntp{'port'},
-	    Password => $gntp{'password'},
-	    Timeout  =>  $gntp{'timeout'},
-	    AppIcon => $gntp{'icon'},
-	    );
-    
-    
-    
-    eval { 
-	$growl->register(
-		[
-		 { Name => 'push_watching',
-		   DisplayName => 'push_watching',
-		   Enabled     => 'True',
-		   Icon => $gntp{'icon'},
-		 },
-		 
-		 { Name => 'push_watched',
-		   DisplayName => 'push_watched',
-		   Enabled     => 'True',
-		   Icon => $gntp{'icon'},
-		 },
-		 
-		 { Name => 'push_recently_added',
-		   DisplayName => 'push_recently_added',
-		   Enabled     => 'True',
-		   Icon => $gntp{'icon'},
-		 },
-		 
-		]);
-	};
+	my %gntp = %{$notify->{GNTP}->{$k}};    
+	$gntp{'message'} = $alert;
 	
-	if (!$@) {
-	    $growl->notify(
-		Priotity => 0,
-		Sticky => 'false',
-		Name => $alert_options->{'push_type'},
-		Title => $gntp{'title'},
-		Message => $alert,
-		ID => time(),
-		Icon => $gntp{'icon'},
+	$gntp{'title'} =  $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
+	
+	if (!$gntp{'server'} || !$gntp{'port'} ) {
+	    my $msg = "Please specify a server and port for GNTP (growl) in config.pl";
+	    &ConsoleLog($msg,,1);
+	} else {
+	    
+	    my $growl = Growl::GNTP->new(
+		AppName => $gntp{'application'},
+		PeerHost => $gntp{'server'},
+		PeerPort => $gntp{'port'},
+		Password => $gntp{'password'},
+		Timeout  =>  $gntp{'timeout'},
+		AppIcon => $gntp{'icon'},
 		);
 	    
 	    
-	    if ($debug) { 	    print "PROWL - Notification successfully posted.\n";}
-	    return 1;     ## success
+	    
+	    eval { 
+		$growl->register(
+		    [
+		     { Name => 'push_watching',
+		       DisplayName => 'push_watching',
+		       Enabled     => 'True',
+		       Icon => $gntp{'icon'},
+		     },
+		     
+		     { Name => 'push_watched',
+		       DisplayName => 'push_watched',
+		       Enabled     => 'True',
+		       Icon => $gntp{'icon'},
+		     },
+		     
+		     { Name => 'push_recently_added',
+		       DisplayName => 'push_recently_added',
+		       Enabled     => 'True',
+		       Icon => $gntp{'icon'},
+		     },
+		     
+		    ]);
+	    };
+	    
+	    if (!$@) {
+		$growl->notify(
+		    Priotity => 0,
+		    Sticky => 'false',
+		    Name => $alert_options->{'push_type'},
+		    Title => $gntp{'title'},
+		    Message => $alert,
+		    ID => time(),
+		    Icon => $gntp{'icon'},
+		    );
+		
+		
+		if ($debug) { 	    print "GNTP - Notification successfully posted.\n";}
+		#return 1;     ## success
+		$success++; ## increment success -- can't return as we might have multiple destinations
+	    }
 	}
+	
     }
+
+    return 1 if $success;
+
+    ## this could be moved above scope to 452 specific GNTP dest that failed -- need to look into RecentlyAdded code to see how it affect that.
     $provider_452->{$provider} = 1;
     my $msg452 = uc($provider) . " failed: $alert - setting $provider to back off additional notifications\n";
     &ConsoleLog($msg452,,1);
@@ -1903,7 +1937,8 @@ sub ProcessRAalerts() {
 	
 	foreach my $provider (keys %{$notify}) {
 	    # provider is globaly enable and provider push type is enable or is file
-	    if ( ( $notify->{$provider}->{'enabled'} ) && ( $notify->{$provider}->{$push_type} || $provider =~ /file/)) { 
+	    if (&ProviderEnabled($provider,$push_type)) {
+	    #if ( ( $notify->{$provider}->{'enabled'} ) && ( $notify->{$provider}->{$push_type} || $provider =~ /file/)) { 
 		if ($ra_done->{$item_id}->{$provider}) {
 		    printf("%s: %-8s %s [%s]\n", scalar localtime($ra_done->{$item_id}->{'time'}) , uc($provider) , $debug_done, $done_keys->{$ra_done->{$item_id}->{$provider}}) if $debug;
 		} elsif ($is_old) {
