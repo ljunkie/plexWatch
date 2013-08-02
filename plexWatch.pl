@@ -1,11 +1,11 @@
 #!/usr/bin/perl
 
-my $version = '0.0.17-3-dev';
+my $version = '0.0.17-4-dev';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-08-01 03:47 PST
+# Modified: 2013-08-01 21:23 PST
 #
 #  Version: $version
 # https://github.com/ljunkie/plexWatch
@@ -150,20 +150,20 @@ $alert_format->{'stop'} = $options{'format_stop'} if $options{'format_stop'};
 $alert_format->{'watched'} = $options{'format_watched'} if $options{'format_watched'};
 $alert_format->{'watching'} = $options{'format_watching'} if $options{'format_watching'};
 
+my %notify_func = &GetNotifyfuncs();
+my $push_type_titles = &GetPushTitles();
+
+
+
+
+
+########################################## START MAIN #######################################################
+
 ## show what the notify alerts will look like
 if  ($options{test_notify}) {
     &RunTestNotify();
     exit;
 }
-
-
-my %notify_func = &GetNotifyfuncs();
-
-my $push_type_titles = &GetPushTitles();
-
-########################################## START MAIN #######################################################
-
-
 
 ####################################################################
 ## RECENTLY ADDED 
@@ -1681,11 +1681,9 @@ sub RunTestNotify() {
     $ntype = 'stop' if $options{test_notify} =~ /stop/;
     $ntype = 'stop' if $options{test_notify} =~ /watched/;
     
-    
     $ntype = 'push_recentlyadded' if $options{test_notify} =~ /recent/;
     if ($ntype =~ /push_recentlyadded/) {
 	my $alerts = ();
-
 	$alerts->{'test'}->{'alert'} = $push_type_titles->{$ntype} .' test recently added alert';
 	$alerts->{'test'}->{'alert_short'} = $push_type_titles->{$ntype} .'test recently added alert (short version)';
 	$alerts->{'test'}->{'item_id'} = 'test_item_id';
@@ -1693,7 +1691,6 @@ sub RunTestNotify() {
 	$alerts->{'test'}->{'alert_url'} = 'https://github.com/ljunkie/plexWatch';
 	&ProcessRAalerts($alerts,1);
     } else {
-	
 	$format_options->{'ntype'} = $ntype;
 	my $info = &GetTestNotify($ntype);
 	## notify if we have a valid DB results
@@ -1712,7 +1709,6 @@ sub RunTestNotify() {
 	    ## nothing to set as notified - this is a test
 	}
     }
-    
     ## test notify -- exit 
     exit;
 }

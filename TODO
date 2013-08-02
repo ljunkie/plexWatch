@@ -8,7 +8,6 @@
     --  create plexWatch.debug to include ALL actions - failures and success. Easier to ... debug
 * ADD OSX instructions: http://forums.plexapp.com/index.php/topic/72552-plexwatch-plex-notify-script-send-push-alerts-on-new-sessions-and-stopped/?p=436554
 * not happy with locking
-* known issue: --test_notify broken 
 ###
 ###########################################################################################
 
