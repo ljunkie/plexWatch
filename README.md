@@ -1,7 +1,7 @@
 plexWatch - 0.0.17-3-dev
 =========
 
-***Notify*** and Log ***'Now Playing'*** content from a Plex Media Server
+***Notify*** and Log ***'Now Playing'*** and ***'Watched'*** content from a Plex Media Server + ***'Recently Added'*** (...and more)
 
 **Supported Push Notifications** 
 * https://pushover.net
