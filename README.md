@@ -1,4 +1,4 @@
-plexWatch - 0.0.17-3-dev
+plexWatch - 0.0.17-4-dev
 =========
 
 ***Notify*** and Log ***'Now Playing'*** and ***'Watched'*** content from a Plex Media Server + ***'Recently Added'*** (...and more)
