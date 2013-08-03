@@ -10,7 +10,7 @@
 # * fixed --test_notify=  -- now works with =start, =stop, =recently_added
 # * cleanup of empty variables for notification: stripping "[]" from alert.
 # * excluding length of video from notification when Plex API doesn't return length: (00 min)
-# * typos cleaned up :)
+# * spell check - cleaned up :)
 
 # 0.0.16
 # * rate limiting: provide mechanisms to back off notifications if provider fails (mainly due to --recently_added)
