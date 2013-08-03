@@ -1,11 +1,11 @@
 #!/usr/bin/perl
 
-my $version = '0.0.17-4-dev';
+my $version = '0.0.17-5-dev';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-08-01 21:23 PST
+# Modified: 2013-08-02 18:30 PST
 #
 #  Version: $version
 # https://github.com/ljunkie/plexWatch
@@ -303,7 +303,9 @@ sub RAdataAlert() {
 	$alert_short = $item->{'title'};
 	$alert .= " [$item->{'contentRating'}]" if $item->{'contentRating'};
 	$alert .= " [$item->{'year'}]" if $item->{'year'};
-	$alert .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
+	if ($item->{'duration'} =~ /\d+/ && $item->{'duration'} > 1000) {
+	    $alert .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
+	}
 	$alert .= " [$media]" if $media;
 	$alert .= " [$add_date]";
 	#$twitter = $item->{'title'};
