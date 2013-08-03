@@ -318,7 +318,9 @@ sub RAdataAlert() {
 	$alert_short = $item->{'title'};
 	$alert .= " [$item->{'contentRating'}]" if $item->{'contentRating'};
 	$alert .= " [$item->{'year'}]" if $item->{'year'};
-	$alert .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
+	if ($item->{'duration'} =~ /\d+/ && $item->{'duration'} > 1000) {
+	    $alert .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
+	}
 	$alert .= " [$media]" if $media;
 	$alert .= " [$add_date]";
 	#$twitter = $alert; ## movies are normally short enough.
@@ -674,10 +676,16 @@ sub formatAlert() {
     }
     if ($debug) { print "\nformat: $format\n";}
     my $s = $format;
+    ## replacemnt templates with variables
     my $regex = join "|", keys %alert;
     $regex = qr/$regex/;
     $s =~ s/{($regex)}/$alert{$1}/g;
     $orig =~ s/{($regex)}/$alert{$1}/g;
+    ## done
+    
+    $s =~ s/\[\]//g; ## trim any empty variable encapsulated in []
+    $s =~ s/\s+/ /g; ## remove double spaces
+    
     ## $orig is pretty much deprecated..
     return ($s,$orig);
 }
