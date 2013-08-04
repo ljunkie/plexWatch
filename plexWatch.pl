@@ -303,7 +303,7 @@ sub RAdataAlert() {
 	$alert_short = $item->{'title'};
 	$alert .= " [$item->{'contentRating'}]" if $item->{'contentRating'};
 	$alert .= " [$item->{'year'}]" if $item->{'year'};
-	if ($item->{'duration'} =~ /\d+/ && $item->{'duration'} > 1000) {
+	if ($item->{'duration'} && ($item->{'duration'} =~ /\d+/ && $item->{'duration'} > 1000)) {
 	    $alert .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
 	}
 	$alert .= " [$media]" if $media;
@@ -320,7 +320,7 @@ sub RAdataAlert() {
 	$alert_short = $item->{'title'};
 	$alert .= " [$item->{'contentRating'}]" if $item->{'contentRating'};
 	$alert .= " [$item->{'year'}]" if $item->{'year'};
-	if ($item->{'duration'} =~ /\d+/ && $item->{'duration'} > 1000) {
+	if ($item->{'duration'} && ($item->{'duration'} =~ /\d+/ && $item->{'duration'} > 1000)) {
 	    $alert .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
 	}
 	$alert .= " [$media]" if $media;
@@ -1327,11 +1327,13 @@ sub NotifyPushOver() {
 			      ]);
     my $content  = $response->decoded_content();
 
+
     if ($content !~ /\"status\":1/) {
 	print STDERR "Failed to post Pushover notification -- $po{'message'} result:$content\n";
 	$provider_452->{$provider} = 1;
 	my $msg452 = uc($provider) . " failed: $alert -  setting $provider to back off additional notifications\n";
 	&ConsoleLog($msg452,,1);
+
 	return 0;
     } 
     
