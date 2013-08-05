@@ -1,4 +1,4 @@
-# 0.0.17-3-dev
+# 0.0.17
 # * GNTP: Provider added.
 #       -- Supports multiple destinations.
 #	-- Currently tested with Growl For Windows as I don't have OSX available. Need to test with others
@@ -11,6 +11,7 @@
 # * cleanup of empty variables for notification: stripping "[]" from alert.
 # * excluding length of video from notification when Plex API doesn't return length: (00 min)
 # * spell check - cleaned up :)
+# * cleanup of unitialized values
 
 # 0.0.16
 # * rate limiting: provide mechanisms to back off notifications if provider fails (mainly due to --recently_added)
