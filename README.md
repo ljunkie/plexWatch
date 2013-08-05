@@ -15,8 +15,8 @@ plexWatch - 0.0.17
 * notify when a user starts watching a video
 * notify when a user stop watching a video
 * notify on recently added content to a PMS server
-* notifies via prowl, pushover, growl, twitter, boxcar and/or a log file
-* notifications per provider enabled/disabled per notification type (watching, watched, recently added)
+* notifies via prowl, pushover, growl, twitter, boxcar, GNTP and/or a log file
+* enable/disable notifications per provider & per notification type (watching, watched, recently added)
 * backed by a SQLite DB (for state and history)
 * CLI to query watched videos, videos being watched and stats on time watched per user
 * Limit output per user or exclude users
@@ -51,7 +51,7 @@ plexWatch - 0.0.17
 
 1) sudo wget -P /opt/plexWatch/ https://raw.github.com/ljunkie/plexWatch/master/plexWatch.pl
 
-2) sudo chmod 755 /opt/plexWatch/plexWatch.pl
+2) sudo chmod -R 777 /opt/plexWatch
 
 3) sudo cp /opt/plexWatch/config.pl-dist /opt/plexWatch/config.pl 
 
@@ -114,7 +114,7 @@ yum -y install perl\(LWP::UserAgent\) perl\(XML::Simple\) \
 
 6) setup cron - /etc/crontab
 ```
-* * * * * root cd /opt/plexWatch && /opt/plexWatch/plexWatch.pl
+* * * * * root /opt/plexWatch/plexWatch.pl
 ```
 
 ### Twitter integration 
