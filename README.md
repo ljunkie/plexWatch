@@ -51,7 +51,7 @@ plexWatch - 0.0.17
 
 1) sudo wget -P /opt/plexWatch/ https://raw.github.com/ljunkie/plexWatch/master/plexWatch.pl
 
-2) sudo chmod -R 777 /opt/plexWatch
+2) sudo chmod 777 /opt/plexWatch && sudo chmod 755 /opt/plexWatch/plexWatch.pl
 
 3) sudo cp /opt/plexWatch/config.pl-dist /opt/plexWatch/config.pl 
 
