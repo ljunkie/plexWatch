@@ -1,4 +1,15 @@
+#####################
+## paused state
 
+<Player machineIdentifier="......." platform="Roku" state="paused" title="Roku 3"/>
+
+#####################
+## transcoded or directplay/stream?
+
+transcoded: <TranscodeSession key="1GH348003911" throttled="0" progress="4.5" speed="11.6" duration="1299000" videoDecision="transcode" audioDecision="transcode" protocol="hls" container="mpegts" videoCodec="h2\
+64" audioCodec="ac3" audioChannels="6" width="1280" height="720"/>
+
+direct: no TranscodeSession
 
 ###########################################################################################
 ###  TODO
