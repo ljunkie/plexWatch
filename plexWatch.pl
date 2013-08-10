@@ -542,10 +542,15 @@ if ($options{'watching'}) {
 	    }
 	    
 	    my $time = localtime ($in_progress->{$k}->{time} );
-	    my $info = &info_from_xml($in_progress->{$k}->{'xml'},'watching',$in_progress->{$k}->{time});
+
+	    ## switched to LIVE info
+	    #my $info = &info_from_xml($in_progress->{$k}->{'xml'},'watching',$in_progress->{$k}->{time});
+	    my $info = &info_from_xml(XMLout($live->{$live_key}),'watching',$in_progress->{$k}->{time});
 	    
-	    $info->{'progress'} = &durationrr($live->{$live_key}->{viewOffset}/1000);
-	    $info->{'time_left'} = &durationrr(($info->{raw_length}/1000)-($live->{$live_key}->{viewOffset}/1000));
+	    
+	    ## overwrite progress and time_left from live -- should be pulling live xml above at some point
+	    #$info->{'progress'} = &durationrr($live->{$live_key}->{viewOffset}/1000);
+	    #$info->{'time_left'} = &durationrr(($info->{raw_length}/1000)-($live->{$live_key}->{viewOffset}/1000));
 	    
 	    my $alert = &Notify($info,1); ## only return formated alert
 	    printf(" %s: %s\n",$time, $alert);
@@ -1599,8 +1604,26 @@ sub info_from_xml() {
     ## start time is in xml
     
     my $vid = XMLin($hash,KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
+
     
+    ## paused or playing?
+    my $state = 'unknown';
+    $state =  $vid->{Player}->{'state'} if $vid->{Player}->{state};
+
+    my $viewOffset = 0;
+    $viewOffset =  &durationrr($vid->{viewOffset}/1000) if $vid->{viewOffset};
     
+    my $isTranscoded =0;
+    my $transInfo;
+    $isTranscoded = 1  if ref $vid->{TranscodeSession};
+    $transInfo = $vid->{TranscodeSession}  if ref $vid->{TranscodeSession};
+
+    my $time_left = 'unknown';
+    if ($vid->{duration} && $vid->{viewOffset}) {
+	$time_left = &durationrr(($vid->{duration}/1000)-($vid->{viewOffset}/1000));
+    }
+    
+
     my $start_time = '';
     my $stop_time = '';
     my $time = $start_epoch;
@@ -1626,9 +1649,11 @@ sub info_from_xml() {
     
     my $length;
     ## not sure which one is more valid.. {'TranscodeSession'}->{duration} or ->{duration}
-    if (!$vid->{duration}) {
-	$length = sprintf("%02d",$vid->{'TranscodeSession'}->{duration}/1000) if $vid->{'TranscodeSession'}->{duration};
-    } else {
+    ## answered -- transcodesession only exists if transcoded.. RR
+    #if (!$vid->{duration}) {
+    if ($vid->{duration}) {
+	#$length = sprintf("%02d",$vid->{'TranscodeSession'}->{duration}/1000) if $vid->{'TranscodeSession'}->{duration};
+	#} else {
 	$length = sprintf("%02d",$vid->{duration}/1000) if $vid->{duration};
     }
     $length = &durationrr($length);
@@ -1683,6 +1708,12 @@ sub info_from_xml() {
 	'length' => $length,
 	'raw_length' =>  $vid->{duration},
 	'ntype' => $ntype,
+	'progress' => $viewOffset,
+	'time_left' => $time_left,
+	'viewOffset' => $vid->{viewOffset},
+	'state' => $state,
+	'transcoded' => $isTranscoded,
+	'transInfo' => $transInfo,
     };
     
     return $info;
