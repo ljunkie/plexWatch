@@ -68,11 +68,11 @@ my $format_options = {
     'summary' => 'summary or video',
     'duration' => 'duration watched',
     'length' => 'length of video',
-    'progress' => 'progress of video [only available on --watching]',
-    'time_left' => 'progress of video [only available on --watching]',
+    'progress' => 'progress of video [only available/correct on --watching]',
+    'time_left' => 'progress of video [only available/correct on --watching]',
     'streamtype' => 'T or D - for Transcoded or Direct',
     'transcoded' => '1 or 0 - if transcoded',
-    'state' => 'playing, paused or buffering [ or stopped ]',
+    'state' => 'playing, paused or buffering [ or stopped ] (useful on --watching)',
 };
 
 if (!-d $data_dir) {
