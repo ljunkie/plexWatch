@@ -1613,10 +1613,14 @@ sub info_from_xml() {
     my $viewOffset = 0;
     $viewOffset =  &durationrr($vid->{viewOffset}/1000) if $vid->{viewOffset};
     
-    my $isTranscoded =0;
+    my $isTranscoded = 0;
     my $transInfo;
-    $isTranscoded = 1  if ref $vid->{TranscodeSession};
-    $transInfo = $vid->{TranscodeSession}  if ref $vid->{TranscodeSession};
+    my $streamType = 'D';
+    if (ref $vid->{TranscodeSession}) {
+	$isTranscoded = 1;
+	$transInfo = $vid->{TranscodeSession};	
+	$streamType = 'T';
+    }
 
     my $time_left = 'unknown';
     if ($vid->{duration} && $vid->{viewOffset}) {
@@ -1648,14 +1652,7 @@ sub info_from_xml() {
     
     
     my $length;
-    ## not sure which one is more valid.. {'TranscodeSession'}->{duration} or ->{duration}
-    ## answered -- transcodesession only exists if transcoded.. RR
-    #if (!$vid->{duration}) {
-    if ($vid->{duration}) {
-	#$length = sprintf("%02d",$vid->{'TranscodeSession'}->{duration}/1000) if $vid->{'TranscodeSession'}->{duration};
-	#} else {
-	$length = sprintf("%02d",$vid->{duration}/1000) if $vid->{duration};
-    }
+    $length = sprintf("%02d",$vid->{duration}/1000) if $vid->{duration};
     $length = &durationrr($length);
     
     my $orig_user = (split('\@',$vid->{User}->{title}))[0];
@@ -1713,6 +1710,7 @@ sub info_from_xml() {
 	'viewOffset' => $vid->{viewOffset},
 	'state' => $state,
 	'transcoded' => $isTranscoded,
+	'streamtype' => $streamType,
 	'transInfo' => $transInfo,
     };
     
