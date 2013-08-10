@@ -70,6 +70,9 @@ my $format_options = {
     'length' => 'length of video',
     'progress' => 'progress of video [only available on --watching]',
     'time_left' => 'progress of video [only available on --watching]',
+    'streamtype' => 'T or D - for Transcoded or Direct',
+    'transcoded' => '1 or 0 - if transcoded',
+    'state' => 'playing, paused or buffering [ or stopped ]',
 };
 
 if (!-d $data_dir) {
@@ -1608,7 +1611,12 @@ sub info_from_xml() {
     
     ## paused or playing?
     my $state = 'unknown';
-    $state =  $vid->{Player}->{'state'} if $vid->{Player}->{state};
+    if ($ntype =~ /watched|stop/) {
+	$state = 'stopped';
+    } else {
+	$state =  $vid->{Player}->{'state'} if $vid->{Player}->{state};
+    }
+    
 
     my $viewOffset = 0;
     $viewOffset =  &durationrr($vid->{viewOffset}/1000) if $vid->{viewOffset};
