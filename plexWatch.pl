@@ -550,7 +550,8 @@ if ($options{'watching'}) {
 	    #my $info = &info_from_xml($in_progress->{$k}->{'xml'},'watching',$in_progress->{$k}->{time});
 	    my $info = &info_from_xml(XMLout($live->{$live_key}),'watching',$in_progress->{$k}->{time});
 	    
-	    
+	    &ProcessUpdate($live->{$live_key},$k); ## update XML	    
+
 	    ## overwrite progress and time_left from live -- should be pulling live xml above at some point
 	    #$info->{'progress'} = &durationrr($live->{$live_key}->{viewOffset}/1000);
 	    #$info->{'time_left'} = &durationrr(($info->{raw_length}/1000)-($live->{$live_key}->{viewOffset}/1000));
@@ -647,6 +648,7 @@ if (!%options || $options{'notify'}) {
 	
 	## ignore content that has already been notified
 	if ($started->{$db_key}) {
+	    &ProcessUpdate($vid->{$k},$db_key); ## update XML
 	    if ($debug) { 
 		&Notify($info);
 		print &consoletxt("Already Notified -- Sent again due to --debug") . "\n"; 
@@ -788,6 +790,15 @@ sub ProcessStart() {
     return  $dbh->sqlite_last_insert_rowid();
 }
 
+sub ProcessUpdate() {
+    my ($xmlref,$db_key) = @_;
+    my $xml =  XMLout($xmlref);
+    if ($db_key) {
+	my $sth = $dbh->prepare("update processed set xml = ? where session_id = ?");
+	$sth->execute($xml,$db_key) or die("Unable to execute query: $dbh->errstr\n");
+    }
+    return  $dbh->sqlite_last_insert_rowid();
+}
 sub ProcessRecentlyAdded() {
     my ($db_key) = @_;
     my $cmd = "select item_id from recently_added where item_id = '$db_key'";
