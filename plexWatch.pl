@@ -726,6 +726,8 @@ sub ConsoleLog() {
 	open FILE, ">>", $notify->{'file'}->{'filename'}  or die $!;
 	print FILE "$console\n";
 	close(FILE);
+	print "FILE Notification successfully logged.\n" if $debug;
+	
     }
     return 1;
 }
@@ -746,8 +748,6 @@ sub Notify() {
     my $push_type;
     if ($type =~ /start/) {	$push_type = 'push_watching';    } 
     if ($type =~ /stop/) {	$push_type = 'push_watched';    } 
-
-
 
     my $alert_options = ();
     $alert_options->{'push_type'} = $push_type;
@@ -1247,7 +1247,8 @@ sub NotifyTwitter() {
 	}
 	return 0;
     }
-    
+
+    print uc($provider) . " Notification successfully posted.\n" if $debug;
     return 1;     ## success
 }
 
@@ -1310,7 +1311,7 @@ sub NotifyProwl() {
     $response = $userAgent->request($request);
     
     if ($response->is_success) {
-	if ($debug) { 	    print "PROWL - Notification successfully posted.\n";}
+	print uc($provider) . " Notification successfully posted.\n" if $debug;
 	return 1;     ## success
     } elsif ($response->code == 401) {
 	print STDERR "PROWL - Notification not posted: incorrect API key.\n";
@@ -1362,7 +1363,7 @@ sub NotifyPushOver() {
 	return 0;
     } 
     
-    if ($debug) { print "Pushover - Notification successfully posted. $content\n";}
+    print uc($provider) . " Notification successfully posted.\n" if $debug;
     return 1;     ## success
 }
 
@@ -1389,8 +1390,11 @@ sub NotifyBoxcar() {
 	&ConsoleLog($msg);
     } else {
         my $response = &NotifyBoxcarPOST(\%bc);
-	
-	return 1 if $response->is_success;
+	if ($response->is_success) {
+	    print uc($provider) . " Notification successfully posted.\n" if $debug;
+	    return 1;
+	}
+
 	if ($response->{'_rc'} == 401) {
 	    my $ua      = LWP::UserAgent->new();
 	    $ua->timeout(20);
@@ -1408,7 +1412,10 @@ sub NotifyBoxcar() {
 		my $msg = "$bc{'email'} is now subscribed to plexWatch service. Trying to send notification again.";
 		&ConsoleLog($msg);
 		$response = &NotifyBoxcarPOST(\%bc);
-		return 1 if $response->is_success;    
+		if ($response->is_success) {
+		    print uc($provider) . " Notification successfully posted.\n" if $debug;
+		    return 1;
+		}
 	    }
 	}
     }
@@ -1499,7 +1506,7 @@ sub NotifyGNTP() {
 		    Sticky => $gntp{'sticky'},
 		    );
 		
-		if ($debug) { 	    print "GNTP - $alert - Notification successfully posted.\n";}
+		print uc($provider) . " Notification successfully posted.\n" if $debug;
 		#return 1;     ## success
 		$success++; ## increment success -- can't return as we might have multiple destinations
 	    }
@@ -1559,6 +1566,7 @@ sub NotifyGrowl() {
 	return 0;
     } else {
 	system( $growl{'script'}, "-n", $growl{'application'}, "--image", $growl{'icon'}, "-m", $alert, $extra_cmd); 
+	print uc($provider) . " Notification successfully posted.\n" if $debug;
 	return 1; ## need better error checking here -- no mac, so I can't test it.
     }
 }
