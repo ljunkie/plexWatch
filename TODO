@@ -1,3 +1,5 @@
+## IMPORTANT -- update database XML on every run when session is still current. ( this will allow us to pull viewOffset (progress) and any other current information that changes over time)
+
 #####################
 ## paused state
 
