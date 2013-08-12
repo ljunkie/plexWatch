@@ -81,7 +81,6 @@ if (!-d $data_dir) {
 my $provider_452 = ();
 
 
-
 # Grab our options.
 my %options = ();
 GetOptions(\%options, 
@@ -147,8 +146,6 @@ $alert_format->{'start'} = $options{'format_start'} if $options{'format_start'};
 $alert_format->{'stop'} = $options{'format_stop'} if $options{'format_stop'};
 $alert_format->{'watched'} = $options{'format_watched'} if $options{'format_watched'};
 $alert_format->{'watching'} = $options{'format_watching'} if $options{'format_watching'};
-
-
 
 my %notify_func = &GetNotifyfuncs();
 my $push_type_titles = &GetPushTitles();
