@@ -80,7 +80,6 @@ if (!-d $data_dir) {
 ## place holder to back off notifications per provider
 my $provider_452 = ();
 
-&CheckLock(); # just make sure we only run one at a time
 
 # Grab our options.
 my %options = ();
@@ -125,9 +124,7 @@ if ($options{debug}) {
     diagnostics->import();
 }
 
-
 my $date = localtime;
-my $dbh = &initDB(); ## Initialize sqlite db
 
 if ($options{'format_options'}) {
     print "\nFormat Options for alerts\n";
@@ -153,8 +150,14 @@ $alert_format->{'watching'} = $options{'format_watching'} if $options{'format_wa
 my %notify_func = &GetNotifyfuncs();
 my $push_type_titles = &GetPushTitles();
 
+## Check LOCK 
+# only allow one script run at a time. 
+# Before initDB
+my $script_fh;
+&CheckLock();
+## END
 
-
+my $dbh = &initDB(); ## Initialize sqlite db - last
 
 
 ########################################## START MAIN #######################################################
@@ -799,6 +802,7 @@ sub GetSessions() {
     # Generate our HTTP request.
     my ($userAgent, $request, $response, $requestURL);
     $userAgent = LWP::UserAgent->new;
+    $userAgent->timeout(20);
     $userAgent->agent($appname);
     $userAgent->env_proxy();
     $requestURL = $url;
@@ -1270,6 +1274,7 @@ sub NotifyProwl() {
     # Generate our HTTP request.
     my ($userAgent, $request, $response, $requestURL);
     $userAgent = LWP::UserAgent->new;
+    $userAgent->timeout(20);
     $userAgent->agent($appname);
     $userAgent->env_proxy();
     
@@ -1312,6 +1317,7 @@ sub NotifyPushOver() {
     
     my %po = %{$notify->{pushover}};    
     my $ua      = LWP::UserAgent->new();
+    $ua->timeout(20);
     $po{'message'} = $alert;
     	    
     ## PushOver title is AppName by default. If there is a real title for push type, It's 'AppName: push_type'
@@ -1368,6 +1374,7 @@ sub NotifyBoxcar() {
 	return 1 if $response->is_success;
 	if ($response->{'_rc'} == 401) {
 	    my $ua      = LWP::UserAgent->new();
+	    $ua->timeout(20);
 	    my $msg = "$bc{'email'} is not subscribed to plexWatch service... trying to subscribe now";
 	    &ConsoleLog($msg);
 	    my $url = 'http://boxcar.io/devices/providers/'. $bc{'provider_key'} .'/notifications/subscribe';
@@ -1497,6 +1504,7 @@ sub NotifyBoxcarPOST() {
     my %bc = %{$_[0]};
     
     my $ua      = LWP::UserAgent->new();
+    $ua->timeout(20);
     my $url = 'http://boxcar.io/devices/providers/'. $bc{'provider_key'} .'/notifications';
     my $response = $ua->post( $url, [
 				  'secret'  => $bc{'provider_secret'},
@@ -1559,13 +1567,13 @@ sub getDuration() {
 }
 
 sub CheckLock {
-    open(my $script_fh, '<', $0)
+    open($script_fh, '<', $0)
 	or die("Unable to open script source: $!\n");
     my $max_wait = 60; ## wait 60 seconds before exiting..
     my $count = 0;
     while (!flock($script_fh, LOCK_EX|LOCK_NB)) {
 	#unless (flock($script_fh, LOCK_EX|LOCK_NB)) {
-	#print "$0 is already running. Exiting.\n";
+	print "$0 is already running. Exiting.\n" if $debug;
 	$count++;
 	sleep 1;
 	if ($count > $max_wait) { 
@@ -1792,6 +1800,7 @@ sub ParseDataItem() {
 
 sub GetSectionsIDs() {
     my $ua      = LWP::UserAgent->new();
+    $ua->timeout(20);
     my $host = "http://$server:$port";
     my $sections = ();
     my $url = $host . '/library/sections';
@@ -1812,6 +1821,7 @@ sub GetSectionsIDs() {
 
 sub GetItemMetadata() {
     my $ua      = LWP::UserAgent->new();
+    $ua->timeout(20);
     my $host = "http://$server:$port";
     my $item = shift;
     my $full_uri = shift;
@@ -1843,6 +1853,7 @@ sub GetRecentlyAdded() {
     my $hkey = shift;    ## array ref &GetRecentlyAdded([5,6,7]);
     
     my $ua      = LWP::UserAgent->new();
+    $ua->timeout(20);
     my $host = "http://$server:$port";
     my $info = ();
     my %result;
