@@ -2156,7 +2156,7 @@ sub BackupSQlite() {
 	    print "\n** Daily Backups are not enabled -- but you called --backup, forcing backup now..\n";
 	}
 	else {
-	    next if !$backup_opts->{$type}->{'enabled'};
+	    next if !$backups->{$type}->{'enabled'};
 	}
 	
 	
