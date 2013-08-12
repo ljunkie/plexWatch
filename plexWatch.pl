@@ -805,6 +805,7 @@ sub GetSessions() {
     # Generate our HTTP request.
     my ($userAgent, $request, $response, $requestURL);
     $userAgent = LWP::UserAgent->new;
+    $userAgent->timeout(20);
     $userAgent->agent($appname);
     $userAgent->env_proxy();
     $requestURL = $url;
@@ -1276,6 +1277,7 @@ sub NotifyProwl() {
     # Generate our HTTP request.
     my ($userAgent, $request, $response, $requestURL);
     $userAgent = LWP::UserAgent->new;
+    $userAgent->timeout(20);
     $userAgent->agent($appname);
     $userAgent->env_proxy();
     
@@ -1318,6 +1320,7 @@ sub NotifyPushOver() {
     
     my %po = %{$notify->{pushover}};    
     my $ua      = LWP::UserAgent->new();
+    $ua->timeout(20);
     $po{'message'} = $alert;
     	    
     ## PushOver title is AppName by default. If there is a real title for push type, It's 'AppName: push_type'
@@ -1374,6 +1377,7 @@ sub NotifyBoxcar() {
 	return 1 if $response->is_success;
 	if ($response->{'_rc'} == 401) {
 	    my $ua      = LWP::UserAgent->new();
+	    $ua->timeout(20);
 	    my $msg = "$bc{'email'} is not subscribed to plexWatch service... trying to subscribe now";
 	    &ConsoleLog($msg);
 	    my $url = 'http://boxcar.io/devices/providers/'. $bc{'provider_key'} .'/notifications/subscribe';
@@ -1503,6 +1507,7 @@ sub NotifyBoxcarPOST() {
     my %bc = %{$_[0]};
     
     my $ua      = LWP::UserAgent->new();
+    $ua->timeout(20);
     my $url = 'http://boxcar.io/devices/providers/'. $bc{'provider_key'} .'/notifications';
     my $response = $ua->post( $url, [
 				  'secret'  => $bc{'provider_secret'},
@@ -1798,6 +1803,7 @@ sub ParseDataItem() {
 
 sub GetSectionsIDs() {
     my $ua      = LWP::UserAgent->new();
+    $ua->timeout(20);
     my $host = "http://$server:$port";
     my $sections = ();
     my $url = $host . '/library/sections';
@@ -1818,6 +1824,7 @@ sub GetSectionsIDs() {
 
 sub GetItemMetadata() {
     my $ua      = LWP::UserAgent->new();
+    $ua->timeout(20);
     my $host = "http://$server:$port";
     my $item = shift;
     my $full_uri = shift;
@@ -1849,6 +1856,7 @@ sub GetRecentlyAdded() {
     my $hkey = shift;    ## array ref &GetRecentlyAdded([5,6,7]);
     
     my $ua      = LWP::UserAgent->new();
+    $ua->timeout(20);
     my $host = "http://$server:$port";
     my $info = ();
     my %result;
