@@ -80,7 +80,7 @@ if (!-d $data_dir) {
 ## place holder to back off notifications per provider
 my $provider_452 = ();
 
-&CheckLock(); # just make sure we only run one at a time
+
 
 # Grab our options.
 my %options = ();
@@ -125,9 +125,7 @@ if ($options{debug}) {
     diagnostics->import();
 }
 
-
 my $date = localtime;
-my $dbh = &initDB(); ## Initialize sqlite db
 
 if ($options{'format_options'}) {
     print "\nFormat Options for alerts\n";
@@ -150,11 +148,19 @@ $alert_format->{'stop'} = $options{'format_stop'} if $options{'format_stop'};
 $alert_format->{'watched'} = $options{'format_watched'} if $options{'format_watched'};
 $alert_format->{'watching'} = $options{'format_watching'} if $options{'format_watching'};
 
+
+
 my %notify_func = &GetNotifyfuncs();
 my $push_type_titles = &GetPushTitles();
 
+## Check LOCK 
+# only allow one script run at a time. 
+# Before initDB
+my $script_fh;
+&CheckLock();
+## END
 
-
+my $dbh = &initDB(); ## Initialize sqlite db - last
 
 
 ########################################## START MAIN #######################################################
@@ -1559,13 +1565,13 @@ sub getDuration() {
 }
 
 sub CheckLock {
-    open(my $script_fh, '<', $0)
+    open($script_fh, '<', $0)
 	or die("Unable to open script source: $!\n");
     my $max_wait = 60; ## wait 60 seconds before exiting..
     my $count = 0;
     while (!flock($script_fh, LOCK_EX|LOCK_NB)) {
 	#unless (flock($script_fh, LOCK_EX|LOCK_NB)) {
-	#print "$0 is already running. Exiting.\n";
+	print "$0 is already running. Exiting.\n" if $debug;
 	$count++;
 	sleep 1;
 	if ($count > $max_wait) { 
