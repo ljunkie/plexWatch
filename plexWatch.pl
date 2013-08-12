@@ -32,7 +32,7 @@ if (!-e $dirname .'/config.pl') {
     exit;
 }
 do $dirname.'/config.pl';
-use vars qw/$data_dir $server $port $appname $user_display $alert_format $notify $push_titles/; 
+use vars qw/$data_dir $server $port $appname $user_display $alert_format $notify $push_titles $backup_opts/; 
 if (!$data_dir || !$server || !$port || !$appname || !$alert_format || !$notify) {
     print "config file missing data\n";
     exit;
@@ -105,6 +105,7 @@ GetOptions(\%options,
 	   'test_notify:s',
 	   'recently_added:s',
 	   'version',
+	   'backup',
 	   'show_xml',
            'help|?'
     ) or pod2usage(2);
@@ -161,6 +162,7 @@ my $script_fh;
 ## END
 
 my $dbh = &initDB(); ## Initialize sqlite db - last
+&BackupSQlite; ## check if the SQLdb needs to be backed up
 
 
 ########################################## START MAIN #######################################################
@@ -2081,6 +2083,136 @@ sub GetPushTitles() {
 	$push_type_display->{$type} = $push_titles->{$type} if $push_titles->{$type};
     }
     return $push_type_display;
+}
+
+sub BackupSQlite() {
+    ## this will Auto Backup the sql lite db to $data_dir/db_backups/...
+    ## --backup will for a daily backup
+
+    # Override in config.pl with
+    
+    #$backup_opts = {
+    #	'daily' => {
+    #	    'enabled' => 0,
+    #	    'keep' => 2,
+    #	},
+    #	'monthly' => {
+    #	    'enabled' => 1,
+    #	    'keep' => 4,
+    #	},
+    #	'weekly' => {
+    #	    'enabled' => 1,
+    #	    'keep' => 4,
+    #	},
+    #   };
+    
+    my $path  = $data_dir . '/db_backups';
+    if (!-d $path) {
+	mkdir($path) or die "Unable to create $path\n";
+	chmod(0777, $path) or die "Couldn't chmod $path: $!";
+    }
+    
+    my $backups = {
+	'daily' => {
+	    'enabled' => 1,
+	    'file' => $path . '/plexWatch.daily.bak',
+	    'time' => 60,
+	    'keep' => 2,
+	},
+	'monthly' => {
+	    'enabled' => 1,
+	    'file' => $path . '/plexWatch.monthly.bak',
+	    'time' => 86400*30,
+	    'keep' => 4,
+	},
+	'weekly' => {
+	    'enabled' => 1,
+	    'file' => $path . '/plexWatch.weekly.bak',
+	    'time' => 86400*7,
+	    'keep' => 4,
+	},
+    };
+
+    ## merge options if set in config -- override
+    ## also print settings if --debug called with --backup
+    foreach my $type (keys %{$backups}) {
+	foreach my $key (keys %{$backups->{$type}}) {
+	    $backups->{$type}->{$key} = $backup_opts->{$type}->{$key} if defined($backup_opts->{$type}->{$key});
+	}
+	
+	if ($debug && $options{'backup'}) {
+	    print "Backup Type: " .uc($type) . "\n";
+	    print "\tenabled: ". $backups->{$type}->{enabled} . "\n";
+	    print "\tkeep: ". $backups->{$type}->{keep} . "\n";
+	    print "\ttime: ". $backups->{$type}->{time} . ' ('. &durationrr($backups->{$type}->{time}) . ") \n";
+	    print "\tfile: ". $backups->{$type}->{file} . "\n\n";
+	}
+	
+    }    
+    
+    
+    foreach my $type (keys %{$backups}) {
+	if ($type =~ /daily/ && $options{'backup'}) {
+	    print "\n** Daily Backups are not enabled -- but you called --backup, forcing backup now..\n";
+	}
+	else {
+	    next if !$backup_opts->{$type}->{'enabled'};
+	}
+	
+	
+	my $do_backup = 1;
+	my $file = $backups->{$type}->{'file'};
+	$file =~ s/\/\//\//g;
+	if (-f $file) {
+	    $do_backup =0;
+	    my $modtime = (stat($file))[9];
+	    my $diff = time()-$modtime;
+	    my $max_time = $backups->{$type}->{'time'};
+	    
+	    my $hum_diff = &durationrr($diff);
+	    my $hum_max = &durationrr($max_time);
+	    
+	    my $extra;
+	    if ($options{'backup'} && $type =~ /daily/i) {
+		$extra = "Forcing DAILY backups --backup called";
+		$do_backup=1;
+	    } elsif ($diff > $max_time) {
+		$do_backup=1;
+		$extra = "Do backup - older than allowed ($hum_diff > $hum_max)";
+	    } else {
+		$extra = "Backup is current ($hum_diff < $hum_max)" if $debug;
+	    }
+	    printf("\n\t%-10s %-15s %s [%s]\n", uc($type), &durationrr($diff), $file, $extra) if $debug;
+	    
+	} else {
+	    print '* ' . uc($type) ." backup not found -- trying now\n";
+	}
+	if ($do_backup) {
+	    my $keep =1;
+	    $keep = $backups->{$type}->{'keep'} if $backups->{$type}->{'keep'};
+	    
+	    if ($keep > 1) {
+		print "\t* Rotating files: keep $keep total\n" if $debug;
+		for (my $count = $keep-1; $count >= 0; $count--) {
+		    my $to = $file .'.'. ($count+1);
+		    my $from = $file .'.'. ($count);
+		    $from = $file if $count == 0;
+		    if (-f $from) { 
+			print "\trotating $from -> $to \n" if $debug;
+			rename $from, $to; 
+		    }
+		}
+		## Should we clean up older files if they change the keep count to something lower? I think not... (unlink no)
+	    } 
+	    print "\t* Backup file: $file ... " if $debug || $options{'backup'};
+	    $dbh->sqlite_backup_to_file($file);
+	    print "DONE\n\n" if $debug || $options{'backup'};
+	}
+	
+    }
+
+    ## exit if --backup was called..
+    exit if $options{'backup'};
 }
 
 

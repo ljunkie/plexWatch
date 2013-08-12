@@ -307,6 +307,33 @@ Format Options for alerts
          {year} year of video
 ```
 
+### Advanced options
+
+#### SQlite backups
+
+By default this script will automatically backup the SQlite db to: $data_dir/db_backups/ ( normally: /opt/plexWatch/db_backups/ )
+
+* you can force a Daily backup with --backup
+
+It will keep 2 x Daily , 4 x Weekly  and 4 x Monthly backups. You can modify the backup policy by adding the config lines below to your existin config.pl
+```
+$backup_opts = {
+        'daily' => {
+            'enabled' => 1,
+            'keep' => 2,
+        },
+        'monthly' => {
+            'enabled' => 1,
+            'keep' => 4,
+        },
+        'weekly' => {
+            'enabled' => 1,
+            'keep' => 4,
+        },
+    };
+```
+
+
 ### Help
 ```
 /opt/plexWatch/plexWatch.pl --help
