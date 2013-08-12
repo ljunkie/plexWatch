@@ -2116,7 +2116,7 @@ sub BackupSQlite() {
 	'daily' => {
 	    'enabled' => 1,
 	    'file' => $path . '/plexWatch.daily.bak',
-	    'time' => 60,
+	    'time' => 86400,
 	    'keep' => 2,
 	},
 	'monthly' => {
