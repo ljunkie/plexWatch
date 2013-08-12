@@ -3,3 +3,5 @@
 config.pl
 plexWatch.db
 plexWatch.log
+db_backups/*
+
