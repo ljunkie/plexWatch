@@ -1621,6 +1621,7 @@ sub FriendlyName() {
 
 sub durationrr() {
     my $sec = shift;
+    return duration(0) if !$sec;
     if ($sec < 3600) { 
 	return duration($sec,1);
     }
@@ -1647,8 +1648,16 @@ sub info_from_xml() {
     }
     
 
+    ## how many minutes in are we?
     my $viewOffset = 0;
-    $viewOffset =  &durationrr($vid->{viewOffset}/1000) if $vid->{viewOffset};
+    if ($vid->{viewOffset}) {
+	## if viewOffset is less than 90 seconds.. lets consider this 0 -- we only run this script every minute
+	if ($vid->{viewOffset}/1000 < 90) {
+	    $viewOffset = &durationrr(0);
+	} else {
+	    $viewOffset =  &durationrr($vid->{viewOffset}/1000) if $vid->{viewOffset};
+	}
+    }
     
     my $isTranscoded = 0;
     my $transInfo;
@@ -1671,14 +1680,37 @@ sub info_from_xml() {
     $start_time = localtime($start_epoch)  if $start_epoch;
     $stop_time = localtime($stop_epoch)  if $stop_epoch;
     
+    my $duration_raw;
     if (!$duration) {
 	if ($time && $stop_epoch) {
 	    $duration = $stop_epoch-$time;
+	    $duration_raw = $duration;
 	    $duration = &durationrr($duration);
 	}    
     } else {
+	$duration_raw = $duration;
 	$duration = &durationrr($duration);
+	
     }
+    
+    ## Percent complete -- this is correct ongoing in verison 0.0.18
+    my $percent_complete;
+    if ( ($vid->{viewOffset} && $vid->{duration}) && $vid->{viewOffset} > 0 && $vid->{duration} > 0) {
+	$percent_complete = sprintf("%2d",($vid->{viewOffset}/$vid->{duration})*100);
+	if ($percent_complete >= 90) {	$percent_complete = 100;    } 
+    }
+    ## version prior to 0.0.18 -- we will have to use duration watched to figure out percent
+    if (!$percent_complete || $percent_complete < 10) {
+	#$percent_complete = 0;
+	if ( ($vid->{duration} && $vid->{duration} > 0) && ($duration_raw && $duration_raw > 0) )  {
+	    $percent_complete = sprintf("%2d",($duration_raw/($vid->{duration}/1000))*100);
+	    if ($percent_complete >= 90) {	$percent_complete = 100;    } 
+	}
+    }
+    
+    $percent_complete = 0 if !$percent_complete;
+    
+
     my ($rating,$year,$summary,$extra_title,$genre,$platform,$title,$episode,$season);    
     $rating = $year = $summary = $extra_title = $genre = $platform = $title = $episode = $season = '';
     
@@ -1743,6 +1775,7 @@ sub info_from_xml() {
 	'raw_length' =>  $vid->{duration},
 	'ntype' => $ntype,
 	'progress' => $viewOffset,
+	'percent_complete' => $percent_complete,
 	'time_left' => $time_left,
 	'viewOffset' => $vid->{viewOffset},
 	'state' => $state,
