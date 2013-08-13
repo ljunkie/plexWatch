@@ -1,6 +1,6 @@
 # 0.0.18-dev
 #
-# * MyPlex Login Token: The script can not be ran from any computer.
+# * MyPlex Login Token: The script can now be ran from any computer.
 #	-- Specify a $myPlex_user and $myPlex_pass in config.pl
 #       -- Will only retrieve a token from my.plexapp.com if the PMS server returns a 401 (authorization required)
 # * format_options update/new:
