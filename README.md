@@ -254,6 +254,31 @@ user: Franks's total duration 2 hours, 43 minutes, and 2 seconds
 ```
 
 
+### Addition options
+
+#### --notify
+```
+ --user=...                      limit output to a specific user. Must be exact, case-insensitive
+ --exclude_user=...              exclude users - you may specify multiple on the same line. '--notify --exclude_user=user1 --exclude_user=user2'
+```
+
+#### --stats
+```
+ --start=...                     limit watched status output to content started AFTER/ON said date/time
+ --stop=...                      limit watched status output to content started BEFORE/ON said date/time
+ --user=...                      limit output to a specific user. Must be exact, case-insensitive
+ --exclude_user=...              exclude users - you may specify multiple on the same line. '--notify --exclude_user=user1 --exclude_user=user2'
+```
+#### --watched
+```
+ --start=...                     limit watched status output to content started AFTER/ON said date/time
+ --stop=...                      limit watched status output to content started BEFORE/ON said date/time
+ --nogrouping                    will show same title multiple times if user has watched/resumed title on the same day
+ --user=...                      limit output to a specific user. Must be exact, case-insensitive
+ --exclude_user=...              exclude users - you may specify multiple on the same line. '--notify --exclude_user=user1 --exclude_user=user2'
+```
+
+
 ### Notification format
 
 * You can edit the format of your alerts and cli output or --watching --watched. This can be done  in the config.pl or on the cli 
