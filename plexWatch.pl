@@ -25,7 +25,6 @@ use POSIX qw(strftime);
 use File::Basename;
 use warnings;
 
-
 ## load config file
 my $dirname = dirname(__FILE__);
 if (!-e $dirname .'/config.pl') {
@@ -165,9 +164,7 @@ my $script_fh;
 my $dbh = &initDB(); ## Initialize sqlite db - last
 &BackupSQlite; ## check if the SQLdb needs to be backed up
 
-
-
-my $PMS_token = &PMSToken();
+my $PMS_token = &PMSToken(); # sets token if required
 
 ########################################## START MAIN #######################################################
 
@@ -824,23 +821,15 @@ sub ProcessRecentlyAdded() {
 sub GetSessions() {
     my $url = "http://$server:$port/status/sessions";
 
-    
     # Generate our HTTP request.
     my ($userAgent, $request, $response);
     $userAgent = LWP::UserAgent->new;
     $userAgent->timeout(20);
     $userAgent->agent($appname);
     $userAgent->env_proxy();
-
     $request = HTTP::Request->new(GET => &PMSurl($url));
     $response = $userAgent->request($request);
 
-
-    if ($response->code == 401) {
-	print "need plexToken\n";
-	exit;
-    }
-    
     if ($response->is_success) {
 	my $XML  = $response->decoded_content();
 	
@@ -1926,7 +1915,6 @@ sub GetSectionsIDs() {
     my $host = "http://$server:$port";
     my $sections = ();
     my $url = $host . '/library/sections';
-    
     my $response = $ua->get( &PMSurl($url) );
     if ( ! $response->is_success ) {
 	print "Failed to get Library Sections from $url\n";
@@ -1953,7 +1941,6 @@ sub GetItemMetadata() {
 	$url = $host . $item;
     }
     my $sections = ();
-    
     my $response = $ua->get( &PMSurl($url) );
     if ( ! $response->is_success ) {
 	if ($options{'debug'}) {
@@ -1985,11 +1972,8 @@ sub GetRecentlyAdded() {
     
     foreach my $section (@$section) {
 	my $url = $host . '/library/sections/'.$section.'/recentlyAdded';
-	
 	## limit the output to the last 25 added.
 	$url .= '?query=c&X-Plex-Container-Start=0&X-Plex-Container-Size=25';
-	
-	
 	my $response = $ua->get( &PMSurl($url) );
 	if ( ! $response->is_success ) {
 	    print "Failed to get Library Sections from $url\n";
