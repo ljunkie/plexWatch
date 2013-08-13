@@ -73,6 +73,7 @@ my $format_options = {
     'streamtype' => 'T or D - for Transcoded or Direct',
     'transcoded' => '1 or 0 - if transcoded',
     'state' => 'playing, paused or buffering [ or stopped ] (useful on --watching)',
+    'percent_complete' => 'Percent of video watched -- user could have only watched 5 minutes, but skipped to end = 100%',
 };
 
 if (!-d $data_dir) {
@@ -139,7 +140,7 @@ if ($options{'format_options'}) {
     print "\n\n";
     
     foreach my $k (keys %{$format_options}) {
-	printf("%15s %s\n", "{$k}", $format_options->{$k});
+	printf("%20s %s\n", "{$k}", $format_options->{$k});
     }
     print "\n";
     exit;
