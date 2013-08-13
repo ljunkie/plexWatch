@@ -25,6 +25,7 @@ use POSIX qw(strftime);
 use File::Basename;
 use warnings;
 
+
 ## load config file
 my $dirname = dirname(__FILE__);
 if (!-e $dirname .'/config.pl') {
@@ -32,7 +33,7 @@ if (!-e $dirname .'/config.pl') {
     exit;
 }
 do $dirname.'/config.pl';
-use vars qw/$data_dir $server $port $appname $user_display $alert_format $notify $push_titles $backup_opts/; 
+use vars qw/$data_dir $server $port $appname $user_display $alert_format $notify $push_titles $backup_opts $myPlex_user $myPlex_pass/; 
 if (!$data_dir || !$server || !$port || !$appname || !$alert_format || !$notify) {
     print "config file missing data\n";
     exit;
@@ -164,6 +165,9 @@ my $script_fh;
 my $dbh = &initDB(); ## Initialize sqlite db - last
 &BackupSQlite; ## check if the SQLdb needs to be backed up
 
+
+
+my $PMS_token = &PMSToken();
 
 ########################################## START MAIN #######################################################
 
@@ -820,15 +824,22 @@ sub ProcessRecentlyAdded() {
 sub GetSessions() {
     my $url = "http://$server:$port/status/sessions";
 
+    
     # Generate our HTTP request.
-    my ($userAgent, $request, $response, $requestURL);
+    my ($userAgent, $request, $response);
     $userAgent = LWP::UserAgent->new;
     $userAgent->timeout(20);
     $userAgent->agent($appname);
     $userAgent->env_proxy();
-    $requestURL = $url;
-    $request = HTTP::Request->new(GET => $requestURL);
+
+    $request = HTTP::Request->new(GET => &PMSurl($url));
     $response = $userAgent->request($request);
+
+
+    if ($response->code == 401) {
+	print "need plexToken\n";
+	exit;
+    }
     
     if ($response->is_success) {
 	my $XML  = $response->decoded_content();
@@ -851,6 +862,26 @@ sub GetSessions() {
 	}
     	exit(2);	
     }
+}
+
+sub PMSToken() {
+    my $url = "http://$server:$port";
+    
+    # Generate our HTTP request.
+    my ($userAgent, $request, $response);
+    $userAgent = LWP::UserAgent->new;
+    $userAgent->timeout(10);
+    $userAgent->agent($appname);
+    $userAgent->env_proxy();
+    $request = HTTP::Request->new(GET => $url);
+    $response = $userAgent->request($request);
+    
+    
+    if ($response->code == 401) {
+	my $token = &myPlexToken();
+	return $token;
+    }
+    return 0;
 }
 
 sub CheckNotified() {
@@ -1895,7 +1926,8 @@ sub GetSectionsIDs() {
     my $host = "http://$server:$port";
     my $sections = ();
     my $url = $host . '/library/sections';
-    my $response = $ua->get( $url );
+    
+    my $response = $ua->get( &PMSurl($url) );
     if ( ! $response->is_success ) {
 	print "Failed to get Library Sections from $url\n";
 	exit(2);
@@ -1920,9 +1952,9 @@ sub GetItemMetadata() {
     if ($full_uri) {
 	$url = $host . $item;
     }
-    
     my $sections = ();
-    my $response = $ua->get( $url );
+    
+    my $response = $ua->get( &PMSurl($url) );
     if ( ! $response->is_success ) {
 	if ($options{'debug'}) {
 	    print "Failed to get Metadata from from $url\n";
@@ -1955,8 +1987,10 @@ sub GetRecentlyAdded() {
 	my $url = $host . '/library/sections/'.$section.'/recentlyAdded';
 	
 	## limit the output to the last 25 added.
-	my $limit = '?query=c&X-Plex-Container-Start=0&X-Plex-Container-Size=25';
-	my $response = $ua->get( $url . $limit);
+	$url .= '?query=c&X-Plex-Container-Start=0&X-Plex-Container-Size=25';
+	
+	
+	my $response = $ua->get( &PMSurl($url) );
 	if ( ! $response->is_success ) {
 	    print "Failed to get Library Sections from $url\n";
 	    exit(2);
@@ -2246,6 +2280,49 @@ sub BackupSQlite() {
 
     ## exit if --backup was called..
     exit if $options{'backup'};
+}
+
+sub myPlexToken() {
+    if (!$myPlex_user || !$myPlex_pass) {
+	print "* You MUST specify a myPlex_user and myPlex_pass in the config.pl\n";
+	print "\n \$myPlex_user = 'your username'\n";
+	print " \$myPlex_pass = 'your password'\n\n";
+	exit;
+    } 
+    my $ua = LWP::UserAgent->new;
+    $ua->timeout(20);
+    $ua->agent($appname);
+    $ua->env_proxy();
+    
+    $ua->default_header('X-Plex-Client-Identifier' => $appname);
+    $ua->default_header('Content-Length' => 0);
+    
+    my $url = 'https://my.plexapp.com/users/sign_in.xml';
+    
+    my $req = HTTP::Request->new(POST => $url);
+    $req->authorization_basic($myPlex_user, $myPlex_pass);
+    my $response = $ua->request($req);
+    
+    
+    #print $response->as_string;
+
+    if ($response->is_success) {
+	my $data = XMLin($response->decoded_content());
+	return $data->{'authenticationToken'} if $data->{'authenticationToken'};
+	return $data->{'authentication-token'} if $data->{'authentication-token'};
+    } else {
+	print $response->as_string;
+	die;
+    }
+}
+
+sub PMSurl() {
+    my $url = shift;
+    ## append Token if required
+    my $j = '?';
+    $j = '&' if $url =~ /\?.*\=/;
+    $url .= $j . 'X-Plex-Token=' . $PMS_token if $PMS_token;
+    return $url;
 }
 
 

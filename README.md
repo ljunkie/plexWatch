@@ -122,13 +122,21 @@ If you want to use twitter, you will need to install two more Perl modules
 
 *  requires Net::Twitter::Lite::WithAPIv1_1  
 ```
-cpan Net::Twitter::Lite::WithAPIv1_1
+sudo cpan Net::Twitter::Lite::WithAPIv1_1
+
+# OR force install it
+sudo cpan -f Net::Twitter::Lite::WithAPIv1_1
 ```
 
 *  requires Net::OAuth >= 0.28
 ```
-cpan Net::OAuth
+sudo cpan Net::OAuth
+
+# OR force install it
+sudo cpan -f Net::OAuth
 ```
+
+
 
 
 #### Twitter setup
@@ -143,7 +151,7 @@ If you want to use GNTP (growl), you will need to install a module
 
 *  requires Growl::GNTP
 ```
-cpan Growl::GNTP
+sudo cpan Growl::GNTP
 ```
 
 * Note: CPAN install failed on centos until I installed perl\(Data::UUID\)
