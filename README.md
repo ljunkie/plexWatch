@@ -113,14 +113,18 @@ yum -y install perl\(LWP::UserAgent\) perl\(XML::Simple\) \
 
 
 6) setup cron - /etc/crontab
+
 ```
 * * * * * root cd /opt/plexWatch && /opt/plexWatch/plexWatch.pl
 ```
+
+
 
 ### Twitter integration 
 If you want to use twitter, you will need to install two more Perl modules
 
 *  requires Net::Twitter::Lite::WithAPIv1_1  
+
 ```
 sudo cpan Net::Twitter::Lite::WithAPIv1_1
 
@@ -129,13 +133,13 @@ sudo cpan -f Net::Twitter::Lite::WithAPIv1_1
 ```
 
 *  requires Net::OAuth >= 0.28
+
 ```
 sudo cpan Net::OAuth
 
 # OR force install it
 sudo cpan -f Net::OAuth
 ```
-
 
 
 
