@@ -1,4 +1,8 @@
 $data_dir = '/opt/plexWatch/'; ## to store the DB, logfile - can be the same as this script
+
+## myplex user/pass ONLY required if you have set the PMS to 'Require authentication on local networks' and $server is not set to localhost
+$myPlex_user = '';
+$myPlex_pass = '';
 	
 $server = 'localhost'; ## IP of PMS - or localhost
 $port = 32400;         ## port of PMS
