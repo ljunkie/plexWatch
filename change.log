@@ -15,6 +15,7 @@
 # * Backup SQLite DB
 #    -- automatically happens daily, weekly and monthly
 #    -- force Daily backup with --backup
+# * Fixed: GNTP ProviderEnabled check was broken -- if one was enabled, all were enabled"
 
 
 # 0.0.17
