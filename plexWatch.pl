@@ -1457,8 +1457,9 @@ sub NotifyGNTP() {
     # It will try to subscribe to the plexWatch service on boxcar if we get a 401 and resend the notification
     my $alert = shift;
     my $alert_options = shift;
-    
     my $provider = 'GNTP';
+    
+
     ## TODO -- make the 452 per multi provider
     if ($provider_452->{$provider}) {
 	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
@@ -1467,6 +1468,15 @@ sub NotifyGNTP() {
     
     my $success;
     foreach my $k (keys %{$notify->{$provider}}) {
+	
+	## the ProviderEnabled check before doesn't work for multi (i.e. GNTP for now) we will have to verify this provider is actually enabled in the foreach..
+	my $push_type = $alert_options->{'push_type'};
+	if (ref $notify->{$provider}->{$k} && $notify->{$provider}->{$k}->{'enabled'}  &&  $notify->{$provider}->{$k}->{$push_type}) {
+	    print "GNTP key:$k enabled for this $alert_options->{'push_type'}\n" if $debug;
+	} else {
+	    print "GNTP key:$k NOT enabled for this $alert_options->{'push_type'} - skipping\n" if $debug;
+	    next;
+	}
 	
 	my %gntp = %{$notify->{GNTP}->{$k}};    
 	$gntp{'message'} = $alert;
