@@ -339,6 +339,8 @@ sub RAdataAlert() {
 	$alert_url .= ' http://www.imdb.com/find?s=tt&q=' . urlencode($item->{'imdb_title'});
     }
     
+    $alert =~ s/[^[:ascii:]]+//g;  ## remove non ascii
+    
     $result->{'alert'} = $alert;
     $result->{'alert_short'} = $alert_short;
     #$result->{'alert'} = 'NEW: '.$alert;
@@ -346,7 +348,7 @@ sub RAdataAlert() {
     $result->{'item_id'} = $item_id;
     $result->{'debug_done'} = $debug_done;
     $result->{'alert_url'} = $alert_url;
-    
+
     return $result;
 }
 
@@ -704,6 +706,8 @@ sub formatAlert() {
     
     $s =~ s/\[\]//g; ## trim any empty variable encapsulated in []
     $s =~ s/\s+/ /g; ## remove double spaces
+    
+    $s =~ s/[^[:ascii:]]+//g;  ## remove non ascii
     
     ## $orig is pretty much deprecated..
     return ($s,$orig);
@@ -1458,6 +1462,7 @@ sub NotifyGNTP() {
     my $alert = shift;
     my $alert_options = shift;
     my $provider = 'GNTP';
+
     
 
     ## TODO -- make the 452 per multi provider
