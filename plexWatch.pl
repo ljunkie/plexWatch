@@ -1673,9 +1673,8 @@ sub info_from_xml() {
     ## start time is in xml
     
     my $vid = XMLin($hash,KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
-
     
-    ## paused or playing?
+    ## paused or playing? stopped is forced and required from ntype
     my $state = 'unknown';
     if ($ntype =~ /watched|stop/) {
 	$state = 'stopped';
@@ -1683,11 +1682,10 @@ sub info_from_xml() {
 	$state =  $vid->{Player}->{'state'} if $vid->{Player}->{state};
     }
     
-
-    ## how many minutes in are we?
+    ## how many minutes in are we? TODO - cleanup when < 90 -- formatting is a bit odd with [0 seconds in]
     my $viewOffset = 0;
     if ($vid->{viewOffset}) {
-	## if viewOffset is less than 90 seconds.. lets consider this 0 -- we only run this script every minute
+	## if viewOffset is less than 90 seconds.. lets consider this 0 -- quick hack to fix initial start
 	if ($vid->{viewOffset}/1000 < 90) {
 	    $viewOffset = &durationrr(0);
 	} else {
@@ -1695,8 +1693,9 @@ sub info_from_xml() {
 	}
     }
     
+    ## Transcoded Info
     my $isTranscoded = 0;
-    my $transInfo;
+    my $transInfo; ## container used for transcoded information - not in use yet
     my $streamType = 'D';
     if (ref $vid->{TranscodeSession}) {
 	$isTranscoded = 1;
@@ -1704,18 +1703,20 @@ sub info_from_xml() {
 	$streamType = 'T';
     }
 
+    ## Time left Info
     my $time_left = 'unknown';
     if ($vid->{duration} && $vid->{viewOffset}) {
 	$time_left = &durationrr(($vid->{duration}/1000)-($vid->{viewOffset}/1000));
     }
-    
 
+    ## Start/Stop Time
     my $start_time = '';
     my $stop_time = '';
     my $time = $start_epoch;
     $start_time = localtime($start_epoch)  if $start_epoch;
     $stop_time = localtime($stop_epoch)  if $stop_epoch;
     
+    ## Duration Watched
     my $duration_raw;
     if (!$duration) {
 	if ($time && $stop_epoch) {
@@ -1736,6 +1737,7 @@ sub info_from_xml() {
 	if ($percent_complete >= 90) {	$percent_complete = 100;    } 
     }
     ## version prior to 0.0.18 -- we will have to use duration watched to figure out percent
+    ## not the best, but if percent complete is < 10 -- let's go with duration watched (including paused) vs duration of the video
     if (!$percent_complete || $percent_complete < 10) {
 	#$percent_complete = 0;
 	if ( ($vid->{duration} && $vid->{duration} > 0) && ($duration_raw && $duration_raw > 0) )  {
@@ -1743,26 +1745,26 @@ sub info_from_xml() {
 	    if ($percent_complete >= 90) {	$percent_complete = 100;    } 
 	}
     }
-    
     $percent_complete = 0 if !$percent_complete;
     
-
+    
     my ($rating,$year,$summary,$extra_title,$genre,$platform,$title,$episode,$season);    
     $rating = $year = $summary = $extra_title = $genre = $platform = $title = $episode = $season = '';
     
     $title = $vid->{title};
+    
+    ## Platform title (client device)
     ## prefer title over platform if exists ( seem to have the exact same info of platform with useful extras )
     if ($vid->{Player}->{title}) {	$platform =  $vid->{Player}->{title};    }
     elsif ($vid->{Player}->{platform}) {	$platform = $vid->{Player}->{platform};    }
     
-    
+    ## length of the video
     my $length;
     $length = sprintf("%02d",$vid->{duration}/1000) if $vid->{duration};
     $length = &durationrr($length);
     
     my $orig_user = (split('\@',$vid->{User}->{title}))[0];
     if (!$orig_user) {	$orig_user = 'Local';    }
-    
     
     $year = $vid->{year} if $vid->{year};
     $rating .= $vid->{contentRating} if ($vid->{contentRating});
