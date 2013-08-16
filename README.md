@@ -541,4 +541,50 @@ perl v5.10.1                      2013-08-13                      PLEXWATCH(1)
 ```
 
 
+### FAQ
+
+-----------
+* __How do I test notifications__
+
+: __Answer__
+
+```
+ Make sure you have enabled a provider in the config.pl
+
+   ./plexWatch.pl --test_notify=start
+   ./plexWatch.pl --test_notify=stop
+   ./plexWatch.pl --test_notify=recent
+
+```
+
+
+-----------
+
+* __I receive this error when running a test notification:__
+
+```
+Can't verify SSL peers without knowning which Certificate Authorities to trust
+ 
+This problem can be fixed by either setting the PERL_LWP_SSL_CA_FILE
+envirionment variable or by installing the Mozilla::CA module.
+```
+
+__Answer__
+
+```
+sudo cpan 
+install LWP::UserAgent Mozilla::CA  
+```
+
+__OSX__ 
+* remove homebrew and macports. Force reinstalled modules, highly recommend installing Mozilla::CA prior to LWP::UserAgent
+
+----
+
+
+
+
+
+
+
 Idea, thanks to https://github.com/vwieczorek/plexMon. I initially had a really horrible script used to parse the log files...  http://IP:PORT/status/sessions is much more useful. This was whipped up in an hour or two.. I am sure it could use some more work. 
