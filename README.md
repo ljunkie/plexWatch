@@ -78,9 +78,10 @@ $notify = {...
 
 * Prowl     : 'apikey' required
 * Pushover  : 'token' and 'user' required
-* Growl     : 'script' required :: GrowlNotify from http://growl.info/downloads
+* Growl     : 'script' required :: GrowlNotify from http://growl.info/downloads (GNTP replaces this)
 * twitter   : 'consumer_key', 'consumer_secret', 'access_token', 'access_token_secret' required
 * boxcar    : 'email' required
+* GNTP      : 'server', 'port' required. 'password' optional. You must allow network notifications on the Growl Server
 ```
 
 4) Install Perl requirements
@@ -315,11 +316,12 @@ user: Franks's total duration 2 hours, 43 minutes, and 2 seconds
 ####config.pl options
 ```
 $alert_format = {
-	         'start'    =>  '{user} watching {title} on {platform}',
-		 'stop'     =>  '{user} watched {title} on {platform} for {duration}',
-		 'watched'  =>  '{user} watched {title} on {platform} for {duration}',
-		 'watching' =>  '{user} watching {title} on {platform}'
-                 };
+	      'start'    =>  '{user} watching {title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in]',
+	      'stop'     =>  '{user} watched {title} [{streamtype}] [{year}] [{rating}] on {platform} for {duration} [{percent_complete}%]',
+	      'watched'  =>  '{user} watched {title} [{streamtype}] [{year}] [{length}] [{rating}] on {platform} for {duration} [{percent_complete}%]',
+	      'watching' =>  '{user} watching {title} [{streamtype}] [{year}] [{rating}] [{length}] on {platform} [{time_left} left]'
+	      };
+
 ```
 
 ####Format options Help
@@ -328,24 +330,29 @@ $alert_format = {
 
 Format Options for alerts
 
-            --start='{user} watching {title} [{year}] [{rating}] on {platform}'
-             --stop='{user} watched {title} [{year}] [{rating}] on {platform} for {duration}'
-          --watched='{user} watched {title} [{year}] [{rating}] on {platform} for {duration}'
-         --watching='{user} watching {title} [{year}] [{rating}] [{length}] on {platform} [{time_left} left]'
+            --start='{user} watching {title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in]'
+             --stop='{user} watched {title} [{streamtype}] [{year}] [{rating}] on {platform} for {duration} [{percent_complete}%]'
+          --watched='{user} watched {title} [{streamtype}] [{year}] [{length}] [{rating}] on {platform} for {duration} [{percent_complete}%]'
+         --watching='{user} watching {title} [{streamtype}] [{year}] [{rating}] [{length}] on {platform} [{time_left} left]'
 
-    {orig_user} orig_user
-     {progress} progress of video [only available on --watching]
-     {duration} duration watched
-       {rating} rating of video - TV-MA, R, PG-13, etc
-       {length} length of video
-      {summary} summary or video
-         {user} user
-    {stop_time} stop_time
-    {time_left} progress of video [only available on --watching]
-        {title} title
-     {platform} client platform 
-  {start_start} start_time
-         {year} year of video
+  {percent_complete} Percent of video watched -- user could have only watched 5 minutes, but skipped to end = 100%
+             {state} playing, paused or buffering [ or stopped ] (useful on --watching)
+            {rating} rating of video - TV-MA, R, PG-13, etc
+           {summary} summary or video
+        {streamtype} T or D - for Transcoded or Direct
+              {user} user
+         {time_left} progress of video [only available/correct on --watching and stop events]
+          {platform} client platform 
+        {transcoded} 1 or 0 - if transcoded
+         {orig_user} orig_user
+          {progress} progress of video [only available/correct on --watching and stop events]
+          {duration} duration watched
+            {length} length of video
+         {stop_time} stop_time
+             {title} title
+       {start_start} start_time
+              {year} year of video
+
 ```
 
 ### Advanced options
