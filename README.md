@@ -19,7 +19,7 @@ http://forums.plexapp.com/index.php/topic/72552-plexwatch-plex-notify-script-sen
 
 **What it does**
 * notify when a user starts watching a video
-* notify when a user stop watching a video
+* notify when a user stops watching a video
 * notify on recently added content to a PMS server
 * notifies via prowl, pushover, growl, twitter, boxcar, GNTP and/or a log file
 * enable/disable notifications per provider & per notification type (watching, watched, recently added)
