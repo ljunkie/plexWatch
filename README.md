@@ -26,6 +26,7 @@ plexWatch - 0.0.18
 * Limit output per user or exclude users
 * ...more to come
 
+
 ###Perl Requirements
 
 * LWP::UserAgent
@@ -33,6 +34,7 @@ plexWatch - 0.0.18
 * DBI
 * Time::Duration;
 * Time::ParseDate;
+
 
 #### These should be part of the bast Perl install
 
@@ -42,27 +44,35 @@ plexWatch - 0.0.18
 * POSIX qw(strftime) (Perl base)
 * File::Basename     (Perl base)
 
+
 #### Required ONLY if you use twitter
 
 * Net::Twitter::Lite::WithAPIv1_1
 * Net::OAuth
 
+
 #### Required ONLY if you use GNTP
 
 * Growl::GNTP
 
+<br/>
+
 ### Install 
+----
 
-1) sudo wget -P /opt/plexWatch/ https://raw.github.com/ljunkie/plexWatch/master/plexWatch.pl
+__1__) sudo wget -P /opt/plexWatch/ https://raw.github.com/ljunkie/plexWatch/master/plexWatch.pl
 
-2) sudo chmod 777 /opt/plexWatch && sudo chmod 755 /opt/plexWatch/plexWatch.pl
 
-3) sudo cp /opt/plexWatch/config.pl-dist /opt/plexWatch/config.pl 
+__2__) sudo chmod 777 /opt/plexWatch && sudo chmod 755 /opt/plexWatch/plexWatch.pl
 
-3a) sudo nano /opt/plexWatch/config.pl 
+
+__3__) sudo cp /opt/plexWatch/config.pl-dist /opt/plexWatch/config.pl 
+
+
+__3a__) sudo nano /opt/plexWatch/config.pl 
 
 Modify Variables as needed:
-```
+```perl
 $server = 'localhost';   ## IP of PMS - or localhost
 $port   = 32400;         ## port of PMS
 $notify_started = 1;   ## notify when a stream is started (first play)
@@ -70,7 +80,7 @@ $notify_stopped = 1;   ## notify when a stream is stopped
 
 ```
 
-```
+```bash
 $notify = {...
 
 * to enable a provider, i.e. file, prowl, pushover 
@@ -84,11 +94,12 @@ $notify = {...
 * GNTP      : 'server', 'port' required. 'password' optional. You must allow network notifications on the Growl Server
 ```
 
-4) Install Perl requirements
+
+__4__) Install Perl requirements
 
 * Debian/Ubuntu - apt-get
 
-```
+```bash
 sudo apt-get install libwww-perl
 
 sudo apt-get install libxml-simple-perl
@@ -104,33 +115,40 @@ sudo apt-get install perl-doc
 
 * RHEL/Centos - yum
 
-```
+```bash
 yum -y install perl\(LWP::UserAgent\) perl\(XML::Simple\) \
                perl\(DBI\) perl\(Time::Duration\)  perl\(Time::ParseDate\)
 ```
 
 
-5) **run** the script manually to verify it works: /opt/plexWatch/plexWatch.pl
+__5__) **run** the script manually to verify it works: /opt/plexWatch/plexWatch.pl
   * start video(s)
   * /opt/plexWatch/plexWatch.pl
   * stop video(s)
   * /opt/plexWatch/plexWatch.pl
 
 
-6) setup cron - /etc/crontab
+__6__) setup crontab or launchagent to run the script every minute
 
-```
+*       __linux__: /etc/crontab
+
+```bash
 * * * * * root /opt/plexWatch/plexWatch.pl
 ```
 
+*       __OSX__: use a launchagent instead of cron. Refer to the __FAQ__ on the bottom. 
 
+
+
+<br/>
 
 ### Twitter integration 
+----
 If you want to use twitter, you will need to install two more Perl modules
 
 *  requires Net::Twitter::Lite::WithAPIv1_1  
 
-```
+```bash
 sudo cpan Net::Twitter::Lite::WithAPIv1_1
 
 # OR force install it
@@ -139,14 +157,12 @@ sudo cpan -f Net::Twitter::Lite::WithAPIv1_1
 
 *  requires Net::OAuth >= 0.28
 
-```
+```bash
 sudo cpan Net::OAuth
 
 # OR force install it
 sudo cpan -f Net::OAuth
 ```
-
-
 
 #### Twitter setup
 * create a new app @ https://dev.twitter.com/apps
@@ -155,11 +171,14 @@ sudo cpan -f Net::OAuth
 
 
 
+<br/>
 ### GNTP integration
+----
 If you want to use GNTP (growl), you will need to install a module
 
 *  requires Growl::GNTP
-```
+
+```bash
 sudo cpan Growl::GNTP
 ```
 
@@ -167,6 +186,7 @@ sudo cpan Growl::GNTP
 
 
 
+<br/>
 ## Using the script
 
 
@@ -271,7 +291,9 @@ user: Franks's total duration 2 hours, 43 minutes, and 2 seconds
 ```
 
 
-### Addition options
+
+<br/>
+## Additional options
 
 #### --notify
 ```
@@ -296,7 +318,9 @@ user: Franks's total duration 2 hours, 43 minutes, and 2 seconds
 ```
 
 
-### Notification format
+
+<br/>
+## Notification format
 
 * You can edit the format of your alerts and cli output or --watching --watched. This can be done  in the config.pl or on the cli 
 
@@ -313,8 +337,9 @@ user: Franks's total duration 2 hours, 43 minutes, and 2 seconds
  --format_watching=".."  : modify cli output for --watching :: --format_watching='{user} watching {title} on {platform}'
 ```
 
+
 ####config.pl options
-```
+```perl
 $alert_format = {
 	      'start'    =>  '{user} watching {title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in]',
 	      'stop'     =>  '{user} watched {title} [{streamtype}] [{year}] [{rating}] on {platform} for {duration} [{percent_complete}%]',
@@ -323,6 +348,7 @@ $alert_format = {
 	      };
 
 ```
+
 
 ####Format options Help
 ```
@@ -355,7 +381,11 @@ Format Options for alerts
 
 ```
 
-### Advanced options
+
+
+<br/>
+## Advanced options
+
 
 #### SQLite backups
 
@@ -364,7 +394,7 @@ By default this script will automatically backup the SQLite db to: $data_dir/db_
 * you can force a Daily backup with --backup
 
 It will keep 2 x Daily , 4 x Weekly  and 4 x Monthly backups. You can modify the backup policy by adding the config lines below to your existing config.pl
-```
+```perl
 $backup_opts = {
         'daily' => {
             'enabled' => 1,
@@ -382,7 +412,8 @@ $backup_opts = {
 ```
 
 
-### Help
+<br/>
+## Help
 ```
 /opt/plexWatch/plexWatch.pl --help
 ```
@@ -541,12 +572,14 @@ perl v5.10.1                      2013-08-13                      PLEXWATCH(1)
 ```
 
 
-### FAQ
 
------------
+<br/>
+## FAQ
+
 * __How do I test notifications__
+----
 
-: __Answer__
+__Answer__
 
 ```
  Make sure you have enabled a provider in the config.pl
@@ -558,9 +591,9 @@ perl v5.10.1                      2013-08-13                      PLEXWATCH(1)
 ```
 
 
------------
 
 * __I receive this error when running a test notification:__
+----
 
 ```
 Can't verify SSL peers without knowning which Certificate Authorities to trust
@@ -579,12 +612,39 @@ install LWP::UserAgent Mozilla::CA
 __OSX__ 
 * remove homebrew and macports. Force reinstalled modules, highly recommend installing Mozilla::CA prior to LWP::UserAgent
 
+
+
+* __How do I setup a launchagent in OSX__
 ----
 
+__Answer__
+
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.rcork.plexwatch</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/bin/perl</string>
+		<string>/path/to/your/plexWatch/plexWatch.pl</string>
+		<string>-notify</string>
+		<string>-recently_added=movie,show</string>
+	</array>
+	<key>StartInterval</key>
+	<integer>30</integer>
+</dict>
+</plist>
+```
 
 
 
 
 
 
+
+----
 Idea, thanks to https://github.com/vwieczorek/plexMon. I initially had a really horrible script used to parse the log files...  http://IP:PORT/status/sessions is much more useful. This was whipped up in an hour or two.. I am sure it could use some more work. 
