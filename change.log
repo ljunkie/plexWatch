@@ -1,3 +1,23 @@
+# 0.0.18-dev
+#
+# * MyPlex Login Token: The script can now be ran from any computer.
+#	-- Specify a $myPlex_user and $myPlex_pass in config.pl
+#       -- Will only retrieve a token from my.plexapp.com if the PMS server returns a 401 (authorization required)
+# * format_options update/new:
+#    -- {streamtype} [T|D] for Transcoded/Direct
+#    -- {transcoded} [1|0] for Transcoded/Direct
+#    -- {percent_complete} - percent of video watched ( not dependent on time watched, but where progress of video/length.
+#    -- {state} - playing/paused/buffering
+#    -- {progress} - exact time spot the user is at  (I.E. "15 minutes" )
+# * XML is now updated on every run -- allows us to view current state of content ( i.e. paused, playing, percent_completed, etc)
+# * CheckLock fixed: script can NOT to be ran multiple times at once (fixed repeat notifications when providers are offline)
+# * Provider notifications: timeout is now 20 seconds instead of 3 minutes (we should not wait 3 minutes to reach a provider!)
+# * Backup SQLite DB
+#    -- automatically happens daily, weekly and monthly
+#    -- force Daily backup with --backup
+# * Fixed: GNTP ProviderEnabled check was broken -- if one was enabled, all were enabled"
+# * Fixed: 'Wide character in send at' errors
+
 # 0.0.17
 # * GNTP: Provider added.
 #       -- Supports multiple destinations.

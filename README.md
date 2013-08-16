@@ -1,4 +1,4 @@
-plexWatch - 0.0.17
+plexWatch - 0.0.18-dev
 =========
 
 ***Notify*** and Log ***'Now Playing'*** and ***'Watched'*** content from a Plex Media Server + ***'Recently Added'*** (...and more)
@@ -113,22 +113,34 @@ yum -y install perl\(LWP::UserAgent\) perl\(XML::Simple\) \
 
 
 6) setup cron - /etc/crontab
+
 ```
 * * * * * root /opt/plexWatch/plexWatch.pl
 ```
+
+
 
 ### Twitter integration 
 If you want to use twitter, you will need to install two more Perl modules
 
 *  requires Net::Twitter::Lite::WithAPIv1_1  
+
 ```
-cpan Net::Twitter::Lite::WithAPIv1_1
+sudo cpan Net::Twitter::Lite::WithAPIv1_1
+
+# OR force install it
+sudo cpan -f Net::Twitter::Lite::WithAPIv1_1
 ```
 
 *  requires Net::OAuth >= 0.28
+
 ```
-cpan Net::OAuth
+sudo cpan Net::OAuth
+
+# OR force install it
+sudo cpan -f Net::OAuth
 ```
+
 
 
 #### Twitter setup
@@ -143,7 +155,7 @@ If you want to use GNTP (growl), you will need to install a module
 
 *  requires Growl::GNTP
 ```
-cpan Growl::GNTP
+sudo cpan Growl::GNTP
 ```
 
 * Note: CPAN install failed on centos until I installed perl\(Data::UUID\)
@@ -214,7 +226,7 @@ User: Carrie
  Wed Jun 26 20:19:48 2013: Carrie watched: Dumb and Dumber [1994] [PG-13] [duration: 1 hour, 7 minutes, and 10 seconds]
 ```
 
-#### list watched shows: option -nogrouping vs default
+#### list watched shows: option --nogrouping vs default
 
 #####  with --nogrouping
 ```
@@ -251,6 +263,31 @@ user: Stans's total duration 3 hours and 56 seconds
 user: Franks's total duration 2 hours, 43 minutes, and 2 seconds 
  Thu Jul  4 2013: Frank 57 minutes and 1 second
  Sun Jul 14 2013: Frank 1 hour, 46 minutes, and 1 second
+```
+
+
+### Addition options
+
+#### --notify
+```
+ --user=...                      limit output to a specific user. Must be exact, case-insensitive
+ --exclude_user=...              exclude users - you may specify multiple on the same line. '--notify --exclude_user=user1 --exclude_user=user2'
+```
+
+#### --stats
+```
+ --start=...                     limit watched status output to content started AFTER/ON said date/time
+ --stop=...                      limit watched status output to content started BEFORE/ON said date/time
+ --user=...                      limit output to a specific user. Must be exact, case-insensitive
+ --exclude_user=...              exclude users - you may specify multiple on the same line. '--notify --exclude_user=user1 --exclude_user=user2'
+```
+#### --watched
+```
+ --start=...                     limit watched status output to content started AFTER/ON said date/time
+ --stop=...                      limit watched status output to content started BEFORE/ON said date/time
+ --nogrouping                    will show same title multiple times if user has watched/resumed title on the same day
+ --user=...                      limit output to a specific user. Must be exact, case-insensitive
+ --exclude_user=...              exclude users - you may specify multiple on the same line. '--notify --exclude_user=user1 --exclude_user=user2'
 ```
 
 
@@ -307,6 +344,33 @@ Format Options for alerts
          {year} year of video
 ```
 
+### Advanced options
+
+#### SQLite backups
+
+By default this script will automatically backup the SQLite db to: $data_dir/db_backups/ ( normally: /opt/plexWatch/db_backups/ )
+
+* you can force a Daily backup with --backup
+
+It will keep 2 x Daily , 4 x Weekly  and 4 x Monthly backups. You can modify the backup policy by adding the config lines below to your existing config.pl
+```
+$backup_opts = {
+        'daily' => {
+            'enabled' => 1,
+            'keep' => 2,
+        },
+        'monthly' => {
+            'enabled' => 1,
+            'keep' => 4,
+        },
+        'weekly' => {
+            'enabled' => 1,
+            'keep' => 4,
+        },
+    };
+```
+
+
 ### Help
 ```
 /opt/plexWatch/plexWatch.pl --help
@@ -315,51 +379,65 @@ Format Options for alerts
 PLEXWATCH(1)          User Contributed Perl Documentation         PLEXWATCH(1)
 
 NAME
-       plexWatch.pl - Notify and Log ’Now Playing’ content from a Plex Media Server
+       plexWatch.p - Notify and Log ’Now Playing’ and ’Watched’ content from a Plex Media Server + ’Recently Added’
 
 SYNOPSIS
        plexWatch.pl [options]
 
          Options:
 
-          -notify=...        Notify any content watched and or stopped [this is default with NO options given]
+          --notify                        Notify any content watched and or stopped [this is default with NO options given]
+               --user=...                      limit output to a specific user. Must be exact, case-insensitive
+               --exclude_user=...              exclude users - you may specify multiple on the same line. '--notify --exclude_user=user1 --exclude_user=user2'
 
-          -watched=...       print watched content
-               -start=...         limit watched status output to content started AFTER/ON said date/time
-               -stop=...          limit watched status output to content started BEFORE/ON said date/time
-               -nogrouping        will show same title multiple times if user has watched/resumed title on the same day
-               -user=...          limit output to a specific user. Must be exact, case-insensitive
+          --recently_added=show,movie   notify when new movies or shows are added to the plex media server (required: config.pl: push_recentlyadded => 1)
+                  * you may specify only one or both on the same line separated by a comma. [--recently_added=show OR --recently_added=movie OR --recently_added=show,movie]
 
-          -watching=...      print content being watched
+          --stats                         show total time watched / per day breakout included
+               --start=...                     limit watched status output to content started AFTER/ON said date/time
+               --stop=...                      limit watched status output to content started BEFORE/ON said date/time
+               --user=...                      limit output to a specific user. Must be exact, case-insensitive
+               --exclude_user=...              exclude users - you may specify multiple on the same line. '--notify --exclude_user=user1 --exclude_user=user2'
 
-          -stats             show total time watched / per day breakout included
+          --watched                       print watched content
+               --start=...                     limit watched status output to content started AFTER/ON said date/time
+               --stop=...                      limit watched status output to content started BEFORE/ON said date/time
+               --nogrouping                    will show same title multiple times if user has watched/resumed title on the same day
+               --user=...                      limit output to a specific user. Must be exact, case-insensitive
+               --exclude_user=...              exclude users - you may specify multiple on the same line. '--notify --exclude_user=user1 --exclude_user=user2'
 
-          ############################################################################################3
+          --watching                      print content being watched
+
+          --backup                       Force a daily backup of the database.
+                                         * automatic backups are done daily,weekly,monthly - refer to backups section below
+
+          #############################################################################################
 
           --format_options        : list all available formats for notifications and cli output
 
           --format_start=".."     : modify start notification :: --format_start='{user} watching {title} on {platform}'
 
-          --format_stop=".."      : modify stop notification :: --format_stop='{user} watched {title} on {platform} for {duration}'
+          --format_stop=".."      : modify stop nottification :: --format_stop='{user} watched {title} on {platform} for {duration}'
 
           --format_watched=".."   : modify cli output for --watched  :: --format_watched='{user} watched {title} on {platform} for {duration}'
 
           --format_watching=".."  : modify cli output for --watching :: --format_watching='{user} watching {title} on {platform}'
 
-          ############################################################################################3
-
+          #############################################################################################
           * Debug Options
 
-          -test_notify=start        send a test notification for a start event. To test a stop event use -test_notify=stop
-          -show_xml                 show xml result from api query
-          -debug                    hit and miss - not very useful
+          --test_notify=start        [start,stop,recent] - send a test notifcation for a start,stop or recently added event.
+          --show_xml                 show xml result from api query
+          --version                  what version is this?
+          --debug                    hit and miss - not very useful
 
 OPTIONS
-       -notify        This will send you a notification through prowl and/or pushover. It will also log the event to a file and to the database.  This is the default if no options are given.
+       --notify       This will send you a notification through prowl, pushover, boxcar, growl and/or twitter. It will also log the event to a file and to the database.  This is the default if no
+                      options are given.
 
-       -watched       Print a list of watched content from all users.
+       --watched      Print a list of watched content from all users.
 
-       -start         * only works with -watched
+       --start        * only works with --watched
 
                       limit watched status output to content started AFTER said date/time
 
@@ -372,7 +450,7 @@ OPTIONS
                          -start="last week"
                          -start=... give it a try and see what you can use :)
 
-       -stop          * only works with -watched
+       --stop         * only works with --watched
 
                       limit watched status output to content started BEFORE said date/time
 
@@ -385,7 +463,7 @@ OPTIONS
                          -stop="last week"
                          -stop=... give it a try and see what you can use :)
 
-       -nogrouping    * only works with -watched
+       --nogrouping   * only works with --watched
 
                       will show same title multiple times if user has watched/resumed title on the same day
 
@@ -400,17 +478,46 @@ OPTIONS
                        Sun Jun 30 15:12:01 2013: exampleUser watched: Your Highness [2011] [R] [duration: 1 hour, 56 minutes, and 53 seconds]
                        Sun Jun 30 15:46:02 2013: exampleUser watched: Star Trek [2009] [PG-13] [duration: 2 hours, 8 minutes, and 18 seconds]
 
-       -user          * works with -watched and -watching
+       ---user        * works with --watched and --watching
 
                       limit output to a specific user. Must be exact, case-insensitive
 
-       -watching      Print a list of content currently being watched
+       --exclude_user limit output to a specific user. Must be exact, case-insensitive
 
-       -stats         show total watched time and show total watched time per day
+       --watching     Print a list of content currently being watched
 
-       -show_xml      Print the XML result from query to the PMS server in regards to what is being watched. Could be useful for troubleshooting..
+       --stats        show total watched time and show total watched time per day
 
-       -debug         This can be used. I have not fully set everything for debugging.. so it’s not very useful
+       --recently_added
+                      notify when new movies or shows are added to the plex media server (required: config.pl: push_recentlyadded => 1)
+
+                       --recently_added=movie :: for movies
+                       --recently_added=show  :: for tv show/episodes
+
+       --show_xml     Print the XML result from query to the PMS server in regards to what is being watched. Could be useful for troubleshooting..
+
+       --backup       By default this script will automatically backup the SQlite db to: $data_dir/db_backups/ ( normally: /opt/plexWatch/db_backups/ )
+
+                      * you can force a Daily backup with --backup
+
+                      It will keep 2 x Daily , 4 x Weekly  and 4 x Monthly backups. You can modify the backup policy by adding the config lines below to your existin config.pl
+
+                      $backup_opts = {
+                              ’daily’ => {
+                                  ’enabled’ => 1,
+                                  ’keep’ => 2,
+                              },
+                              ’monthly’ => {
+                                  ’enabled’ => 1,
+                                  ’keep’ => 4,
+                              },
+                              ’weekly’ => {
+                                  ’enabled’ => 1,
+                                  ’keep’ => 4,
+                              },
+                          };
+
+       --debug        This can be used. I have not fully set everything for debugging.. so it’s not very useful
 
 DESCRIPTION
        This program will Notify and Log ’Now Playing’ content from a Plex Media Server
@@ -418,7 +525,8 @@ DESCRIPTION
 HELP
        nothing to see here.
 
-perl v5.10.1                      2013-07-16                      PLEXWATCH(1)
+perl v5.10.1                      2013-08-13                      PLEXWATCH(1)
+
 ```
 
 

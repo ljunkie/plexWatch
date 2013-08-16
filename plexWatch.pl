@@ -1,11 +1,11 @@
 #!/usr/bin/perl
 
-my $version = '0.0.17';
+my $version = '0.0.18-dev';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-08-02 18:30 PST
+# Modified: 2013-08-14 16:07 PST
 #
 #  Version: $version
 # https://github.com/ljunkie/plexWatch
@@ -32,7 +32,7 @@ if (!-e $dirname .'/config.pl') {
     exit;
 }
 do $dirname.'/config.pl';
-use vars qw/$data_dir $server $port $appname $user_display $alert_format $notify $push_titles/; 
+use vars qw/$data_dir $server $port $appname $user_display $alert_format $notify $push_titles $backup_opts $myPlex_user $myPlex_pass/; 
 if (!$data_dir || !$server || !$port || !$appname || !$alert_format || !$notify) {
     print "config file missing data\n";
     exit;
@@ -68,8 +68,12 @@ my $format_options = {
     'summary' => 'summary or video',
     'duration' => 'duration watched',
     'length' => 'length of video',
-    'progress' => 'progress of video [only available on --watching]',
-    'time_left' => 'progress of video [only available on --watching]',
+    'progress' => 'progress of video [only available/correct on --watching and stop events]',
+    'time_left' => 'progress of video [only available/correct on --watching and stop events]',
+    'streamtype' => 'T or D - for Transcoded or Direct',
+    'transcoded' => '1 or 0 - if transcoded',
+    'state' => 'playing, paused or buffering [ or stopped ] (useful on --watching)',
+    'percent_complete' => 'Percent of video watched -- user could have only watched 5 minutes, but skipped to end = 100%',
 };
 
 if (!-d $data_dir) {
@@ -80,7 +84,6 @@ if (!-d $data_dir) {
 ## place holder to back off notifications per provider
 my $provider_452 = ();
 
-&CheckLock(); # just make sure we only run one at a time
 
 # Grab our options.
 my %options = ();
@@ -103,6 +106,7 @@ GetOptions(\%options,
 	   'test_notify:s',
 	   'recently_added:s',
 	   'version',
+	   'backup',
 	   'show_xml',
            'help|?'
     ) or pod2usage(2);
@@ -125,9 +129,7 @@ if ($options{debug}) {
     diagnostics->import();
 }
 
-
 my $date = localtime;
-my $dbh = &initDB(); ## Initialize sqlite db
 
 if ($options{'format_options'}) {
     print "\nFormat Options for alerts\n";
@@ -138,7 +140,7 @@ if ($options{'format_options'}) {
     print "\n\n";
     
     foreach my $k (keys %{$format_options}) {
-	printf("%15s %s\n", "{$k}", $format_options->{$k});
+	printf("%20s %s\n", "{$k}", $format_options->{$k});
     }
     print "\n";
     exit;
@@ -153,9 +155,17 @@ $alert_format->{'watching'} = $options{'format_watching'} if $options{'format_wa
 my %notify_func = &GetNotifyfuncs();
 my $push_type_titles = &GetPushTitles();
 
+## Check LOCK 
+# only allow one script run at a time. 
+# Before initDB
+my $script_fh;
+&CheckLock();
+## END
 
+my $dbh = &initDB(); ## Initialize sqlite db - last
+&BackupSQlite; ## check if the SQLdb needs to be backed up
 
-
+my $PMS_token = &PMSToken(); # sets token if required
 
 ########################################## START MAIN #######################################################
 
@@ -329,6 +339,8 @@ sub RAdataAlert() {
 	$alert_url .= ' http://www.imdb.com/find?s=tt&q=' . urlencode($item->{'imdb_title'});
     }
     
+    $alert =~ s/[^[:ascii:]]+//g;  ## remove non ascii
+    
     $result->{'alert'} = $alert;
     $result->{'alert_short'} = $alert_short;
     #$result->{'alert'} = 'NEW: '.$alert;
@@ -336,7 +348,7 @@ sub RAdataAlert() {
     $result->{'item_id'} = $item_id;
     $result->{'debug_done'} = $debug_done;
     $result->{'alert_url'} = $alert_url;
-    
+
     return $result;
 }
 
@@ -542,10 +554,16 @@ if ($options{'watching'}) {
 	    }
 	    
 	    my $time = localtime ($in_progress->{$k}->{time} );
-	    my $info = &info_from_xml($in_progress->{$k}->{'xml'},'watching',$in_progress->{$k}->{time});
+
+	    ## switched to LIVE info
+	    #my $info = &info_from_xml($in_progress->{$k}->{'xml'},'watching',$in_progress->{$k}->{time});
+	    my $info = &info_from_xml(XMLout($live->{$live_key}),'watching',$in_progress->{$k}->{time});
 	    
-	    $info->{'progress'} = &durationrr($live->{$live_key}->{viewOffset}/1000);
-	    $info->{'time_left'} = &durationrr(($info->{raw_length}/1000)-($live->{$live_key}->{viewOffset}/1000));
+	    &ProcessUpdate($live->{$live_key},$k); ## update XML	    
+
+	    ## overwrite progress and time_left from live -- should be pulling live xml above at some point
+	    #$info->{'progress'} = &durationrr($live->{$live_key}->{viewOffset}/1000);
+	    #$info->{'time_left'} = &durationrr(($info->{raw_length}/1000)-($live->{$live_key}->{viewOffset}/1000));
 	    
 	    my $alert = &Notify($info,1); ## only return formated alert
 	    printf(" %s: %s\n",$time, $alert);
@@ -639,6 +657,7 @@ if (!%options || $options{'notify'}) {
 	
 	## ignore content that has already been notified
 	if ($started->{$db_key}) {
+	    &ProcessUpdate($vid->{$k},$db_key); ## update XML
 	    if ($debug) { 
 		&Notify($info);
 		print &consoletxt("Already Notified -- Sent again due to --debug") . "\n"; 
@@ -688,6 +707,8 @@ sub formatAlert() {
     $s =~ s/\[\]//g; ## trim any empty variable encapsulated in []
     $s =~ s/\s+/ /g; ## remove double spaces
     
+    $s =~ s/[^[:ascii:]]+//g;  ## remove non ascii
+    
     ## $orig is pretty much deprecated..
     return ($s,$orig);
 }
@@ -713,6 +734,8 @@ sub ConsoleLog() {
 	open FILE, ">>", $notify->{'file'}->{'filename'}  or die $!;
 	print FILE "$console\n";
 	close(FILE);
+	print "FILE Notification successfully logged.\n" if $debug;
+	
     }
     return 1;
 }
@@ -733,8 +756,6 @@ sub Notify() {
     my $push_type;
     if ($type =~ /start/) {	$push_type = 'push_watching';    } 
     if ($type =~ /stop/) {	$push_type = 'push_watched';    } 
-
-
 
     my $alert_options = ();
     $alert_options->{'push_type'} = $push_type;
@@ -780,6 +801,15 @@ sub ProcessStart() {
     return  $dbh->sqlite_last_insert_rowid();
 }
 
+sub ProcessUpdate() {
+    my ($xmlref,$db_key) = @_;
+    my $xml =  XMLout($xmlref);
+    if ($db_key) {
+	my $sth = $dbh->prepare("update processed set xml = ? where session_id = ?");
+	$sth->execute($xml,$db_key) or die("Unable to execute query: $dbh->errstr\n");
+    }
+    return  $dbh->sqlite_last_insert_rowid();
+}
 sub ProcessRecentlyAdded() {
     my ($db_key) = @_;
     my $cmd = "select item_id from recently_added where item_id = '$db_key'";
@@ -797,14 +827,14 @@ sub GetSessions() {
     my $url = "http://$server:$port/status/sessions";
 
     # Generate our HTTP request.
-    my ($userAgent, $request, $response, $requestURL);
+    my ($userAgent, $request, $response);
     $userAgent = LWP::UserAgent->new;
+    $userAgent->timeout(20);
     $userAgent->agent($appname);
     $userAgent->env_proxy();
-    $requestURL = $url;
-    $request = HTTP::Request->new(GET => $requestURL);
+    $request = HTTP::Request->new(GET => &PMSurl($url));
     $response = $userAgent->request($request);
-    
+
     if ($response->is_success) {
 	my $XML  = $response->decoded_content();
 	
@@ -826,6 +856,26 @@ sub GetSessions() {
 	}
     	exit(2);	
     }
+}
+
+sub PMSToken() {
+    my $url = "http://$server:$port";
+    
+    # Generate our HTTP request.
+    my ($userAgent, $request, $response);
+    $userAgent = LWP::UserAgent->new;
+    $userAgent->timeout(10);
+    $userAgent->agent($appname);
+    $userAgent->env_proxy();
+    $request = HTTP::Request->new(GET => $url);
+    $response = $userAgent->request($request);
+    
+    
+    if ($response->code == 401) {
+	my $token = &myPlexToken();
+	return $token;
+    }
+    return 0;
 }
 
 sub CheckNotified() {
@@ -1224,7 +1274,8 @@ sub NotifyTwitter() {
 	}
 	return 0;
     }
-    
+
+    print uc($provider) . " Notification successfully posted.\n" if $debug;
     return 1;     ## success
 }
 
@@ -1270,6 +1321,7 @@ sub NotifyProwl() {
     # Generate our HTTP request.
     my ($userAgent, $request, $response, $requestURL);
     $userAgent = LWP::UserAgent->new;
+    $userAgent->timeout(20);
     $userAgent->agent($appname);
     $userAgent->env_proxy();
     
@@ -1286,7 +1338,7 @@ sub NotifyProwl() {
     $response = $userAgent->request($request);
     
     if ($response->is_success) {
-	if ($debug) { 	    print "PROWL - Notification successfully posted.\n";}
+	print uc($provider) . " Notification successfully posted.\n" if $debug;
 	return 1;     ## success
     } elsif ($response->code == 401) {
 	print STDERR "PROWL - Notification not posted: incorrect API key.\n";
@@ -1312,6 +1364,7 @@ sub NotifyPushOver() {
     
     my %po = %{$notify->{pushover}};    
     my $ua      = LWP::UserAgent->new();
+    $ua->timeout(20);
     $po{'message'} = $alert;
     	    
     ## PushOver title is AppName by default. If there is a real title for push type, It's 'AppName: push_type'
@@ -1337,7 +1390,7 @@ sub NotifyPushOver() {
 	return 0;
     } 
     
-    if ($debug) { print "Pushover - Notification successfully posted. $content\n";}
+    print uc($provider) . " Notification successfully posted.\n" if $debug;
     return 1;     ## success
 }
 
@@ -1364,10 +1417,14 @@ sub NotifyBoxcar() {
 	&ConsoleLog($msg);
     } else {
         my $response = &NotifyBoxcarPOST(\%bc);
-	
-	return 1 if $response->is_success;
+	if ($response->is_success) {
+	    print uc($provider) . " Notification successfully posted.\n" if $debug;
+	    return 1;
+	}
+
 	if ($response->{'_rc'} == 401) {
 	    my $ua      = LWP::UserAgent->new();
+	    $ua->timeout(20);
 	    my $msg = "$bc{'email'} is not subscribed to plexWatch service... trying to subscribe now";
 	    &ConsoleLog($msg);
 	    my $url = 'http://boxcar.io/devices/providers/'. $bc{'provider_key'} .'/notifications/subscribe';
@@ -1382,7 +1439,10 @@ sub NotifyBoxcar() {
 		my $msg = "$bc{'email'} is now subscribed to plexWatch service. Trying to send notification again.";
 		&ConsoleLog($msg);
 		$response = &NotifyBoxcarPOST(\%bc);
-		return 1 if $response->is_success;    
+		if ($response->is_success) {
+		    print uc($provider) . " Notification successfully posted.\n" if $debug;
+		    return 1;
+		}
 	    }
 	}
     }
@@ -1401,8 +1461,10 @@ sub NotifyGNTP() {
     # It will try to subscribe to the plexWatch service on boxcar if we get a 401 and resend the notification
     my $alert = shift;
     my $alert_options = shift;
-    
     my $provider = 'GNTP';
+
+    
+
     ## TODO -- make the 452 per multi provider
     if ($provider_452->{$provider}) {
 	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
@@ -1411,6 +1473,15 @@ sub NotifyGNTP() {
     
     my $success;
     foreach my $k (keys %{$notify->{$provider}}) {
+	
+	## the ProviderEnabled check before doesn't work for multi (i.e. GNTP for now) we will have to verify this provider is actually enabled in the foreach..
+	my $push_type = $alert_options->{'push_type'};
+	if (ref $notify->{$provider}->{$k} && $notify->{$provider}->{$k}->{'enabled'}  &&  $notify->{$provider}->{$k}->{$push_type}) {
+	    print "GNTP key:$k enabled for this $alert_options->{'push_type'}\n" if $debug;
+	} else {
+	    print "GNTP key:$k NOT enabled for this $alert_options->{'push_type'} - skipping\n" if $debug;
+	    next;
+	}
 	
 	my %gntp = %{$notify->{GNTP}->{$k}};    
 	$gntp{'message'} = $alert;
@@ -1473,7 +1544,7 @@ sub NotifyGNTP() {
 		    Sticky => $gntp{'sticky'},
 		    );
 		
-		if ($debug) { 	    print "GNTP - $alert - Notification successfully posted.\n";}
+		print uc($provider) . " Notification successfully posted.\n" if $debug;
 		#return 1;     ## success
 		$success++; ## increment success -- can't return as we might have multiple destinations
 	    }
@@ -1497,6 +1568,7 @@ sub NotifyBoxcarPOST() {
     my %bc = %{$_[0]};
     
     my $ua      = LWP::UserAgent->new();
+    $ua->timeout(20);
     my $url = 'http://boxcar.io/devices/providers/'. $bc{'provider_key'} .'/notifications';
     my $response = $ua->post( $url, [
 				  'secret'  => $bc{'provider_secret'},
@@ -1532,6 +1604,7 @@ sub NotifyGrowl() {
 	return 0;
     } else {
 	system( $growl{'script'}, "-n", $growl{'application'}, "--image", $growl{'icon'}, "-m", $alert, $extra_cmd); 
+	print uc($provider) . " Notification successfully posted.\n" if $debug;
 	return 1; ## need better error checking here -- no mac, so I can't test it.
     }
 }
@@ -1559,13 +1632,13 @@ sub getDuration() {
 }
 
 sub CheckLock {
-    open(my $script_fh, '<', $0)
+    open($script_fh, '<', $0)
 	or die("Unable to open script source: $!\n");
     my $max_wait = 60; ## wait 60 seconds before exiting..
     my $count = 0;
     while (!flock($script_fh, LOCK_EX|LOCK_NB)) {
 	#unless (flock($script_fh, LOCK_EX|LOCK_NB)) {
-	#print "$0 is already running. Exiting.\n";
+	print "$0 is already running. Exiting.\n" if $debug;
 	$count++;
 	sleep 1;
 	if ($count > $max_wait) { 
@@ -1584,6 +1657,7 @@ sub FriendlyName() {
 
 sub durationrr() {
     my $sec = shift;
+    return duration(0) if !$sec;
     if ($sec < 3600) { 
 	return duration($sec,1);
     }
@@ -1600,42 +1674,97 @@ sub info_from_xml() {
     
     my $vid = XMLin($hash,KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
     
+    ## paused or playing? stopped is forced and required from ntype
+    my $state = 'unknown';
+    if ($ntype =~ /watched|stop/) {
+	$state = 'stopped';
+    } else {
+	$state =  $vid->{Player}->{'state'} if $vid->{Player}->{state};
+    }
     
+    ## how many minutes in are we? TODO - cleanup when < 90 -- formatting is a bit odd with [0 seconds in]
+    my $viewOffset = 0;
+    if ($vid->{viewOffset}) {
+	## if viewOffset is less than 90 seconds.. lets consider this 0 -- quick hack to fix initial start
+	if ($vid->{viewOffset}/1000 < 90) {
+	    $viewOffset = &durationrr(0);
+	} else {
+	    $viewOffset =  &durationrr($vid->{viewOffset}/1000) if $vid->{viewOffset};
+	}
+    }
+    
+    ## Transcoded Info
+    my $isTranscoded = 0;
+    my $transInfo; ## container used for transcoded information - not in use yet
+    my $streamType = 'D';
+    if (ref $vid->{TranscodeSession}) {
+	$isTranscoded = 1;
+	$transInfo = $vid->{TranscodeSession};	
+	$streamType = 'T';
+    }
+
+    ## Time left Info
+    my $time_left = 'unknown';
+    if ($vid->{duration} && $vid->{viewOffset}) {
+	$time_left = &durationrr(($vid->{duration}/1000)-($vid->{viewOffset}/1000));
+    }
+
+    ## Start/Stop Time
     my $start_time = '';
     my $stop_time = '';
     my $time = $start_epoch;
     $start_time = localtime($start_epoch)  if $start_epoch;
     $stop_time = localtime($stop_epoch)  if $stop_epoch;
     
+    ## Duration Watched
+    my $duration_raw;
     if (!$duration) {
 	if ($time && $stop_epoch) {
 	    $duration = $stop_epoch-$time;
+	    $duration_raw = $duration;
 	    $duration = &durationrr($duration);
 	}    
     } else {
+	$duration_raw = $duration;
 	$duration = &durationrr($duration);
+	
     }
+    
+    ## Percent complete -- this is correct ongoing in verison 0.0.18
+    my $percent_complete;
+    if ( ($vid->{viewOffset} && $vid->{duration}) && $vid->{viewOffset} > 0 && $vid->{duration} > 0) {
+	$percent_complete = sprintf("%2d",($vid->{viewOffset}/$vid->{duration})*100);
+	if ($percent_complete >= 90) {	$percent_complete = 100;    } 
+    }
+    ## version prior to 0.0.18 -- we will have to use duration watched to figure out percent
+    ## not the best, but if percent complete is < 10 -- let's go with duration watched (including paused) vs duration of the video
+    if (!$percent_complete || $percent_complete < 10) {
+	#$percent_complete = 0;
+	if ( ($vid->{duration} && $vid->{duration} > 0) && ($duration_raw && $duration_raw > 0) )  {
+	    $percent_complete = sprintf("%2d",($duration_raw/($vid->{duration}/1000))*100);
+	    if ($percent_complete >= 90) {	$percent_complete = 100;    } 
+	}
+    }
+    $percent_complete = 0 if !$percent_complete;
+    
+    
     my ($rating,$year,$summary,$extra_title,$genre,$platform,$title,$episode,$season);    
     $rating = $year = $summary = $extra_title = $genre = $platform = $title = $episode = $season = '';
     
     $title = $vid->{title};
+    
+    ## Platform title (client device)
     ## prefer title over platform if exists ( seem to have the exact same info of platform with useful extras )
     if ($vid->{Player}->{title}) {	$platform =  $vid->{Player}->{title};    }
     elsif ($vid->{Player}->{platform}) {	$platform = $vid->{Player}->{platform};    }
     
-    
+    ## length of the video
     my $length;
-    ## not sure which one is more valid.. {'TranscodeSession'}->{duration} or ->{duration}
-    if (!$vid->{duration}) {
-	$length = sprintf("%02d",$vid->{'TranscodeSession'}->{duration}/1000) if $vid->{'TranscodeSession'}->{duration};
-    } else {
-	$length = sprintf("%02d",$vid->{duration}/1000) if $vid->{duration};
-    }
+    $length = sprintf("%02d",$vid->{duration}/1000) if $vid->{duration};
     $length = &durationrr($length);
     
     my $orig_user = (split('\@',$vid->{User}->{title}))[0];
     if (!$orig_user) {	$orig_user = 'Local';    }
-    
     
     $year = $vid->{year} if $vid->{year};
     $rating .= $vid->{contentRating} if ($vid->{contentRating});
@@ -1683,6 +1812,14 @@ sub info_from_xml() {
 	'length' => $length,
 	'raw_length' =>  $vid->{duration},
 	'ntype' => $ntype,
+	'progress' => $viewOffset,
+	'percent_complete' => $percent_complete,
+	'time_left' => $time_left,
+	'viewOffset' => $vid->{viewOffset},
+	'state' => $state,
+	'transcoded' => $isTranscoded,
+	'streamtype' => $streamType,
+	'transInfo' => $transInfo,
     };
     
     return $info;
@@ -1792,10 +1929,11 @@ sub ParseDataItem() {
 
 sub GetSectionsIDs() {
     my $ua      = LWP::UserAgent->new();
+    $ua->timeout(20);
     my $host = "http://$server:$port";
     my $sections = ();
     my $url = $host . '/library/sections';
-    my $response = $ua->get( $url );
+    my $response = $ua->get( &PMSurl($url) );
     if ( ! $response->is_success ) {
 	print "Failed to get Library Sections from $url\n";
 	exit(2);
@@ -1812,6 +1950,7 @@ sub GetSectionsIDs() {
 
 sub GetItemMetadata() {
     my $ua      = LWP::UserAgent->new();
+    $ua->timeout(20);
     my $host = "http://$server:$port";
     my $item = shift;
     my $full_uri = shift;
@@ -1819,9 +1958,8 @@ sub GetItemMetadata() {
     if ($full_uri) {
 	$url = $host . $item;
     }
-    
     my $sections = ();
-    my $response = $ua->get( $url );
+    my $response = $ua->get( &PMSurl($url) );
     if ( ! $response->is_success ) {
 	if ($options{'debug'}) {
 	    print "Failed to get Metadata from from $url\n";
@@ -1843,6 +1981,7 @@ sub GetRecentlyAdded() {
     my $hkey = shift;    ## array ref &GetRecentlyAdded([5,6,7]);
     
     my $ua      = LWP::UserAgent->new();
+    $ua->timeout(20);
     my $host = "http://$server:$port";
     my $info = ();
     my %result;
@@ -1851,10 +1990,9 @@ sub GetRecentlyAdded() {
     
     foreach my $section (@$section) {
 	my $url = $host . '/library/sections/'.$section.'/recentlyAdded';
-	
 	## limit the output to the last 25 added.
-	my $limit = '?query=c&X-Plex-Container-Start=0&X-Plex-Container-Size=25';
-	my $response = $ua->get( $url . $limit);
+	$url .= '?query=c&X-Plex-Container-Start=0&X-Plex-Container-Size=25';
+	my $response = $ua->get( &PMSurl($url) );
 	if ( ! $response->is_success ) {
 	    print "Failed to get Library Sections from $url\n";
 	    exit(2);
@@ -2016,6 +2154,179 @@ sub GetPushTitles() {
     return $push_type_display;
 }
 
+sub BackupSQlite() {
+    ## this will Auto Backup the sql lite db to $data_dir/db_backups/...
+    ## --backup will for a daily backup
+
+    # Override in config.pl with
+    
+    #$backup_opts = {
+    #	'daily' => {
+    #	    'enabled' => 0,
+    #	    'keep' => 2,
+    #	},
+    #	'monthly' => {
+    #	    'enabled' => 1,
+    #	    'keep' => 4,
+    #	},
+    #	'weekly' => {
+    #	    'enabled' => 1,
+    #	    'keep' => 4,
+    #	},
+    #   };
+    
+    my $path  = $data_dir . '/db_backups';
+    if (!-d $path) {
+	mkdir($path) or die "Unable to create $path\n";
+	chmod(0777, $path) or die "Couldn't chmod $path: $!";
+    }
+    
+    my $backups = {
+	'daily' => {
+	    'enabled' => 1,
+	    'file' => $path . '/plexWatch.daily.bak',
+	    'time' => 86400,
+	    'keep' => 2,
+	},
+	'monthly' => {
+	    'enabled' => 1,
+	    'file' => $path . '/plexWatch.monthly.bak',
+	    'time' => 86400*30,
+	    'keep' => 4,
+	},
+	'weekly' => {
+	    'enabled' => 1,
+	    'file' => $path . '/plexWatch.weekly.bak',
+	    'time' => 86400*7,
+	    'keep' => 4,
+	},
+    };
+
+    ## merge options if set in config -- override
+    ## also print settings if --debug called with --backup
+    foreach my $type (keys %{$backups}) {
+	foreach my $key (keys %{$backups->{$type}}) {
+	    $backups->{$type}->{$key} = $backup_opts->{$type}->{$key} if defined($backup_opts->{$type}->{$key});
+	}
+	
+	if ($debug && $options{'backup'}) {
+	    print "Backup Type: " .uc($type) . "\n";
+	    print "\tenabled: ". $backups->{$type}->{enabled} . "\n";
+	    print "\tkeep: ". $backups->{$type}->{keep} . "\n";
+	    print "\ttime: ". $backups->{$type}->{time} . ' ('. &durationrr($backups->{$type}->{time}) . ") \n";
+	    print "\tfile: ". $backups->{$type}->{file} . "\n\n";
+	}
+	
+    }    
+    
+    
+    foreach my $type (keys %{$backups}) {
+	if ($type =~ /daily/ && $options{'backup'}) {
+	    print "\n** Daily Backups are not enabled -- but you called --backup, forcing backup now..\n";
+	}
+	else {
+	    next if !$backups->{$type}->{'enabled'};
+	}
+	
+	
+	my $do_backup = 1;
+	my $file = $backups->{$type}->{'file'};
+	$file =~ s/\/\//\//g;
+	if (-f $file) {
+	    $do_backup =0;
+	    my $modtime = (stat($file))[9];
+	    my $diff = time()-$modtime;
+	    my $max_time = $backups->{$type}->{'time'};
+	    
+	    my $hum_diff = &durationrr($diff);
+	    my $hum_max = &durationrr($max_time);
+	    
+	    my $extra;
+	    if ($options{'backup'} && $type =~ /daily/i) {
+		$extra = "Forcing DAILY backups --backup called";
+		$do_backup=1;
+	    } elsif ($diff > $max_time) {
+		$do_backup=1;
+		$extra = "Do backup - older than allowed ($hum_diff > $hum_max)";
+	    } else {
+		$extra = "Backup is current ($hum_diff < $hum_max)" if $debug;
+	    }
+	    printf("\n\t%-10s %-15s %s [%s]\n", uc($type), &durationrr($diff), $file, $extra) if $debug;
+	    
+	} else {
+	    print '* ' . uc($type) ." backup not found -- trying now\n";
+	}
+	if ($do_backup) {
+	    my $keep =1;
+	    $keep = $backups->{$type}->{'keep'} if $backups->{$type}->{'keep'};
+	    
+	    if ($keep > 1) {
+		print "\t* Rotating files: keep $keep total\n" if $debug;
+		for (my $count = $keep-1; $count >= 0; $count--) {
+		    my $to = $file .'.'. ($count+1);
+		    my $from = $file .'.'. ($count);
+		    $from = $file if $count == 0;
+		    if (-f $from) { 
+			print "\trotating $from -> $to \n" if $debug;
+			rename $from, $to; 
+		    }
+		}
+		## Should we clean up older files if they change the keep count to something lower? I think not... (unlink no)
+	    } 
+	    print "\t* Backup file: $file ... " if $debug || $options{'backup'};
+	    $dbh->sqlite_backup_to_file($file);
+	    print "DONE\n\n" if $debug || $options{'backup'};
+	}
+	
+    }
+
+    ## exit if --backup was called..
+    exit if $options{'backup'};
+}
+
+sub myPlexToken() {
+    if (!$myPlex_user || !$myPlex_pass) {
+	print "* You MUST specify a myPlex_user and myPlex_pass in the config.pl\n";
+	print "\n \$myPlex_user = 'your username'\n";
+	print " \$myPlex_pass = 'your password'\n\n";
+	exit;
+    } 
+    my $ua = LWP::UserAgent->new;
+    $ua->timeout(20);
+    $ua->agent($appname);
+    $ua->env_proxy();
+    
+    $ua->default_header('X-Plex-Client-Identifier' => $appname);
+    $ua->default_header('Content-Length' => 0);
+    
+    my $url = 'https://my.plexapp.com/users/sign_in.xml';
+    
+    my $req = HTTP::Request->new(POST => $url);
+    $req->authorization_basic($myPlex_user, $myPlex_pass);
+    my $response = $ua->request($req);
+    
+    
+    #print $response->as_string;
+
+    if ($response->is_success) {
+	my $data = XMLin($response->decoded_content());
+	return $data->{'authenticationToken'} if $data->{'authenticationToken'};
+	return $data->{'authentication-token'} if $data->{'authentication-token'};
+    } else {
+	print $response->as_string;
+	die;
+    }
+}
+
+sub PMSurl() {
+    my $url = shift;
+    ## append Token if required
+    my $j = '?';
+    $j = '&' if $url =~ /\?.*\=/;
+    $url .= $j . 'X-Plex-Token=' . $PMS_token if $PMS_token;
+    return $url;
+}
+
 
 
 __DATA__
@@ -2024,7 +2335,7 @@ __END__
 
 =head1 NAME 
 
-plexWatch.pl - Notify and Log 'Now Playing' content from a Plex Media Server
+plexWatch.p - Notify and Log 'Now Playing' and 'Watched' content from a Plex Media Server + 'Recently Added'
 
 =head1 SYNOPSIS
 
@@ -2033,19 +2344,31 @@ plexWatch.pl [options]
 
   Options:
 
-   -notify=...                    Notify any content watched and or stopped [this is default with NO options given]
+   --notify                        Notify any content watched and or stopped [this is default with NO options given]
+        --user=...                      limit output to a specific user. Must be exact, case-insensitive
+        --exclude_user=...              exclude users - you may specify multiple on the same line. '--notify --exclude_user=user1 --exclude_user=user2'
 
-   -watched=...                   print watched content
-        -start=...                    limit watched status output to content started AFTER/ON said date/time
-        -stop=...                     limit watched status output to content started BEFORE/ON said date/time
-        -nogrouping                   will show same title multiple times if user has watched/resumed title on the same day
-        -user=...                     limit output to a specific user. Must be exact, case-insensitive
+   --recently_added=show,movie   notify when new movies or shows are added to the plex media server (required: config.pl: push_recentlyadded => 1) 
+           * you may specify only one or both on the same line separated by a comma. [--recently_added=show OR --recently_added=movie OR --recently_added=show,movie]
 
-   -watching=...                  print content being watched
+   --stats                         show total time watched / per day breakout included
+        --start=...                     limit watched status output to content started AFTER/ON said date/time
+        --stop=...                      limit watched status output to content started BEFORE/ON said date/time
+        --user=...                      limit output to a specific user. Must be exact, case-insensitive
+        --exclude_user=...              exclude users - you may specify multiple on the same line. '--notify --exclude_user=user1 --exclude_user=user2'
 
-   -stats                         show total time watched / per day breakout included
 
-   -recently_added=[show,movie]   notify when new movies or shows are added to the plex media server (required: config.pl: push_recentlyadded => 1) 
+   --watched                       print watched content
+        --start=...                     limit watched status output to content started AFTER/ON said date/time
+        --stop=...                      limit watched status output to content started BEFORE/ON said date/time
+        --nogrouping                    will show same title multiple times if user has watched/resumed title on the same day
+        --user=...                      limit output to a specific user. Must be exact, case-insensitive
+        --exclude_user=...              exclude users - you may specify multiple on the same line. '--notify --exclude_user=user1 --exclude_user=user2'
+
+   --watching                      print content being watched
+
+   --backup                       Force a daily backup of the database. 
+                                  * automatic backups are done daily,weekly,monthly - refer to backups section below
 
    #############################################################################################
     
@@ -2062,26 +2385,27 @@ plexWatch.pl [options]
    #############################################################################################
    * Debug Options
 
-   -test_notify=start        send a test notifcation for a start event. To test a stop event use -test_notify=stop 
-   -show_xml                 show xml result from api query
-   -debug                    hit and miss - not very useful
+   --test_notify=start        [start,stop,recent] - send a test notifcation for a start,stop or recently added event.
+   --show_xml                 show xml result from api query
+   --version                  what version is this?
+   --debug                    hit and miss - not very useful
 
 =head1 OPTIONS
 
 =over 15
 
-=item B<-notify>
+=item B<--notify>
 
 This will send you a notification through prowl, pushover, boxcar, growl and/or twitter. It will also log the event to a file and to the database.
 This is the default if no options are given.
 
-=item B<-watched>
+=item B<--watched>
 
 Print a list of watched content from all users.
 
-=item B<-start>
+=item B<--start>
 
-* only works with -watched
+* only works with --watched
 
 limit watched status output to content started AFTER said date/time
 
@@ -2094,9 +2418,9 @@ Valid options: dates, times and even fuzzy human times. Make sure you quote an v
    -start="last week"
    -start=... give it a try and see what you can use :)
 
-=item B<-stop>
+=item B<--stop>
 
-* only works with -watched
+* only works with --watched
 
 limit watched status output to content started BEFORE said date/time
 
@@ -2109,9 +2433,9 @@ Valid options: dates, times and even fuzzy human times. Make sure you quote an v
    -stop="last week"
    -stop=... give it a try and see what you can use :)
 
-=item B<-nogrouping>
+=item B<--nogrouping>
 
-* only works with -watched
+* only works with --watched
 
 will show same title multiple times if user has watched/resumed title on the same day
 
@@ -2128,32 +2452,60 @@ without --nogrouping [default]
  Sun Jun 30 15:46:02 2013: exampleUser watched: Star Trek [2009] [PG-13] [duration: 2 hours, 8 minutes, and 18 seconds]
 
 
-=item B<-user>
+=item B<---user>
 
-* works with -watched and -watching
+* works with --watched and --watching
 
 limit output to a specific user. Must be exact, case-insensitive
 
-=item B<-watching>
+=item B<--exclude_user>
+
+limit output to a specific user. Must be exact, case-insensitive
+
+=item B<--watching>
 
 Print a list of content currently being watched
 
-=item B<-stats>
+=item B<--stats>
 
 show total watched time and show total watched time per day
 
-=item B<-recently_added>
+=item B<--recently_added>
 
 notify when new movies or shows are added to the plex media server (required: config.pl: push_recentlyadded => 1) 
 
  --recently_added=movie :: for movies
  --recently_added=show  :: for tv show/episodes
 
-=item B<-show_xml>
+=item B<--show_xml>
 
 Print the XML result from query to the PMS server in regards to what is being watched. Could be useful for troubleshooting..
 
-=item B<-debug>
+=item B<--backup>
+
+By default this script will automatically backup the SQlite db to: $data_dir/db_backups/ ( normally: /opt/plexWatch/db_backups/ )
+
+* you can force a Daily backup with --backup
+
+It will keep 2 x Daily , 4 x Weekly  and 4 x Monthly backups. You can modify the backup policy by adding the config lines below to your existin config.pl
+
+$backup_opts = {
+        'daily' => {
+            'enabled' => 1,
+            'keep' => 2,
+        },
+        'monthly' => {
+            'enabled' => 1,
+            'keep' => 4,
+        },
+        'weekly' => {
+            'enabled' => 1,
+            'keep' => 4,
+        },
+    };
+
+
+=item B<--debug>
 
 This can be used. I have not fully set everything for debugging.. so it's not very useful
 

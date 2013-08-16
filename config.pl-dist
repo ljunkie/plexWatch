@@ -1,4 +1,8 @@
 $data_dir = '/opt/plexWatch/'; ## to store the DB, logfile - can be the same as this script
+
+## myplex user/pass ONLY required if you have set the PMS to 'Require authentication on local networks' and $server is not set to localhost
+$myPlex_user = '';
+$myPlex_pass = '';
 	
 $server = 'localhost'; ## IP of PMS - or localhost
 $port = 32400;         ## port of PMS
@@ -20,10 +24,10 @@ $user_display = {'REAL_USER1' => 'Frank',
 #       stop = notification for stop of video
 #       watched = cli output for watched content
 #       watching = cli output content being watched
-$alert_format = {'start'    =>  '{user} watching {title} [{year}] [{rating}] on {platform}',
-		 'stop'     =>  '{user} watched {title} [{year}] [{rating}] on {platform} for {duration}',
-		 'watched'  =>  '{user} watched {title} [{year}] [{rating}] on {platform} for {duration}',
-		 'watching' =>  '{user} watching {title} [{year}] [{rating}] [{length}] on {platform} [{time_left} left]'
+$alert_format = {'start'    =>  '{user} watching {title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in]',
+		 'stop'     =>  '{user} watched {title} [{streamtype}] [{year}] [{rating}] on {platform} for {duration} [{percent_complete}%]',
+		 'watched'  =>  '{user} watched {title} [{streamtype}] [{year}] [{length}] [{rating}] on {platform} for {duration} [{percent_complete}%]',
+		 'watching' =>  '{user} watching {title} [{streamtype}] [{year}] [{rating}] [{length}] on {platform} [{time_left} left]'
 };
 
 $notify = {

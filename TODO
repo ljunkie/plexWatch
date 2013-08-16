@@ -1,13 +1,12 @@
+## on start, set viewOffset -- do not update this field on any run after
 
 
 ###########################################################################################
 ###  TODO
 
-* Paused status:  ?? to add ( every run update XML ) -- some DB changes needed too
 * re-work plexWatch.log: only include --recently_added, --watched, --watching
     --  create plexWatch.debug to include ALL actions - failures and success. Easier to ... debug
 * ADD OSX instructions: http://forums.plexapp.com/index.php/topic/72552-plexwatch-plex-notify-script-send-push-alerts-on-new-sessions-and-stopped/?p=436554
-* not happy with locking
 ###
 ###########################################################################################
 
@@ -26,14 +25,8 @@
 
 * code cleanup - always available
 
-* --watching -- show start time if not at beginning 'user watching movie  (36 minutes / 120 minutes)'
-
 ###
 ###########################################################################################
-
-
-
-
 
 
 
