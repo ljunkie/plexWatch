@@ -73,8 +73,8 @@ http://forums.plexapp.com/index.php/topic/72552-plexwatch-plex-notify-script-sen
     
     ```
     sudo mkdir -p /opt/plexWatch/
-    curl https://raw.github.com/ljunkie/plexWatch/master/plexWatch.pl -o /opt/plexWatch/plexWatch.pl
-    curl https://raw.github.com/ljunkie/plexWatch/master/config.pl-dist -o /opt/plexWatch/config.pl-dist
+    sudo curl https://raw.github.com/ljunkie/plexWatch/master/plexWatch.pl -o /opt/plexWatch/plexWatch.pl
+    sudo curl https://raw.github.com/ljunkie/plexWatch/master/config.pl-dist -o /opt/plexWatch/config.pl-dist
     ```
     
 2. ```sudo chmod 777 /opt/plexWatch && sudo chmod 755 /opt/plexWatch/plexWatch.pl```
