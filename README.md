@@ -644,6 +644,51 @@ __Answer__
 
 
 
+* __How do I install on OSX__
+----
+
+__Answer__
+ 
+ : User contribution - Thanks rcork!
+ 
+ Here are the steps to get it running on OSX. This was done with a clean install of OSX. 
+ 
+1. Download plexWatch from github and unzip
+2. Copy config.pl-dist to config.pl and modify for your notification options
+3. Install XCode from Mac App Strore
+4. Install XCode command line tools by launching XCode, going to preferences, downloads, Install Command Line Tools
+5. Configure CPAN
+    1. Launch Terminal.app
+    2. Type "cpan" without the quotes and press enter
+    3. If this is first time launching cpan, it will ask if you want to automatically configure. Hit Enter
+        1. It will ask if you want to automatically pick download mirrors. Type No and hit enter
+        2. Pick mirrors for your region. I've had the best luck with .edu mirrors
+    4. Type "install cpan" without the quotes and hit enter. This will update cpan to the latest version
+    5. Type "reload cpan" without the quotes and hit enter.
+    6. Type "exit" without the quotes and hit enter
+    7. Install required perl modules from Terminal
+
+    ```
+    sudo cpan install Time::Duration
+    sudo cpan install Time::ParseDate
+    sudo cpan install Net::Twitter::Lite::WithAPIv1_1
+    sudo cpan install Net::OAuth
+    sudo cpan install Mozilla::CA
+    ```
+7. Now create data directory and set permission. Replace [user] with your username
+
+     ```
+     sudo mkdir /opt
+     sudo mkdir /opt/plexWatch
+     sudo chown [user]:staff /opt/plexWatch
+     ```
+8. Run plexWatch from Terminal. You shouldn't receive any errors or warnings
+    ```
+    ./plexWatch.pl
+    ```
+ 
+
+
 
 
 
