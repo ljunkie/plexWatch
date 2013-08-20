@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-my $version = '0.0.18';
+my $version = '0.1.0-dev';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
@@ -24,6 +24,8 @@ use Time::ParseDate;
 use POSIX qw(strftime);
 use File::Basename;
 use warnings;
+use open qw/:std :utf8/; ## default encoding of these filehandles all at once (binmode could also be used) 
+                         ## TODO: might want to allow non ascii -- would require stripping " s/[^[:ascii:]]+//g; " from the code below..
 
 ## load config file
 my $dirname = dirname(__FILE__);
@@ -824,11 +826,14 @@ sub ProcessRecentlyAdded() {
 }
 
 sub GetSessions() {
-    my $url = "http://$server:$port/status/sessions";
-
+    my $proto = 'http';
+    $proto = 'https' if $port == 32443;
+    my $url = "$proto://$server:$port/status/sessions";
+    
     # Generate our HTTP request.
     my ($userAgent, $request, $response);
-    $userAgent = LWP::UserAgent->new;
+    $userAgent = LWP::UserAgent->new();
+    
     $userAgent->timeout(20);
     $userAgent->agent($appname);
     $userAgent->env_proxy();
@@ -859,11 +864,13 @@ sub GetSessions() {
 }
 
 sub PMSToken() {
-    my $url = "http://$server:$port";
+    my $proto = 'http';
+    $proto = 'https' if $port == 32443;
+    my $url = "$proto://$server:$port";
     
     # Generate our HTTP request.
     my ($userAgent, $request, $response);
-    $userAgent = LWP::UserAgent->new;
+    $userAgent = LWP::UserAgent->new();
     $userAgent->timeout(10);
     $userAgent->agent($appname);
     $userAgent->env_proxy();
@@ -1320,7 +1327,7 @@ sub NotifyProwl() {
     
     # Generate our HTTP request.
     my ($userAgent, $request, $response, $requestURL);
-    $userAgent = LWP::UserAgent->new;
+    $userAgent = LWP::UserAgent->new();
     $userAgent->timeout(20);
     $userAgent->agent($appname);
     $userAgent->env_proxy();
@@ -1928,9 +1935,13 @@ sub ParseDataItem() {
 }
 
 sub GetSectionsIDs() {
-    my $ua      = LWP::UserAgent->new();
+    my $proto = 'http';
+    $proto = 'https' if $port == 32443;
+    my $host = "$proto://$server:$port";
+    
+    my $ua = LWP::UserAgent->new();
     $ua->timeout(20);
-    my $host = "http://$server:$port";
+    
     my $sections = ();
     my $url = $host . '/library/sections';
     my $response = $ua->get( &PMSurl($url) );
@@ -1949,9 +1960,13 @@ sub GetSectionsIDs() {
 }
 
 sub GetItemMetadata() {
-    my $ua      = LWP::UserAgent->new();
+    my $proto = 'http';
+    $proto = 'https' if $port == 32443;
+    my $host = "$proto://$server:$port";
+    
+    my $ua = LWP::UserAgent->new();
     $ua->timeout(20);
-    my $host = "http://$server:$port";
+
     my $item = shift;
     my $full_uri = shift;
     my $url = $host . '/library/metadata/' . $item;
@@ -1980,9 +1995,13 @@ sub GetRecentlyAdded() {
     my $section = shift; ## array ref &GetRecentlyAdded([5,6,7]);
     my $hkey = shift;    ## array ref &GetRecentlyAdded([5,6,7]);
     
-    my $ua      = LWP::UserAgent->new();
+    my $proto = 'http';
+    $proto = 'https' if $port == 32443;
+    my $host = "$proto://$server:$port";
+
+    my $ua = LWP::UserAgent->new();
     $ua->timeout(20);
-    my $host = "http://$server:$port";
+
     my $info = ();
     my %result;
     # /library/recentlyAdded <-- all sections
@@ -2291,7 +2310,7 @@ sub myPlexToken() {
 	print " \$myPlex_pass = 'your password'\n\n";
 	exit;
     } 
-    my $ua = LWP::UserAgent->new;
+    my $ua = LWP::UserAgent->new();
     $ua->timeout(20);
     $ua->agent($appname);
     $ua->env_proxy();
