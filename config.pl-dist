@@ -29,10 +29,10 @@ $user_display = {'REAL_USER1' => 'Frank',
 #       stop = notification for stop of video
 #       watched = cli output for watched content
 #       watching = cli output content being watched
-$alert_format = {'start'    =>  '{user} watching {title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in]',
-		 'stop'     =>  '{user} watched {title} [{streamtype}] [{year}] [{rating}] on {platform} for {duration} [{percent_complete}%]',
-		 'watched'  =>  '{user} watched {title} [{streamtype}] [{year}] [{length}] [{rating}] on {platform} for {duration} [{percent_complete}%]',
-		 'watching' =>  '{user} watching {title} [{streamtype}] [{year}] [{rating}] [{length}] on {platform} [{time_left} left]'
+$alert_format = {'start'    =>  '{user} watching {title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in] {ip_address}',
+		 'stop'     =>  '{user} watched {title} [{streamtype}] [{year}] [{rating}] on {platform} for {duration} [{percent_complete}%] {ip_address}',
+		 'watched'  =>  '{user} watched {title} [{streamtype}] [{year}] [{length}] [{rating}] on {platform} for {duration} [{percent_complete}%] {ip_address}',
+		 'watching' =>  '{user} watching {title} [{streamtype}] [{year}] [{rating}] [{length}] on {platform} [{time_left} left] {ip_address}'
 };
 
 $notify = {
