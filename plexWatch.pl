@@ -483,6 +483,8 @@ if ($options{'watched'} || $options{'stats'}) {
 		} else {
 		    ## if same user/same movie/same day -- append duration -- must of been resumed
 		    $seen{$skey}->{'duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
+		    ## update the group with the most recent XML
+		    $seen{$skey}->{'xml'} = $is_watched->{$k}->{xml};
 		    if ($is_watched->{$k}->{stopped} > $seen{$skey}->{'stopped'}) {
 			$seen{$skey}->{'stopped'} = $is_watched->{$k}->{stopped}; ## include max stopped in case someone wants to display it
 		    }

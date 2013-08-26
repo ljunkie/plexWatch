@@ -5,7 +5,7 @@
 #      -- Requires parsing of PMS log file. $server_log in config.pl
 # * Addes SSL support (port 32443)
 # * --watching now calls --notify before it shows now playing content. Fixes issue when content hasn't been logged as started/stopped
-
+# * --watched: fixed percent_complete -- using the last viewOffset instead of the first.
 
 # 0.0.18-dev
 #
