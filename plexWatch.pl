@@ -80,6 +80,7 @@ my $format_options = {
     'transcoded' => '1 or 0 - if transcoded',
     'state' => 'playing, paused or buffering [ or stopped ] (useful on --watching)',
     'percent_complete' => 'Percent of video watched -- user could have only watched 5 minutes, but skipped to end = 100%',
+    'ip_address' => 'Client IP Address',
 };
 
 if (!-d $data_dir) {
@@ -532,9 +533,8 @@ if (%options && !$options{'notify'} && !$options{'stats'} && !$options{'watched'
 }
 
 ## set notify to 1 if we call --watching ( we need to either log start/update/stop current progress)
-if ($options{'watching'}) { 
-    $options{'notify'} = 1;
-}
+$options{'notify'} = 1 if $options{'watching'};
+			   
 
 #################################################################
 ## Notify -notify || no options = notify on watch/stopped streams
@@ -829,8 +829,10 @@ sub ProcessStart() {
 
 sub LocateIP() {
     ## locate IP by machineIdentifier in log file -- hoping this will be part of the API at some point
+
     my $find = shift;
     if (-f $server_log && $find) {
+	if ($debug) {	    print "Locating IP for $find from $server_log\n";	}
 	print $server_log . "\n";
 	open FILE, "< $server_log";
 	my @line = <FILE>;
@@ -1895,14 +1897,14 @@ sub RunTestNotify() {
 	&ProcessRAalerts($alerts,1);
     } else {
 	$format_options->{'ntype'} = $ntype;
-	my $info = &GetTestNotify($ntype);
+	my $test_info = &GetTestNotify($ntype);
 	## notify if we have a valid DB results
-	if ($info) {
-	    foreach my $k (keys %{$info}) {
-		my $start_epoch = $info->{$k}->{time} if $info->{$k}->{time}; ## DB only
-		my $stop_epoch = $info->{$k}->{stopped} if $info->{$k}->{stopped}; ## DB only
-		my $info = &info_from_xml($info->{$k}->{'xml'},$ntype,$start_epoch,$stop_epoch);
-		$info->{'ip_address'} = $info->{$k}->{ip_address};
+	if ($test_info) {
+	    foreach my $k (keys %{$test_info}) {
+		my $start_epoch = $test_info->{$k}->{time} if $test_info->{$k}->{time}; ## DB only
+		my $stop_epoch = $test_info->{$k}->{stopped} if $test_info->{$k}->{stopped}; ## DB only
+		my $info = &info_from_xml($test_info->{$k}->{'xml'},$ntype,$start_epoch,$stop_epoch);
+		$info->{'ip_address'} = $test_info->{$k}->{ip_address};
 		&Notify($info);
 		## nothing to set as notified - this is a test
 	    }
