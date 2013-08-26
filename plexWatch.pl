@@ -615,6 +615,7 @@ if (!%options || $options{'notify'}) {
 	## end unused data to clean up
 	
 	## ignore content that has already been notified
+	## However, UPDATE the XML in the DB
 	if ($started->{$db_key}) {
 	    &ProcessUpdate($vid->{$k},$db_key); ## update XML
 	    if ($debug) { 
@@ -624,9 +625,9 @@ if (!%options || $options{'notify'}) {
 	} 
 	## unnotified - insert into DB and notify
 	else {
-	    ## robrobrobr
-	    my $ip = &LocateIP($info->{'machineIdentifier'}) if $info->{'machineIdentifier'};
-	    $info->{'ip_address'} = $ip;
+	    ## quick and dirty hack for client IP address
+	    $info->{'ip_address'} = &LocateIP($info->{'machineIdentifier'}) if $info->{'machineIdentifier'};
+	    ## end the dirty feeling
 	    
 	    my $insert_id = &ProcessStart($vid->{$k},$db_key,$info->{'title'},$info->{'platform'},$info->{'orig_user'},$info->{'orig_title'},$info->{'orig_title_ep'},$info->{'genre'},$info->{'episode'},$info->{'season'},$info->{'summary'},$info->{'rating'},$info->{'year'},$info->{'ip_address'});
 	    &Notify($info);
@@ -678,7 +679,6 @@ if ($options{'watching'}) {
 	    ## switched to LIVE info
 	    #my $info = &info_from_xml($in_progress->{$k}->{'xml'},'watching',$in_progress->{$k}->{time});
 	    my $info = &info_from_xml(XMLout($live->{$live_key}),'watching',$in_progress->{$k}->{time});
-
 	    $info->{'ip_address'} = $in_progress->{$k}->{ip_address};
 
 	    &ProcessUpdate($live->{$live_key},$k); ## update XML	    
@@ -1902,6 +1902,7 @@ sub RunTestNotify() {
 		my $start_epoch = $info->{$k}->{time} if $info->{$k}->{time}; ## DB only
 		my $stop_epoch = $info->{$k}->{stopped} if $info->{$k}->{stopped}; ## DB only
 		my $info = &info_from_xml($info->{$k}->{'xml'},$ntype,$start_epoch,$stop_epoch);
+		$info->{'ip_address'} = $info->{$k}->{ip_address};
 		&Notify($info);
 		## nothing to set as notified - this is a test
 	    }
