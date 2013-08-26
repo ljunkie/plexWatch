@@ -1,11 +1,11 @@
 #!/usr/bin/perl
 
-my $version = '0.1.0-dev';
+my $version = '0.0.19-dev';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-08-16 13:04 PST
+# Modified: 2013-08-26 11:47 PST
 #
 #  Version: $version
 # https://github.com/ljunkie/plexWatch
@@ -34,12 +34,16 @@ if (!-e $dirname .'/config.pl') {
     exit;
 }
 do $dirname.'/config.pl';
-use vars qw/$data_dir $server $port $appname $user_display $alert_format $notify $push_titles $backup_opts $myPlex_user $myPlex_pass/; 
+use vars qw/$data_dir $server $port $appname $user_display $alert_format $notify $push_titles $backup_opts $myPlex_user $myPlex_pass $server_log/; 
 if (!$data_dir || !$server || !$port || !$appname || !$alert_format || !$notify) {
     print "config file missing data\n";
     exit;
 }
 ## end
+
+if ($server_log && !-f $server_log) {
+    print "warning: \$server_log is specified in config.pl and $server_log does not exist\n";
+}
 
 
 ## ONLY Load modules if used
@@ -462,10 +466,12 @@ if ($options{'watched'} || $options{'stats'}) {
 		}
 		my $time = localtime ($is_watched->{$k}->{time} );
 		my $info = &info_from_xml($is_watched->{$k}->{'xml'},$ntype,$is_watched->{$k}->{'time'},$is_watched->{$k}->{'stopped'});
+		$info->{'ip_address'} = $is_watched->{$k}->{ip_address};
 		my $alert = &Notify($info,1); ## only return formated alert
 		printf(" %s: %s\n",$time, $alert);
 	    } else {
 		if (!$seen{$skey}) {
+		    $seen{$skey}->{'ip_address'} = $is_watched->{$k}->{ip_address};
 		    $seen{$skey}->{'time'} = $is_watched->{$k}->{time};
 		    $seen{$skey}->{'xml'} = $is_watched->{$k}->{xml};
 		    $seen{$skey}->{'user'} = $user;
@@ -497,6 +503,7 @@ if ($options{'watched'} || $options{'stats'}) {
 	    }
 	    my $time = localtime ($seen{$k}->{time} );
 	    my $info = &info_from_xml($seen{$k}->{xml},$ntype,$seen{$k}->{'time'},$seen{$k}->{'stopped'},$seen{$k}->{'duration'});
+	    $info->{'ip_address'} = $seen{$k}->{ip_address};
 	    my $alert = &Notify($info,1); ## only return formated alert
 	    printf(" %s: %s\n",$time, $alert);
 	}
@@ -560,7 +567,9 @@ if ($options{'watching'}) {
 	    ## switched to LIVE info
 	    #my $info = &info_from_xml($in_progress->{$k}->{'xml'},'watching',$in_progress->{$k}->{time});
 	    my $info = &info_from_xml(XMLout($live->{$live_key}),'watching',$in_progress->{$k}->{time});
-	    
+
+	    $info->{'ip_address'} = $in_progress->{$k}->{ip_address};
+
 	    &ProcessUpdate($live->{$live_key},$k); ## update XML	    
 
 	    ## overwrite progress and time_left from live -- should be pulling live xml above at some point
@@ -667,7 +676,7 @@ if (!%options || $options{'notify'}) {
 	} 
 	## unnotified - insert into DB and notify
 	else {
-	    my $insert_id = &ProcessStart($vid->{$k},$db_key,$info->{'title'},$info->{'platform'},$info->{'orig_user'},$info->{'orig_title'},$info->{'orig_title_ep'},$info->{'genre'},$info->{'episode'},$info->{'season'},$info->{'summary'},$info->{'rating'},$info->{'year'});
+	    my $insert_id = &ProcessStart($vid->{$k},$db_key,$info->{'title'},$info->{'platform'},$info->{'orig_user'},$info->{'orig_title'},$info->{'orig_title_ep'},$info->{'genre'},$info->{'episode'},$info->{'season'},$info->{'summary'},$info->{'rating'},$info->{'year'},$info->{'machineIdentifier'});
 	    &Notify($info);
 	    &SetNotified($insert_id);
 	}
@@ -678,6 +687,7 @@ if (!%options || $options{'notify'}) {
 
 sub formatAlert() {
     my $info = shift;
+    $info->{'ip_address'} = '' if !$info->{'ip_address'};
     my %alert = %{$info};
     my $type = $alert{'ntype'};
     my $format = $alert_format->{'start'};
@@ -702,8 +712,10 @@ sub formatAlert() {
     ## replacemnt templates with variables
     my $regex = join "|", keys %alert;
     $regex = qr/$regex/;
+
     $s =~ s/{($regex)}/$alert{$1}/g;
     $orig =~ s/{($regex)}/$alert{$1}/g;
+
     ## done
     
     $s =~ s/\[\]//g; ## trim any empty variable encapsulated in []
@@ -744,6 +756,8 @@ sub ConsoleLog() {
 
 sub Notify() {
     my $info = shift;
+
+
     my $ret_alert = shift;
     my $type = $info->{'ntype'};
     my ($alert,$orig) = &formatAlert($info);
@@ -794,13 +808,30 @@ sub ProviderEnabled() {
 }
 
 sub ProcessStart() {
-    my ($xmlref,$db_key,$title,$platform,$user,$orig_title,$orig_title_ep,$genre,$episode,$season,$summary,$rating,$year) = @_;
+    my ($xmlref,$db_key,$title,$platform,$user,$orig_title,$orig_title_ep,$genre,$episode,$season,$summary,$rating,$year,$ma_id) = @_;
     my $xml =  XMLout($xmlref);
-    
-    my $sth = $dbh->prepare("insert into processed (session_id,title,platform,user,orig_title,orig_title_ep,genre,episode,season,summary,rating,year,xml) values (?,?,?,?,?,?,?,?,?,?,?,?,?)");
-    $sth->execute($db_key,$title,$platform,$user,$orig_title,$orig_title_ep,$genre,$episode,$season,$summary,$rating,$year,$xml) or die("Unable to execute query: $dbh->errstr\n");
-    
+    my $ip = &LocateIP($ma_id) if $ma_id; ## new -- alpha
+    my $sth = $dbh->prepare("insert into processed (session_id,ip_address,title,platform,user,orig_title,orig_title_ep,genre,episode,season,summary,rating,year,xml) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+    $sth->execute($db_key,$ip,$title,$platform,$user,$orig_title,$orig_title_ep,$genre,$episode,$season,$summary,$rating,$year,$xml) or die("Unable to execute query: $dbh->errstr\n");
     return  $dbh->sqlite_last_insert_rowid();
+}
+
+sub LocateIP() {
+    ## locate IP by machineIdentifier in log file -- hoping this will be part of the API at some point
+    my $find = shift;
+    if (-f $server_log && $find) {
+	print $server_log . "\n";
+	open FILE, "< $server_log";
+	my @line = <FILE>;
+	my $ip;
+	for (@line) {
+	    if (!$ip) {
+		if ($_ =~ /GET.*X-Plex-Client-Identifier=$find.*\s+\[(.*)\:\d+\]/) { $ip = $1; }
+		elsif ($_ =~ /GET.*session=$find.*\s+\[(.*)\:\d+\]/) { $ip = $1; }
+	    }
+	}
+	return $ip if $ip;
+    }
 }
 
 sub ProcessUpdate() {
@@ -1036,6 +1067,7 @@ sub initDB() {
 	{ 'name' => 'notified', 'definition' => 'INTEGER', },
 	{ 'name' => 'stopped', 'definition' => 'timestamp',},
 	{ 'name' => 'xml', 'definition' => 'text',},
+	{ 'name' => 'ip_address', 'definition' => 'text',},
 	);
     
     my @dbidx = (
@@ -1060,7 +1092,7 @@ sub initDB() {
     for my $col ( @dbcol ) {
 	if ($dbcol_exists{$col->{'name'}} && $dbcol_exists{$col->{'name'}} ne $col->{'definition'}) {	    $alter_def =1;	}
     }
-    
+
     if ($alter_def) {
 	print "New Table definitions.. upgrading DB\n";
 	$dbh->begin_work;
@@ -1689,6 +1721,9 @@ sub info_from_xml() {
 	$state =  $vid->{Player}->{'state'} if $vid->{Player}->{state};
     }
     
+    my $ma_id = '';
+    $ma_id = $vid->{Player}->{'machineIdentifier'} if $vid->{Player}->{'machineIdentifier'};
+    
     ## how many minutes in are we? TODO - cleanup when < 90 -- formatting is a bit odd with [0 seconds in]
     my $viewOffset = 0;
     if ($vid->{viewOffset}) {
@@ -1826,7 +1861,8 @@ sub info_from_xml() {
 	'state' => $state,
 	'transcoded' => $isTranscoded,
 	'streamtype' => $streamType,
-	'transInfo' => $transInfo,
+	'transInfo' => $transInfo,	
+	'machineIdentifier' => $ma_id,
     };
     
     return $info;
@@ -1873,7 +1909,7 @@ sub RunTestNotify() {
 sub twittime() {
     ## twitters way of showing the date/time
     my $epoch = shift;
-    my $date = (strftime "%I:%M%P %d %b %y", localtime($epoch));
+    my $date = (strftime "%I:%M%p %d %b %y", localtime($epoch));
     $date =~ s/^0//;
     return $date;
 }
@@ -1881,7 +1917,7 @@ sub twittime() {
 sub rrtime() {
     ## my way of showing the date/time
     my $epoch = shift;
-    my $date = (strftime "%I:%M%P - %a %b ", localtime($epoch)) . suffer(strftime "%e", localtime($epoch)) . (strftime " %Y", localtime($epoch));
+    my $date = (strftime "%I:%M%p - %a %b ", localtime($epoch)) . suffer(strftime "%e", localtime($epoch)) . (strftime " %Y", localtime($epoch));
     $date =~ s/^0//;
     return $date;
 }

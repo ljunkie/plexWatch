@@ -1,3 +1,10 @@
+# 0.0.19-dev
+# * fix AM/PM for OSX (non GNU) 
+# * added options for logging IP_Address of client
+#      -- format_options: {ip_address}
+#      -- Requires parsing of PMS log file. $server_log in config.pl
+# * Addes SSL support (port 32443)
+
 # 0.0.18-dev
 #
 # * MyPlex Login Token: The script can now be ran from any computer.
