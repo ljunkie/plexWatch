@@ -1868,11 +1868,11 @@ sub info_from_xml() {
 	$orig_title_ep = $title;
 	
 	$title = $vid->{grandparentTitle} . ' - ' . $title;
-	$episode = $vid->{index};
-	$season = $vid->{parentIndex};
-	if ($episode < 10) { $episode = 0 . $episode};
-	if ($season < 10) { $season = 0 . $season};
-	$title .= ' - s'.$season.'e'.$episode;
+	$episode = $vid->{index} if $vid->{index};
+	$season = $vid->{parentIndex} if $vid->{parentIndex};
+	if ($episode =~ /\d+/ && $episode < 10) { $episode = 0 . $episode};
+	if ($season =~ /\d+/ && $season < 10) { $season = 0 . $season};
+	$title .= ' - s'.$season.'e'.$episode if ($season =~ /\d+/ && $episode =~ /\d+/);
     }
     
     ## formatting now allows user to include year, rating, etc...
