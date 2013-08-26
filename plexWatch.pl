@@ -458,6 +458,7 @@ if ($options{'watched'} || $options{'stats'}) {
 	    ## end
 	    
 	    next if !$options{'watched'};
+	    next if $is_watched->{$k}->{xml} =~ /<opt><\/opt>/i; ## bug -- fixed in 0.0.19
 	    if ($options{'nogrouping'}) {
 		if (!$seen_user{$user}) {
 		    $seen_user{$user} = 1;
@@ -876,7 +877,14 @@ sub LocateIP() {
 
 sub ProcessUpdate() {
     my ($xmlref,$db_key) = @_;
+    my ($sess,$key) = split("_",$db_key);
     my $xml =  XMLout($xmlref);
+
+    ## multiple checks to verify the xml we update is valid
+    return if !$xmlref->{'title'}; ## xml must have title
+    return if !$xmlref->{'key'}; ## xml ref must have key
+    return if $xml !~ /$key/i; ## xml must contain key
+    
     if ($db_key) {
 	my $sth = $dbh->prepare("update processed set xml = ? where session_id = ?");
 	$sth->execute($xml,$db_key) or die("Unable to execute query: $dbh->errstr\n");
@@ -1752,7 +1760,7 @@ sub info_from_xml() {
     ## start time is in xml
     
     my $vid = XMLin($hash,KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
-    
+
     ## paused or playing? stopped is forced and required from ntype
     my $state = 'unknown';
     if ($ntype =~ /watched|stop/) {
@@ -1845,8 +1853,8 @@ sub info_from_xml() {
     $length = sprintf("%02d",$vid->{duration}/1000) if $vid->{duration};
     $length = &durationrr($length);
     
-    my $orig_user = (split('\@',$vid->{User}->{title}))[0];
-    if (!$orig_user) {	$orig_user = 'Local';    }
+    my $orig_user = (split('\@',$vid->{User}->{title}))[0]     if $vid->{User}->{title};
+    if (!$orig_user) {	$orig_user = 'Local';        }
     
     $year = $vid->{year} if $vid->{year};
     $rating .= $vid->{contentRating} if ($vid->{contentRating});
