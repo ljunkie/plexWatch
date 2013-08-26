@@ -525,6 +525,117 @@ if ($options{'watched'} || $options{'stats'}) {
 }
 
 
+## no options -- we can continue.. otherwise --stats, --watched, --watching or --notify MUST be specified
+if (%options && !$options{'notify'} && !$options{'stats'} && !$options{'watched'} && !$options{'watching'} && !$options{'recently_added'} ) {
+    print "\n* Skipping any Notifications -- command line options set, use '--notify' or supply no options to enable notifications\n";
+    exit;
+}
+
+## set notify to 1 if we call --watching ( we need to either log start/update/stop current progress)
+if ($options{'watching'}) { 
+    $options{'notify'} = 1;
+}
+
+#################################################################
+## Notify -notify || no options = notify on watch/stopped streams
+##--notify
+if (!%options || $options{'notify'}) {
+    my $vid = &GetSessions();    ## query API for current streams
+    my $started= &GetStarted(); ## query streams already started/not stopped
+    my $playing = ();            ## container of now playing id's - used for stopped status/notification
+    
+    ###########################################################################
+    ## nothing being watched.. verify all notification went out
+    ## this shouldn't happen ( only happened during development when I was testing -- but just in case )
+    #### to fix
+    if (!ref($vid)) {
+	my $un = &GetUnNotified();
+	foreach my $k (keys %{$un}) {
+	    if (!$playing->{$k}) {
+		my $ntype = 'start';
+		my $start_epoch = $un->{$k}->{time} if $un->{$k}->{time};
+		my $stop_epoch = '';
+		my $info = &info_from_xml($un->{$k}->{'xml'},'start',$start_epoch,$stop_epoch);
+		$info->{'ip_address'} = $un->{$k}->{ip_address};
+		&Notify($info);
+		&SetNotified($un->{$k}->{id});
+		## another notification will go out about being stopped..
+		## next run it will be marked as watched and notified
+	    }
+	}
+    }
+    ## end unnotified
+    
+    ## Quick hack to notify stopped content before start -- get a list of playing content
+    foreach my $k (keys %{$vid}) {
+	my $user = (split('\@',$vid->{$k}->{User}->{title}))[0];
+	if (!$user) {	$user = 'Local';    }
+	my $db_key = $k . '_' . $vid->{$k}->{key} . '_' . $user;
+	$playing->{$db_key} = 1;
+    }
+    
+    ## Notify on any Stop
+    ## Iterate through all non-stopped content and notify if not playing
+    if (ref($started)) {
+	foreach my $k (keys %{$started}) {
+	    if (!$playing->{$k}) {
+		my $start_epoch = $started->{$k}->{time} if $started->{$k}->{time};
+		my $stop_epoch = time();
+		my $info = &info_from_xml($started->{$k}->{'xml'},'stop',$start_epoch,$stop_epoch);
+		$info->{'ip_address'} = $started->{$k}->{ip_address};
+		&Notify($info);
+		&SetStopped($started->{$k}->{id},$stop_epoch);
+	    }
+	}
+    }
+    
+    ## Notify on start/now playing
+    foreach my $k (keys %{$vid}) {
+	my $start_epoch = time();
+	my $stop_epoch = ''; ## not stopped yet
+	my $info = &info_from_xml(XMLout($vid->{$k}),'start',$start_epoch,$stop_epoch);
+
+	## for insert 
+	my $db_key = $k . '_' . $vid->{$k}->{key} . '_' . $info->{orig_user};
+	
+	## these shouldn't be neede any more - to clean up as we now use XML data from DB
+	$info->{'orig_title'} = $vid->{$k}->{title};
+	$info->{'orig_title_ep'} = '';
+	$info->{'episode'} = '';
+	$info->{'season'} = '';
+	$info->{'genre'} = '';
+	if ($vid->{$k}->{grandparentTitle}) {
+	    $info->{'orig_title'} = $vid->{$k}->{grandparentTitle};
+	    $info->{'orig_title_ep'} = $vid->{$k}->{title};
+	    $info->{'episode'} = $vid->{$k}->{index};
+	    $info->{'season'} = $vid->{$k}->{parentIndex};
+	    if ($info->{'episode'} < 10) { $info->{'episode'} = 0 . $info->{'episode'};}
+	    if ($info->{'season'} < 10) { $info->{'season'} = 0 . $info->{'season'}; }
+	}
+	## end unused data to clean up
+	
+	## ignore content that has already been notified
+	if ($started->{$db_key}) {
+	    &ProcessUpdate($vid->{$k},$db_key); ## update XML
+	    if ($debug) { 
+		&Notify($info);
+		print &consoletxt("Already Notified -- Sent again due to --debug") . "\n"; 
+	    };
+	} 
+	## unnotified - insert into DB and notify
+	else {
+	    ## robrobrobr
+	    my $ip = &LocateIP($info->{'machineIdentifier'}) if $info->{'machineIdentifier'};
+	    $info->{'ip_address'} = $ip;
+	    
+	    my $insert_id = &ProcessStart($vid->{$k},$db_key,$info->{'title'},$info->{'platform'},$info->{'orig_user'},$info->{'orig_title'},$info->{'orig_title_ep'},$info->{'genre'},$info->{'episode'},$info->{'season'},$info->{'summary'},$info->{'rating'},$info->{'year'},$info->{'ip_address'});
+	    &Notify($info);
+	    &SetNotified($insert_id);
+	}
+    }
+}
+
+
 #####################################################
 ## print content being watched
 ##--watching
@@ -582,105 +693,6 @@ if ($options{'watching'}) {
 	
     } else {	    print "\n * nothing in progress\n";	}
     print " \n";
-}
-
-## no options -- we can continue.. otherwise --stats, --watched, --watching or --notify MUST be specified
-if (%options && !$options{'notify'} && !$options{'stats'} && !$options{'watched'} && !$options{'watching'} && !$options{'recently_added'} ) {
-    print "\n* Skipping any Notifications -- command line options set, use '--notify' or supply no options to enable notifications\n";
-    exit;
-}
-
-#################################################################
-## Notify -notify || no options = notify on watch/stopped streams
-##--notify
-if (!%options || $options{'notify'}) {
-    my $vid = &GetSessions();    ## query API for current streams
-    my $started= &GetStarted(); ## query streams already started/not stopped
-    my $playing = ();            ## container of now playing id's - used for stopped status/notification
-    
-    ###########################################################################
-    ## nothing being watched.. verify all notification went out
-    ## this shouldn't happen ( only happened during development when I was testing -- but just in case )
-    #### to fix
-    if (!ref($vid)) {
-	my $un = &GetUnNotified();
-	foreach my $k (keys %{$un}) {
-	    if (!$playing->{$k}) {
-		my $ntype = 'start';
-		my $start_epoch = $un->{$k}->{time} if $un->{$k}->{time};
-		my $stop_epoch = '';
-		my $info = &info_from_xml($un->{$k}->{'xml'},'start',$start_epoch,$stop_epoch);
-		&Notify($info);
-		&SetNotified($un->{$k}->{id});
-		## another notification will go out about being stopped..
-		## next run it will be marked as watched and notified
-	    }
-	}
-    }
-    ## end unnotified
-    
-    ## Quick hack to notify stopped content before start -- get a list of playing content
-    foreach my $k (keys %{$vid}) {
-	my $user = (split('\@',$vid->{$k}->{User}->{title}))[0];
-	if (!$user) {	$user = 'Local';    }
-	my $db_key = $k . '_' . $vid->{$k}->{key} . '_' . $user;
-	$playing->{$db_key} = 1;
-    }
-    
-    ## Notify on any Stop
-    ## Iterate through all non-stopped content and notify if not playing
-    if (ref($started)) {
-	foreach my $k (keys %{$started}) {
-	    if (!$playing->{$k}) {
-		my $start_epoch = $started->{$k}->{time} if $started->{$k}->{time};
-		my $stop_epoch = time();
-		my $info = &info_from_xml($started->{$k}->{'xml'},'stop',$start_epoch,$stop_epoch);
-		&Notify($info);
-		&SetStopped($started->{$k}->{id},$stop_epoch);
-	    }
-	}
-    }
-    
-    ## Notify on start/now playing
-    foreach my $k (keys %{$vid}) {
-	my $start_epoch = time();
-	my $stop_epoch = ''; ## not stopped yet
-	my $info = &info_from_xml(XMLout($vid->{$k}),'start',$start_epoch,$stop_epoch);
-	
-	## for insert 
-	my $db_key = $k . '_' . $vid->{$k}->{key} . '_' . $info->{orig_user};
-	
-	## these shouldn't be neede any more - to clean up as we now use XML data from DB
-	$info->{'orig_title'} = $vid->{$k}->{title};
-	$info->{'orig_title_ep'} = '';
-	$info->{'episode'} = '';
-	$info->{'season'} = '';
-	$info->{'genre'} = '';
-	if ($vid->{$k}->{grandparentTitle}) {
-	    $info->{'orig_title'} = $vid->{$k}->{grandparentTitle};
-	    $info->{'orig_title_ep'} = $vid->{$k}->{title};
-	    $info->{'episode'} = $vid->{$k}->{index};
-	    $info->{'season'} = $vid->{$k}->{parentIndex};
-	    if ($info->{'episode'} < 10) { $info->{'episode'} = 0 . $info->{'episode'};}
-	    if ($info->{'season'} < 10) { $info->{'season'} = 0 . $info->{'season'}; }
-	}
-	## end unused data to clean up
-	
-	## ignore content that has already been notified
-	if ($started->{$db_key}) {
-	    &ProcessUpdate($vid->{$k},$db_key); ## update XML
-	    if ($debug) { 
-		&Notify($info);
-		print &consoletxt("Already Notified -- Sent again due to --debug") . "\n"; 
-	    };
-	} 
-	## unnotified - insert into DB and notify
-	else {
-	    my $insert_id = &ProcessStart($vid->{$k},$db_key,$info->{'title'},$info->{'platform'},$info->{'orig_user'},$info->{'orig_title'},$info->{'orig_title_ep'},$info->{'genre'},$info->{'episode'},$info->{'season'},$info->{'summary'},$info->{'rating'},$info->{'year'},$info->{'machineIdentifier'});
-	    &Notify($info);
-	    &SetNotified($insert_id);
-	}
-    }
 }
 
 #################################################### SUB #########################################################################
@@ -808,9 +820,8 @@ sub ProviderEnabled() {
 }
 
 sub ProcessStart() {
-    my ($xmlref,$db_key,$title,$platform,$user,$orig_title,$orig_title_ep,$genre,$episode,$season,$summary,$rating,$year,$ma_id) = @_;
+    my ($xmlref,$db_key,$title,$platform,$user,$orig_title,$orig_title_ep,$genre,$episode,$season,$summary,$rating,$year,$ip) = @_;
     my $xml =  XMLout($xmlref);
-    my $ip = &LocateIP($ma_id) if $ma_id; ## new -- alpha
     my $sth = $dbh->prepare("insert into processed (session_id,ip_address,title,platform,user,orig_title,orig_title_ep,genre,episode,season,summary,rating,year,xml) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
     $sth->execute($db_key,$ip,$title,$platform,$user,$orig_title,$orig_title_ep,$genre,$episode,$season,$summary,$rating,$year,$xml) or die("Unable to execute query: $dbh->errstr\n");
     return  $dbh->sqlite_last_insert_rowid();

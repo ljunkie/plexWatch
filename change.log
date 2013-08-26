@@ -4,6 +4,8 @@
 #      -- format_options: {ip_address}
 #      -- Requires parsing of PMS log file. $server_log in config.pl
 # * Addes SSL support (port 32443)
+# * --watching now calls --notify before it shows now playing content. Fixes issue when content hasn't been logged as started/stopped
+
 
 # 0.0.18-dev
 #
