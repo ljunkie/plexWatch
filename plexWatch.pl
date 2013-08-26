@@ -34,17 +34,17 @@ if (!-e $dirname .'/config.pl') {
     exit;
 }
 do $dirname.'/config.pl';
-use vars qw/$data_dir $server $port $appname $user_display $alert_format $notify $push_titles $backup_opts $myPlex_user $myPlex_pass $server_log/; 
+use vars qw/$data_dir $server $port $appname $user_display $alert_format $notify $push_titles $backup_opts $myPlex_user $myPlex_pass $server_log $log_client_ip $debug_logging/; 
 if (!$data_dir || !$server || !$port || !$appname || !$alert_format || !$notify) {
     print "config file missing data\n";
     exit;
 }
 ## end
 
+## for now, let's warn the user if they have enabled logging of clients IP's and the server log is not found
 if ($server_log && !-f $server_log) {
-    print "warning: \$server_log is specified in config.pl and $server_log does not exist\n";
+    print "warning: \$server_log is specified in config.pl and $server_log does not exist (required for logging of the clients IP address)\n" if $log_client_ip;
 }
-
 
 ## ONLY Load modules if used
 if (&ProviderEnabled('twitter')) {
@@ -619,6 +619,7 @@ if (!%options || $options{'notify'}) {
 	if ($started->{$db_key}) {
 	    &ProcessUpdate($vid->{$k},$db_key); ## update XML
 	    if ($debug) { 
+		$info->{'ip_address'} = $started->{$db_key}->{ip_address};
 		&Notify($info);
 		print &consoletxt("Already Notified -- Sent again due to --debug") . "\n"; 
 	    };
@@ -766,6 +767,22 @@ sub ConsoleLog() {
     return 1;
 }
 
+
+sub DebugLog() {
+    ## still need to add this routine to many other places (TODO)
+    my $msg = shift;
+    my $print = shift;
+    
+    my $console = &consoletxt("$date: $msg"); 
+    print   $console ."\n"     if ($debug || $print);
+    
+    if ($debug_logging) {
+	open FILE, ">>", $data_dir . '/' . 'debug.log'  or die $!;
+	print FILE "$console\n";
+	close(FILE);
+    }
+}
+
 sub Notify() {
     my $info = shift;
 
@@ -831,19 +848,29 @@ sub LocateIP() {
     ## locate IP by machineIdentifier in log file -- hoping this will be part of the API at some point
 
     my $find = shift;
-    if (-f $server_log && $find) {
-	if ($debug) {	    print "Locating IP for $find from $server_log\n";	}
-	print $server_log . "\n";
-	open FILE, "< $server_log";
-	my @line = <FILE>;
-	my $ip;
-	for (@line) {
-	    if (!$ip) {
-		if ($_ =~ /GET.*X-Plex-Client-Identifier=$find.*\s+\[(.*)\:\d+\]/) { $ip = $1; }
-		elsif ($_ =~ /GET.*session=$find.*\s+\[(.*)\:\d+\]/) { $ip = $1; }
+    if ($log_client_ip && $find) {
+	# two logs should be enough.. shouldn't rotate more than once
+	my @logs = ($server_log,
+		    $server_log . '.1',
+	    );
+	foreach my $log (@logs) {
+	    if (-f $log) {
+		my $d_out = "Locating IP for $find from $log... ";
+		open FILE, "< $log";
+		my @line = <FILE>;
+		my $ip;
+		for (@line) {
+		    if (!$ip) {
+			if ($_ =~ /GET.*X-Plex-Client-Identifier=$find.*\s+\[(.*)\:\d+\]/) { $ip = $1; }
+			elsif ($_ =~ /GET.*session=$find.*\s+\[(.*)\:\d+\]/) { $ip = $1; }
+		    }
+		}
+		$d_out .= $ip . "\n" if $ip;
+		$d_out .= "NO IP found\n" if !$ip;
+		&DebugLog($d_out);
+		return $ip if $ip;
 	    }
 	}
-	return $ip if $ip;
     }
 }
 
