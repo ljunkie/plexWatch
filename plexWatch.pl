@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-my $version = '0.0.19-dev';
+my $version = '0.0.19-dev-5';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
@@ -935,11 +935,11 @@ sub ProcessUpdate() {
     return if $xml !~ /$key/i; ## xml must contain key
     
     if ($db_key) {
-	my $sth = $dbh->prepare("update processed set xml = ? where session_id = ?");
 	if ($ip_address) {
-	    $sth = $dbh->prepare("update processed set xml = ?, ip_address = ? where session_id = ?");
+	    my $sth = $dbh->prepare("update processed set xml = ?, ip_address = ? where session_id = ?");
 	    $sth->execute($xml,$ip_address,$db_key) or die("Unable to execute query: $dbh->errstr\n");
 	} else {
+	    my $sth = $dbh->prepare("update processed set xml = ? where session_id = ?");
 	    $sth->execute($xml,$db_key) or die("Unable to execute query: $dbh->errstr\n");
 	}
 	
