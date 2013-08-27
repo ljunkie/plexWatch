@@ -1,11 +1,11 @@
 #!/usr/bin/perl
 
-my $version = '0.0.19-friendly+platform';
+my $version = '0.0.19-dev';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-08-26 17:39 PST
+# Modified: 2013-08-27 11:06 PST
 #
 #  Version: $version
 # https://github.com/ljunkie/plexWatch
@@ -875,33 +875,50 @@ sub LocateIP() {
 	    );
 	foreach my $log (@logs) {
 	    if (-f $log) {
+		my $match;
 		my $d_out = "Locating IP for $href->{'machineIdentifier'} from $log... ";
-		open FILE, "< $log";
-		my @line = <FILE>;
+		open SLOG, "< $log";
+		my @lines = reverse <SLOG>; ## search file backwards for most recent match
 		my $ip;
 		my $find = $href->{'machineIdentifier'};
-		for (@line) {
+		for (@lines) {
 		    if (!$ip) {
-			if ($_ =~ /GET.*X-Plex-Client-Identifier=$find.*\s+\[(.*)\:\d+\]/) { $ip = $1; }
-			elsif ($_ =~ /GET.*session=$find.*\s+\[(.*)\:\d+\]/) { $ip = $1; }
+			if ($_ =~ /GET.*X-Plex-Client-Identifier=$find.*\s+\[(.*)\:\d+\]/) { 
+			    $ip = $1; 
+			    $match = $_;
+			}
+			elsif ($_ =~ /GET.*session=$find.*\s+\[(.*)\:\d+\]/) { 
+			    $ip = $1; 
+			    $match = $_;
+			}
 		    }
 		}
 		$d_out .= $ip . "\n" if $ip;
 		$d_out .= "NO IP found\n" if !$ip;
 		&DebugLog($d_out);
-		
+		&DebugLog("$ip log match: $match") if $ip;
+
 		if (!$ip) {
 		    my $find = $href->{'ratingKey'};
 		    $d_out = "Locating IP for  $href->{ratingKey} from $log... ";
-		    for (@line) {
-			## we want to match up to the last (so continue up to the last match) we should read backwarks - NO PERL MODULE (TODO)
-			if ($_ =~ /GET.*ratingKey=$find.*\s+\[(.*)\:\d+\]/) { $ip = $1; }
+		    for (@lines) {
+			if (!$ip) {
+			    if ($_ =~ /GET.*ratingKey=$find.*\s+\[(.*)\:\d+\]/) { 
+				$ip = $1; 
+				$match = $_;
+			    }
+			}
 		    }
 		    $d_out .= $ip . "\n" if $ip;
+		    $d_out .= "$ip matched: $match\n" if $ip;
 		    $d_out .= "NO IP found\n" if !$ip;
 		    &DebugLog($d_out);
+		    &DebugLog("$ip log match: $match") if $ip;
 		}
+		
+		close SLOG;
 		return $ip if $ip;
+
 	    }
 	}
     }

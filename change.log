@@ -1,13 +1,21 @@
 # 0.0.19-dev
-# * fix AM/PM for OSX (non GNU) 
 # * added options for logging IP_Address of client
+#      * enable this in config.pl with the $server_log, $log_client_ip (enable $debug_logging to see what matched )
 #      -- format_options: {ip_address}
 #      -- Requires parsing of PMS log file. $server_log in config.pl
-# * Addes SSL support (port 32443)
-# * --watching now calls --notify before it shows now playing content. Fixes issue when content hasn't been logged as started/stopped
-# * --watched: fixed percent_complete -- using the last viewOffset instead of the first.
-# * friendly name now allows for user+platform (example in config.pl-dist)
-	
+#      -- log file searched in reverse order for most recent line
+#      -- fallback to itemID (ratingKey) being watched for IP. (mainly for clients connecting from 'List of networks that are allowed without auth')
+# * Added SSL support (port 32443)
+# * friendly name now allows for user+platform(title) (example in config.pl-dist)
+# * $debug_logging added to config.pl ( still need to add more debug logging though )
+# * Fix: AM/PM for OSX (non GNU) 
+# * Fix: --watching now calls --notify before it shows now playing content. Fixes issue when content hasn't been logged as started/stopped
+# * Fix: allows season/episode fields to be empty for 'show'
+# * Fix: Do not update XML if the XML is not valid
+# * Fix: --watched: percent_complete -- use the last viewOffset instead of the first.
+#        * TODO: break --watched into multiple if viewOffset hit 100% complete and then watched again on the same day
+# * README: updated instructions to NOT call sudo before running the script. This way the DB is not owned by root and can be run by the 'normal' user. 
+
 # 0.0.18-dev
 #
 # * MyPlex Login Token: The script can now be ran from any computer.

@@ -127,16 +127,16 @@ http://forums.plexapp.com/index.php/topic/72552-plexwatch-plex-notify-script-sen
 
 5. **run** the script manually to verify it works: /opt/plexWatch/plexWatch.pl
   * start video(s)
-  * ```sudo /opt/plexWatch/plexWatch.pl```
+  * ```/opt/plexWatch/plexWatch.pl```
   * stop video(s)
-  * ```sudo /opt/plexWatch/plexWatch.pl```
+  * ```/opt/plexWatch/plexWatch.pl```
 
 
 6. setup crontab or launchagent to run the script every minute
     * __linux__: /etc/crontab
 
     ```bash
-    * * * * * root /opt/plexWatch/plexWatch.pl
+    * * * * * YOUR_USERNAME /opt/plexWatch/plexWatch.pl
     ```
     * __OSX__: use a launchagent instead of cron. Refer to the __FAQ__ on the bottom. 
 
