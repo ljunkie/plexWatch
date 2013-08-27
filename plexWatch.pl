@@ -491,8 +491,10 @@ if ($options{'watched'} || $options{'stats'}) {
 		my $info = &info_from_xml($is_watched->{$k}->{'xml'},$ntype,$is_watched->{$k}->{'time'},$is_watched->{$k}->{'stopped'});
 		$skey = $skey . $completed{$orig_skey} if $completed{$orig_skey};
 		if ($info->{'percent_complete'} > 99) {
+		    my $d_out = "$is_watched->{$k}->{title} watched 100\% by $user on $year-$month-$day - starting a new line (more than once)\n";
 		    $completed{$orig_skey}++;
 		    $is_completed = 1; ## skey-incremented -- we can skip other skey checks
+		    &DebugLog($d_out) if $completed{$orig_skey} > 1;
 		}
 	    }
 	    # end 100% grouping
@@ -506,8 +508,7 @@ if ($options{'watched'} || $options{'stats'}) {
 		
 		if ($diff > (60*60)*($watched_grouping_maxhr)) {
 		    my $d_out = &durationrr($diff) . 
-			" between start,restart of '$is_watched->{$k}->{title}' " .
-			" ( is > \$watched_grouping_maxhr of $watched_grouping_maxhr): starting a new line\n";
+			" between start,restart of '$is_watched->{$k}->{title}' for $user on $year-$month-$day: starting a new line\n";
 		    &DebugLog($d_out);
 		    $skey = $orig_skey . $is_watched->{$k}->{time}; ## increment the skey
 		    $seen_cur{$orig_skey} = $skey;                  ## set what the skey will be for future
