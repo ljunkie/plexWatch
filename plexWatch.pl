@@ -623,10 +623,17 @@ if (!%options || $options{'notify'}) {
 	
 	## ignore content that has already been notified
 	## However, UPDATE the XML in the DB
+
+
 	if ($started->{$db_key}) {
-	    &ProcessUpdate($vid->{$k},$db_key); ## update XML
+	    $info->{'ip_address'} = $started->{$db_key}->{ip_address};
+	    ## try and locate IP address on each run ( if empty )
+	    if (!$info->{'ip_address'}) {
+		$info->{'ip_address'} = &LocateIP($info) if ref $info;
+	    }
+	    &ProcessUpdate($vid->{$k},$db_key,$info->{'ip_address'}); ## update XML
+	    
 	    if ($debug) { 
-		$info->{'ip_address'} = $started->{$db_key}->{ip_address};
 		&Notify($info);
 		print &consoletxt("Already Notified -- Sent again due to --debug") . "\n"; 
 	    };
@@ -634,7 +641,7 @@ if (!%options || $options{'notify'}) {
 	## unnotified - insert into DB and notify
 	else {
 	    ## quick and dirty hack for client IP address
-	    $info->{'ip_address'} = &LocateIP($info->{'machineIdentifier'}) if $info->{'machineIdentifier'};
+	    $info->{'ip_address'} = &LocateIP($info) if ref $info;
 	    ## end the dirty feeling
 	    
 	    my $insert_id = &ProcessStart($vid->{$k},$db_key,$info->{'title'},$info->{'platform'},$info->{'orig_user'},$info->{'orig_title'},$info->{'orig_title_ep'},$info->{'genre'},$info->{'episode'},$info->{'season'},$info->{'summary'},$info->{'rating'},$info->{'year'},$info->{'ip_address'});
@@ -691,7 +698,7 @@ if ($options{'watching'}) {
 	    my $info = &info_from_xml(XMLout($live->{$live_key}),'watching',$in_progress->{$k}->{time});
 	    $info->{'ip_address'} = $in_progress->{$k}->{ip_address};
 
-	    &ProcessUpdate($live->{$live_key},$k); ## update XML	    
+	    &ProcessUpdate($live->{$live_key},$k); ## update XML  ## probably redundant as --watching calls --notify now -- (TODO)
 
 	    ## overwrite progress and time_left from live -- should be pulling live xml above at some point
 	    #$info->{'progress'} = &durationrr($live->{$live_key}->{viewOffset}/1000);
@@ -855,19 +862,24 @@ sub ProcessStart() {
 
 sub LocateIP() {
     ## locate IP by machineIdentifier in log file -- hoping this will be part of the API at some point
+    ##  * added ratingKey -- sometimes the DirectPlay on LAN is missing the standated GET I am expecting..
+    ##  ** I think it's due when the IP is in the allowedNetworks
 
-    my $find = shift;
-    if ($log_client_ip && $find) {
+    my $href = shift;
+    
+
+    if ($log_client_ip && ref $href) {
 	# two logs should be enough.. shouldn't rotate more than once
 	my @logs = ($server_log,
 		    $server_log . '.1',
 	    );
 	foreach my $log (@logs) {
 	    if (-f $log) {
-		my $d_out = "Locating IP for $find from $log... ";
+		my $d_out = "Locating IP for $href->{'machineIdentifier'} from $log... ";
 		open FILE, "< $log";
 		my @line = <FILE>;
 		my $ip;
+		my $find = $href->{'machineIdentifier'};
 		for (@line) {
 		    if (!$ip) {
 			if ($_ =~ /GET.*X-Plex-Client-Identifier=$find.*\s+\[(.*)\:\d+\]/) { $ip = $1; }
@@ -877,6 +889,18 @@ sub LocateIP() {
 		$d_out .= $ip . "\n" if $ip;
 		$d_out .= "NO IP found\n" if !$ip;
 		&DebugLog($d_out);
+		
+		if (!$ip) {
+		    my $find = $href->{'ratingKey'};
+		    $d_out = "Locating IP for  $href->{ratingKey} from $log... ";
+		    for (@line) {
+			## we want to match up to the last (so continue up to the last match) we should read backwarks - NO PERL MODULE (TODO)
+			if ($_ =~ /GET.*ratingKey=$find.*\s+\[(.*)\:\d+\]/) { $ip = $1; }
+		    }
+		    $d_out .= $ip . "\n" if $ip;
+		    $d_out .= "NO IP found\n" if !$ip;
+		    &DebugLog($d_out);
+		}
 		return $ip if $ip;
 	    }
 	}
@@ -884,10 +908,10 @@ sub LocateIP() {
 }
 
 sub ProcessUpdate() {
-    my ($xmlref,$db_key) = @_;
+    my ($xmlref,$db_key,$ip_address) = @_;
     my ($sess,$key) = split("_",$db_key);
     my $xml =  XMLout($xmlref);
-
+    
     ## multiple checks to verify the xml we update is valid
     return if !$xmlref->{'title'}; ## xml must have title
     return if !$xmlref->{'key'}; ## xml ref must have key
@@ -895,7 +919,13 @@ sub ProcessUpdate() {
     
     if ($db_key) {
 	my $sth = $dbh->prepare("update processed set xml = ? where session_id = ?");
-	$sth->execute($xml,$db_key) or die("Unable to execute query: $dbh->errstr\n");
+	if ($ip_address) {
+	    $sth = $dbh->prepare("update processed set xml = ?, ip_address = ? where session_id = ?");
+	    $sth->execute($xml,$ip_address,$db_key) or die("Unable to execute query: $dbh->errstr\n");
+	} else {
+	    $sth->execute($xml,$db_key) or die("Unable to execute query: $dbh->errstr\n");
+	}
+	
     }
     return  $dbh->sqlite_last_insert_rowid();
 }
@@ -1784,6 +1814,7 @@ sub info_from_xml() {
     
     my $ma_id = '';
     $ma_id = $vid->{Player}->{'machineIdentifier'} if $vid->{Player}->{'machineIdentifier'};
+    my $ratingKey = $vid->{'ratingKey'} if $vid->{'ratingKey'};
     
     ## how many minutes in are we? TODO - cleanup when < 90 -- formatting is a bit odd with [0 seconds in]
     my $viewOffset = 0;
@@ -1924,6 +1955,7 @@ sub info_from_xml() {
 	'streamtype' => $streamType,
 	'transInfo' => $transInfo,	
 	'machineIdentifier' => $ma_id,
+	'ratingKey' => $ratingKey,
     };
     
     return $info;
