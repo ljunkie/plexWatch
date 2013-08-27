@@ -420,11 +420,10 @@ if ($options{'watched'} || $options{'stats'}) {
 	print "\n";
 	foreach my $k (sort {$is_watched->{$a}->{user} cmp $is_watched->{$b}->{'user'} || 
 				 $is_watched->{$a}->{time} cmp $is_watched->{$b}->{'time'} } (keys %{$is_watched}) ) {
-
 	    ## use display name 
 	    my ($user,$orig_user) = &FriendlyName($is_watched->{$k}->{user},$is_watched->{$k}->{platform});
 	    
-	    ## clean this up at some point -- skip user if user and/or display user is not = to specified 
+	    ## skip/exclude users --user/--exclude_user
 	    my $skip = 1;
 	    ## --exclude_user array ref
 	    next if ( grep { $_ =~ /$is_watched->{$k}->{'user'}/i } @{$options{'exclude_user'}});
@@ -436,8 +435,6 @@ if ($options{'watched'} || $options{'stats'}) {
 	    }  else {	$skip = 0;    }
 
 	    next if $skip;
-	    
-
 
 	    ## only show one watched status on movie/show per day (default) -- duration will be calculated from start/stop on each watch/resume
 	    ## --nogrouping will display movie as many times as it has been started on the same day.
@@ -661,13 +658,10 @@ if ($options{'watching'}) {
     if (keys %{$in_progress}) {
 	print "\n";
 	foreach my $k (sort { $in_progress->{$a}->{user} cmp $in_progress->{$b}->{'user'} || $in_progress->{$a}->{time} cmp $in_progress->{$b}->{'time'} } (keys %{$in_progress}) ) {
-	    ## clean this up at some point -- skip user if user and/or display user is not = to specified 
-	    my $skip =1;
-
 	    ## use display name 
 	    my ($user,$orig_user) = &FriendlyName($in_progress->{$k}->{user},$in_progress->{$k}->{platform});
 
-	    ## clean this up at some point -- skip user if user and/or display user is not = to specified 
+	    ## skip/exclude users --user/--exclude_user
 	    my $skip = 1;
 	    ## --exclude_user array ref
 	    next if ( grep { $_ =~ /$in_progress->{$k}->{'user'}/i } @{$options{'exclude_user'}});
