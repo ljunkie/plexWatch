@@ -41,6 +41,13 @@ if (!$data_dir || !$server || !$port || !$appname || !$alert_format || !$notify)
 }
 ## end
 
+## Advanced Options
+
+my $watched_show_completed = 1; ## always display a 100% watched show. I.E. if user watches show1 100%, then restarts it and stops at < 90%, show two lines
+
+
+## end
+
 ## for now, let's warn the user if they have enabled logging of clients IP's and the server log is not found
 if ($server_log && !-f $server_log) {
     print "warning: \$server_log is specified in config.pl and $server_log does not exist (required for logging of the clients IP address)\n" if $log_client_ip;
@@ -416,6 +423,8 @@ if ($options{'watched'} || $options{'stats'}) {
     my %seen_user = ();
     my %stats = ();
     my $ntype = 'watched';
+    my %completed = ();
+    my %seenc = (); ## testing
     if (keys %{$is_watched}) {
 	print "\n";
 	foreach my $k (sort {$is_watched->{$a}->{user} cmp $is_watched->{$b}->{'user'} || 
@@ -444,6 +453,7 @@ if ($options{'watched'} || $options{'stats'}) {
 	    $year += 1900;
 	    $month += 1;
 	    my $serial = parsedate("$year-$month-$day 00:00:00");
+
 	    #my $skey = $is_watched->{$k}->{user}.$year.$month.$day.$is_watched->{$k}->{title};
 	    my $skey = $user.$year.$month.$day.$is_watched->{$k}->{title};
 	    
@@ -451,10 +461,27 @@ if ($options{'watched'} || $options{'stats'}) {
 	    my ($sec2, $min2, $hour2, $day2,$month2,$year2) = (localtime($is_watched->{$k}->{time}-86400))[0,1,2,3,4,5]; 
 	    $year2 += 1900;
 	    $month2 += 1;
+	    
+
 	    #my $skey2 = $is_watched->{$k}->{user}.$year2.$month2.$day2.$is_watched->{$k}->{title};
 	    my $skey2 = $user.$year2.$month2.$day2.$is_watched->{$k}->{title};
 	    if ($seen{$skey2}) {		$skey = $skey2;	    }
+	    my $orig_skey = $skey;
+
+	    ## Do NOT group content if the percent watched is 100% -- this will group everything up to 100% and start a new line...
+	    ## will nowshow that the viewer had watched the video completely (line1) and restarted it (line2)
 	    
+	    ## just testing out grouping if percent_complete == 100
+	    #if ($seenc{$orig_skey} && $seenc{$orig_skey} == 2) {$info->{'percent_complete'}  = 100;  }
+	    #if ($seenc{$orig_skey} && $seenc{$orig_skey} == 5) {$info->{'percent_complete'}  = 100;  }
+	    #$seenc{$orig_skey}++;
+	    
+	    if ($watched_show_completed) {
+		my $info = &info_from_xml($is_watched->{$k}->{'xml'},$ntype,$is_watched->{$k}->{'time'},$is_watched->{$k}->{'stopped'});
+		$skey = $skey . $completed{$orig_skey} if $completed{$orig_skey};
+		$completed{$orig_skey}++ if $info->{'percent_complete'} > 99;
+	    }
+	    # end 100% grouping
 	    
 	    ## stat -- quick and dirty -- to clean up later
 	    $stats{$user}->{'total_duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
@@ -489,6 +516,7 @@ if ($options{'watched'} || $options{'stats'}) {
 		    $seen{$skey}->{'duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
 		    ## update the group with the most recent XML
 		    $seen{$skey}->{'xml'} = $is_watched->{$k}->{xml};
+		    
 		    if ($is_watched->{$k}->{stopped} > $seen{$skey}->{'stopped'}) {
 			$seen{$skey}->{'stopped'} = $is_watched->{$k}->{stopped}; ## include max stopped in case someone wants to display it
 		    }
