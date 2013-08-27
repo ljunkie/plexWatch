@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-my $version = '0.0.19-dev-client-ip';
+my $version = '0.0.19-friendly+platform';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
