@@ -18,7 +18,7 @@ $notify_stopped = 1;   # !deprecated -- does nothing anymore (use push_watched, 
 $appname = 'plexWatch';
 
 ## Give a user a more friendly name. I.E. REAL_USER will now be Frank
-## you may also specify the device with +Device 
+## you may also specify the platform with user+platform
 $user_display = {'REAL_USER1' => 'Frank',
 		 'REAL_USER2' => 'Rob & Carrie',
 		 'REAL_USER2+Roku 3' => 'Family Room',
