@@ -1,11 +1,11 @@
 #!/usr/bin/perl
 
-my $version = '0.0.19-dev-5';
+my $version = '0.0.19-dev-8';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-08-27 11:06 PST
+# Modified: 2013-08-27 18:30 PST
 #
 #  Version: $version
 # https://github.com/ljunkie/plexWatch
@@ -34,19 +34,25 @@ if (!-e $dirname .'/config.pl') {
     exit;
 }
 do $dirname.'/config.pl';
-use vars qw/$data_dir $server $port $appname $user_display $alert_format $notify $push_titles $backup_opts $myPlex_user $myPlex_pass $server_log $log_client_ip $debug_logging/; 
+use vars qw/$data_dir $server $port $appname $user_display $alert_format $notify $push_titles $backup_opts $myPlex_user $myPlex_pass $server_log $log_client_ip $debug_logging $watched_show_completed $watched_grouping_maxhr/; 
 if (!$data_dir || !$server || !$port || !$appname || !$alert_format || !$notify) {
     print "config file missing data\n";
     exit;
 }
 ## end
 
-## Advanced Options
+############################################
+## Advanced Options (override in config.pl)
 
-my $watched_show_completed = 1; ## always display a 100% watched show. I.E. if user watches show1 100%, then restarts it and stops at < 90%, show two lines
+## always display a 100% watched show. I.E. if user watches show1 100%, then restarts it and stops at < 90%, show two lines
+$watched_show_completed = 1 if !defined($watched_show_completed); 
 
+## how many hours between starts of the same show do we allow grouping? 24 is max (3 hour default)
+$watched_grouping_maxhr = 3 if !defined($watched_grouping_maxhr);      
 
 ## end
+############################################
+
 
 ## for now, let's warn the user if they have enabled logging of clients IP's and the server log is not found
 if ($server_log && !-f $server_log) {
@@ -420,6 +426,8 @@ if ($options{'watched'} || $options{'stats'}) {
     else {	print "Now";    }
     
     my %seen = ();
+    my %seen_epoch = ();
+    my %seen_cur = ();
     my %seen_user = ();
     my %stats = ();
     my $ntype = 'watched';
@@ -466,22 +474,47 @@ if ($options{'watched'} || $options{'stats'}) {
 	    #my $skey2 = $is_watched->{$k}->{user}.$year2.$month2.$day2.$is_watched->{$k}->{title};
 	    my $skey2 = $user.$year2.$month2.$day2.$is_watched->{$k}->{title};
 	    if ($seen{$skey2}) {		$skey = $skey2;	    }
-	    my $orig_skey = $skey;
+	    
+	    my $orig_skey = $skey; ## DO NOT MODIFY THIS
 
+	    
 	    ## Do NOT group content if the percent watched is 100% -- this will group everything up to 100% and start a new line...
-	    ## will nowshow that the viewer had watched the video completely (line1) and restarted it (line2)
+	    #    * will now show that the viewer had watched the video completely (line1) and restarted it (line2)
 	    
-	    ## just testing out grouping if percent_complete == 100
-	    #if ($seenc{$orig_skey} && $seenc{$orig_skey} == 2) {$info->{'percent_complete'}  = 100;  }
-	    #if ($seenc{$orig_skey} && $seenc{$orig_skey} == 5) {$info->{'percent_complete'}  = 100;  }
-	    #$seenc{$orig_skey}++;
+	    #just testing out grouping if percent_complete == 100
+	    # if ($seenc{$orig_skey} && $seenc{$orig_skey} == 2) {$info->{'percent_complete'}  = 100;  }
+	    # if ($seenc{$orig_skey} && $seenc{$orig_skey} == 5) {$info->{'percent_complete'}  = 100;  }
+	    # $seenc{$orig_skey}++;
 	    
+	    my $is_completed = 0;
 	    if ($watched_show_completed) {
 		my $info = &info_from_xml($is_watched->{$k}->{'xml'},$ntype,$is_watched->{$k}->{'time'},$is_watched->{$k}->{'stopped'});
 		$skey = $skey . $completed{$orig_skey} if $completed{$orig_skey};
-		$completed{$orig_skey}++ if $info->{'percent_complete'} > 99;
+		if ($info->{'percent_complete'} > 99) {
+		    $completed{$orig_skey}++;
+		    $is_completed = 1; ## skey-incremented -- we can skip other skey checks
+		}
 	    }
 	    # end 100% grouping
+	    
+	    ## split lines if start/restart > $watched_grouping_maxhr
+	    #    * do not just blindly group by day.. the start/restart should be NO MORE than a few hours apart ($watched_grouping_maxhr)
+	    if (!$is_completed) {
+		$skey = $seen_cur{$orig_skey}  if $seen_cur{$orig_skey};                 ## if we have set $seen_cur - reset skey to that
+		$seen_epoch{$skey} = $is_watched->{$k}->{time}  if !$seen_epoch{$skey};  ## set epoch for skey (if not set)
+		my $diff = $is_watched->{$k}->{time}-$seen_epoch{$skey};                 ## diff between last start and this start
+		
+		if ($diff > (60*60)*($watched_grouping_maxhr)) {
+		    my $d_out = &durationrr($diff) . 
+			" between start,restart of '$is_watched->{$k}->{title}' " .
+			" ( is > \$watched_grouping_maxhr of $watched_grouping_maxhr): starting a new line\n";
+		    &DebugLog($d_out);
+		    $skey = $orig_skey . $is_watched->{$k}->{time}; ## increment the skey
+		    $seen_cur{$orig_skey} = $skey;                  ## set what the skey will be for future
+		} 
+		$seen_epoch{$skey} = $is_watched->{$k}->{time};  ## set the last epoch seen for this skey
+	    }
+	    ## END split if > $watched_grouping_maxhr
 	    
 	    ## stat -- quick and dirty -- to clean up later
 	    $stats{$user}->{'total_duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};

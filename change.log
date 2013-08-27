@@ -14,7 +14,10 @@
 # * Fix: Do not update XML if the XML is not valid
 # * Fix: --watched: percent_complete -- use the last viewOffset instead of the first.
 #        * TODO: break --watched into multiple if viewOffset hit 100% complete and then watched again on the same day
-# * README: updated instructions to NOT call sudo before running the script. This way the DB is not owned by root and can be run by the 'normal' user. 
+# * README: updated instructions to NOT call sudo before running the script. This way the DB is not owned by root and can be run by the 'normal' user.
+# * Fix: always display a 100% watched show/movie. I.E.  show two lines: if user completes show1 (100%), then restarts said show and stops at < 90%
+# * Fix: do NOT group shows together IF hours between start of the same show is > 3 hours. 
+
 
 # 0.0.18-dev
 #
