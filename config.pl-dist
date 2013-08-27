@@ -18,8 +18,12 @@ $notify_stopped = 1;   # !deprecated -- does nothing anymore (use push_watched, 
 $appname = 'plexWatch';
 
 ## Give a user a more friendly name. I.E. REAL_USER will now be Frank
+## you may also specify the device with +Device 
 $user_display = {'REAL_USER1' => 'Frank',
-		 'REAL_USER2' => 'Carrie',
+		 'REAL_USER2' => 'Rob & Carrie',
+		 'REAL_USER2+Roku 3' => 'Family Room',
+		 'REAL_USER2+Roku' => 'Family Room',
+		 'REAL_USER2+iOS' => 'Rob',
 };
 
 ## format of alert - default. You can also override this per provider  ($notify below)

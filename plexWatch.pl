@@ -420,18 +420,25 @@ if ($options{'watched'} || $options{'stats'}) {
 	print "\n";
 	foreach my $k (sort {$is_watched->{$a}->{user} cmp $is_watched->{$b}->{'user'} || 
 				 $is_watched->{$a}->{time} cmp $is_watched->{$b}->{'time'} } (keys %{$is_watched}) ) {
+
+	    ## use display name 
+	    my ($user,$orig_user) = &FriendlyName($is_watched->{$k}->{user},$is_watched->{$k}->{platform});
+	    
 	    ## clean this up at some point -- skip user if user and/or display user is not = to specified 
-	    my $skip =1;
+	    my $skip = 1;
 	    ## --exclude_user array ref
 	    next if ( grep { $_ =~ /$is_watched->{$k}->{'user'}/i } @{$options{'exclude_user'}});
-	    next if ( $user_display->{$is_watched->{$k}->{user}}  && grep { $_ =~ /$user_display->{$is_watched->{$k}->{user}}/i } @{$options{'exclude_user'}});
+	    next if ( $user  && grep { $_ =~ /^$user$/i } @{$options{'exclude_user'}});
 	    
 	    if ($options{'user'}) {
-	    	$skip = 0 if $options{'user'} &&  $options{'user'} =~ /$is_watched->{$k}->{user}/i; ## allow real user
-		$skip = 0 if $options{'user'} && $user_display->{$is_watched->{$k}->{user}} &&  $options{'user'} =~ /$user_display->{$is_watched->{$k}->{user}}/i; ## allow display_user
+		$skip = 0 if $user =~ /^$options{'user'}$/i; ## user display (friendly) matches specified 
+		$skip = 0 if $orig_user =~ /^$options{'user'}$/i; ## user (non friendly) matches specified
 	    }  else {	$skip = 0;    }
+
 	    next if $skip;
 	    
+
+
 	    ## only show one watched status on movie/show per day (default) -- duration will be calculated from start/stop on each watch/resume
 	    ## --nogrouping will display movie as many times as it has been started on the same day.
 	    
@@ -440,17 +447,17 @@ if ($options{'watched'} || $options{'stats'}) {
 	    $year += 1900;
 	    $month += 1;
 	    my $serial = parsedate("$year-$month-$day 00:00:00");
-	    my $skey = $is_watched->{$k}->{user}.$year.$month.$day.$is_watched->{$k}->{title};
+	    #my $skey = $is_watched->{$k}->{user}.$year.$month.$day.$is_watched->{$k}->{title};
+	    my $skey = $user.$year.$month.$day.$is_watched->{$k}->{title};
 	    
 	    ## get previous day -- see if video same title was watched then -- if so -- group them together for display purposes. stats and --nogrouping will still show the break
 	    my ($sec2, $min2, $hour2, $day2,$month2,$year2) = (localtime($is_watched->{$k}->{time}-86400))[0,1,2,3,4,5]; 
 	    $year2 += 1900;
 	    $month2 += 1;
-	    my $skey2 = $is_watched->{$k}->{user}.$year2.$month2.$day2.$is_watched->{$k}->{title};
+	    #my $skey2 = $is_watched->{$k}->{user}.$year2.$month2.$day2.$is_watched->{$k}->{title};
+	    my $skey2 = $user.$year2.$month2.$day2.$is_watched->{$k}->{title};
 	    if ($seen{$skey2}) {		$skey = $skey2;	    }
 	    
-	    ## use display name 
-	    my ($user,$orig_user) = &FriendlyName($is_watched->{$k}->{user});
 	    
 	    ## stat -- quick and dirty -- to clean up later
 	    $stats{$user}->{'total_duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
@@ -656,20 +663,25 @@ if ($options{'watching'}) {
 	foreach my $k (sort { $in_progress->{$a}->{user} cmp $in_progress->{$b}->{'user'} || $in_progress->{$a}->{time} cmp $in_progress->{$b}->{'time'} } (keys %{$in_progress}) ) {
 	    ## clean this up at some point -- skip user if user and/or display user is not = to specified 
 	    my $skip =1;
-	    
+
+	    ## use display name 
+	    my ($user,$orig_user) = &FriendlyName($in_progress->{$k}->{user},$in_progress->{$k}->{platform});
+
+	    ## clean this up at some point -- skip user if user and/or display user is not = to specified 
+	    my $skip = 1;
 	    ## --exclude_user array ref
 	    next if ( grep { $_ =~ /$in_progress->{$k}->{'user'}/i } @{$options{'exclude_user'}});
-	    next if ( $user_display->{$in_progress->{$k}->{user}}  && grep { $_ =~ /$user_display->{$in_progress->{$k}->{user}}/i } @{$options{'exclude_user'}});
+	    next if ( $user  && grep { $_ =~ /^$user$/i } @{$options{'exclude_user'}});
 	    
 	    if ($options{'user'}) {
-	    	$skip = 0 if $options{'user'} &&  $options{'user'} =~ /$in_progress->{$k}->{user}/i; ## allow real user
-		$skip = 0 if $options{'user'} && $user_display->{$in_progress->{$k}->{user}} &&  $options{'user'} =~ /$user_display->{$in_progress->{$k}->{user}}/i; ## allow display_user
+		$skip = 0 if $user =~ /^$options{'user'}$/i; ## user display (friendly) matches specified 
+		$skip = 0 if $orig_user =~ /^$options{'user'}$/i; ## user (non friendly) matches specified
 	    }  else {	$skip = 0;    }
+	    
 	    next if $skip;
+	    
 	    my $live_key = (split("_",$k))[0];
 	    
-	    ## use display name 
-	    my ($user,$orig_user) = &FriendlyName($in_progress->{$k}->{user});
 	    
 	    if (!$seen{$user}) {
 		$seen{$user} = 1;
@@ -1739,8 +1751,13 @@ sub CheckLock {
 
 sub FriendlyName() {
     my $user = shift;
+    my $device = shift;
+    
     my $orig_user = $user;
     $user = $user_display->{$user} if $user_display->{$user};
+    if ($device && $user_display->{$orig_user.'+'.$device} ) {
+	$user = $user_display->{$orig_user.'+'.$device};
+    }
     return ($user,$orig_user);
 }
 
@@ -1885,8 +1902,8 @@ sub info_from_xml() {
     #	$title .= ' ['.$rating.']';
     #   }
     
-    my ($user,$tmp) = &FriendlyName($orig_user);
-    
+    my ($user,$tmp) = &FriendlyName($orig_user,$platform);
+
     ## ADD keys here when needed for &Notify hash
     my $info = {
 	'user' => $user,
