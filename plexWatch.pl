@@ -74,6 +74,12 @@ if (&ProviderEnabled('GNTP')) {
     Growl::GNTP->import();
 }
 
+
+if ($log_client_ip) {
+    require File::ReadBackwards;
+    File::ReadBackwards->import();
+}
+
 ## used for later..
 my $format_options = {
     'user' => 'user',
@@ -928,61 +934,71 @@ sub LocateIP() {
     ## locate IP by machineIdentifier in log file -- hoping this will be part of the API at some point
     ##  * added ratingKey -- sometimes the DirectPlay on LAN is missing the standated GET I am expecting..
     ##  ** I think it's due when the IP is in the allowedNetworks
+    ## * modified to read file backwards -- if people use custom logs - they can be way to large..
 
     my $href = shift;
     
-
     if ($log_client_ip && ref $href) {
 	# two logs should be enough.. shouldn't rotate more than once
 	my @logs = ($server_log,
 		    $server_log . '.1',
 	    );
+	my $max_lines = 10000; # seems like a lot.. but it's not
+	
 	foreach my $log (@logs) {
 	    if (-f $log) {
 		my $match;
 		my $d_out = "Locating IP for $href->{'machineIdentifier'} from $log... ";
-		open SLOG, "< $log";
-		my @lines = reverse <SLOG>; ## search file backwards for most recent match
+		
+		my $bw = File::ReadBackwards->new( $log ) or
+		    die "can't read 'log_file' $!" ;
+		
 		my $ip;
 		my $find = $href->{'machineIdentifier'};
-		for (@lines) {
+		
+		my $count = 0;
+		while( defined( my $log_line = $bw->readline ) ) {
+		    $count++;
+		    last if ($count > $max_lines);
 		    if (!$ip) {
-			if ($_ =~ /GET.*X-Plex-Client-Identifier=$find.*\s+\[(.*)\:\d+\]/) { 
+			if ($log_line =~ /GET.*X-Plex-Client-Identifier=$find.*\s+\[(.*)\:\d+\]/) { 
 			    $ip = $1; 
-			    $match = $_;
+			    $match = $log_line;
 			}
-			elsif ($_ =~ /GET.*session=$find.*\s+\[(.*)\:\d+\]/) { 
+			elsif ($log_line =~ /GET.*session=$find.*\s+\[(.*)\:\d+\]/) { 
 			    $ip = $1; 
-			    $match = $_;
+			    $match = $log_line;
 			}
 		    }
 		}
-		$d_out .= $ip . "\n" if $ip;
-		$d_out .= "NO IP found\n" if !$ip;
+		
+		$d_out .= $ip if $ip;
+		$d_out .= "NO IP found ($count lines searched)" if !$ip;
 		&DebugLog($d_out);
 		&DebugLog("$ip log match: $match") if $ip;
-
+		
 		if (!$ip) {
+		    $count = 0;
 		    my $find = $href->{'ratingKey'};
 		    $d_out = "Locating IP for  $href->{ratingKey} from $log... ";
-		    for (@lines) {
+		    while( defined( my $log_line = $bw->readline ) ) {
+			$count++;
+			last if ($count > $max_lines);
+
 			if (!$ip) {
-			    if ($_ =~ /GET.*ratingKey=$find.*\s+\[(.*)\:\d+\]/) { 
+			    if ($log_line =~ /GET.*ratingKey=$find.*\s+\[(.*)\:\d+\]/) { 
 				$ip = $1; 
-				$match = $_;
+				$match = $log_line;
+				last;
 			    }
 			}
 		    }
-		    $d_out .= $ip . "\n" if $ip;
-		    $d_out .= "$ip matched: $match\n" if $ip;
-		    $d_out .= "NO IP found\n" if !$ip;
+		    $d_out .= $ip if $ip;
+		    $d_out .= "NO IP found ($count lines searched)" if !$ip;
 		    &DebugLog($d_out);
 		    &DebugLog("$ip log match: $match") if $ip;
 		}
-		
-		close SLOG;
 		return $ip if $ip;
-
 	    }
 	}
     }
@@ -1868,13 +1884,13 @@ sub getDuration() {
 sub CheckLock {
     open($script_fh, '<', $0)
 	or die("Unable to open script source: $!\n");
-    my $max_wait = 60; ## wait 60 seconds before exiting..
+    my $max_wait = 30; ## wait 60 (sleep 2) seconds before exiting..
     my $count = 0;
     while (!flock($script_fh, LOCK_EX|LOCK_NB)) {
 	#unless (flock($script_fh, LOCK_EX|LOCK_NB)) {
-	print "$0 is already running. Exiting.\n" if $debug;
+	print "$0 is already running. waiting.\n" if $debug;
 	$count++;
-	sleep 1;
+	sleep 2;
 	if ($count > $max_wait) { 
 	    print "CRITICAL: max wait of $max_wait seconds reached.. other running $0?\n";
 	    exit(2);

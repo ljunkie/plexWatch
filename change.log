@@ -5,6 +5,7 @@
 #      -- Requires parsing of PMS log file. $server_log in config.pl
 #      -- log file searched in reverse order for most recent line
 #      -- fallback to itemID (ratingKey) being watched for IP. (mainly for clients connecting from 'List of networks that are allowed without auth')
+#      -- REQUIRES perl module File::ReadBackwards
 # * Added SSL support (port 32443)
 # * friendly name now allows for user+platform(title) (example in config.pl-dist)
 # * $debug_logging added to config.pl ( still need to add more debug logging though )
