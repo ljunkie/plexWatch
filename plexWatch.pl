@@ -880,7 +880,9 @@ sub Notify() {
     if ($type =~ /start/) {	$push_type = 'push_watching';    } 
     if ($type =~ /stop/) {	$push_type = 'push_watched';    } 
 
-    my $alert_options = ();
+    #my $alert_options = ();
+    my $alert_options = $info; ## include $info href
+    
     $alert_options->{'push_type'} = $push_type;
     foreach my $provider (keys %{$notify}) {
 	if (&ProviderEnabled($provider,$push_type)) {
@@ -1512,6 +1514,15 @@ sub NotifyProwl() {
     $prowl{'application'} ||= $appname;
     $prowl{'url'} ||= "";
     
+    ## allow formatting of appname
+    my $format = $prowl{'application'};
+    if ($format =~ /\{.*\}/) {
+	### replacemnt templates with variables
+	my $regex = join "|", keys %{$alert_options};
+	$regex = qr/$regex/;
+	$prowl{'application'} =~ s/{($regex)}/$alert_options->{$1}/g;
+    }
+
     # URL encode our arguments
     $prowl{'application'} =~ s/([^A-Za-z0-9])/sprintf("%%%02X", ord($1))/seg;
     $prowl{'event'} =~ s/([^A-Za-z0-9])/sprintf("%%%02X", ord($1))/seg;
@@ -1572,6 +1583,15 @@ sub NotifyPushOver() {
     $po{'message'} = $alert;
     	    
     ## PushOver title is AppName by default. If there is a real title for push type, It's 'AppName: push_type'
+
+    ## allow formatting of appname
+    my $format = $po{'title'};
+    if ($format =~ /\{.*\}/) {
+	### replacemnt templates with variables
+	my $regex = join "|", keys %{$alert_options};
+	$regex = qr/$regex/;
+	$po{'title'} =~ s/{($regex)}/$alert_options->{$1}/g;
+    }
     $po{'title'} .= ': ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
     
     
@@ -1614,6 +1634,16 @@ sub NotifyBoxcar() {
     $bc{'message'} = $alert;
     
     ## BoxCars title [from name] is set in config.pl. If there is a real title for push type, It's 'From: push_type_title'
+    ## allow formatting of appname
+
+    my $format = $bc{'from'};
+    if ($format =~ /\{.*\}/) {
+	### replacemnt templates with variables
+	my $regex = join "|", keys %{$alert_options};
+	$regex = qr/$regex/;
+	$bc{'from'} =~ s/{($regex)}/$alert_options->{$1}/g;
+    }
+    
     $bc{'from'} .= ': ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
     
     if (!$bc{'email'}) {
