@@ -975,7 +975,7 @@ sub LocateIP() {
 		$d_out .= $ip if $ip;
 		$d_out .= "NO IP found ($count lines searched)" if !$ip;
 		&DebugLog($d_out);
-		&DebugLog("$ip log match: $match") if $ip;
+		&DebugLog("$ip log match (line $count): $match") if $ip;
 		
 		if (!$ip) {
 		    $count = 0;
@@ -996,7 +996,7 @@ sub LocateIP() {
 		    $d_out .= $ip if $ip;
 		    $d_out .= "NO IP found ($count lines searched)" if !$ip;
 		    &DebugLog($d_out);
-		    &DebugLog("$ip log match: $match") if $ip;
+		    &DebugLog("$ip log match (line $count): $match") if $ip;
 		}
 		return $ip if $ip;
 	    }
