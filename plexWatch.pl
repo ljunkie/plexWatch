@@ -957,18 +957,16 @@ sub LocateIP() {
 		my $find = $href->{'machineIdentifier'};
 		
 		my $count = 0;
-		while( defined( my $log_line = $bw->readline ) ) {
-		    $count++;
+		while( defined( my $log_line = $bw->readline ) && !$ip) {
 		    last if ($count > $max_lines);
-		    if (!$ip) {
-			if ($log_line =~ /GET.*X-Plex-Client-Identifier=$find.*\s+\[(.*)\:\d+\]/) { 
-			    $ip = $1; 
-			    $match = $log_line;
-			}
-			elsif ($log_line =~ /GET.*session=$find.*\s+\[(.*)\:\d+\]/) { 
-			    $ip = $1; 
-			    $match = $log_line;
-			}
+		    $count++;
+		    if ($log_line =~ /GET.*X-Plex-Client-Identifier=$find.*\s+\[(.*)\:\d+\]/) { 
+			$ip = $1; 
+			$match = $log_line;
+		    }
+		    elsif ($log_line =~ /GET.*session=$find.*\s+\[(.*)\:\d+\]/) { 
+			$ip = $1; 
+			$match = $log_line;
 		    }
 		}
 		
@@ -981,16 +979,12 @@ sub LocateIP() {
 		    $count = 0;
 		    my $find = $href->{'ratingKey'};
 		    $d_out = "Locating IP for  $href->{ratingKey} from $log... ";
-		    while( defined( my $log_line = $bw->readline ) ) {
-			$count++;
+		    while( defined( my $log_line = $bw->readline ) && !$ip) {
 			last if ($count > $max_lines);
-
-			if (!$ip) {
-			    if ($log_line =~ /GET.*ratingKey=$find.*\s+\[(.*)\:\d+\]/) { 
-				$ip = $1; 
-				$match = $log_line;
-				last;
-			    }
+			$count++;
+			if ($log_line =~ /GET.*ratingKey=$find.*\s+\[(.*)\:\d+\]/) { 
+			    $ip = $1; 
+			    $match = $log_line;
 			}
 		    }
 		    $d_out .= $ip if $ip;
