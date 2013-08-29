@@ -948,25 +948,27 @@ sub LocateIP() {
 	foreach my $log (@logs) {
 	    if (-f $log) {
 		my $match;
-		my $d_out = "Locating IP for $href->{'machineIdentifier'} from $log... ";
 		
 		my $bw = File::ReadBackwards->new( $log ) or
 		    die "can't read 'log_file' $!" ;
 		
 		my $ip;
 		my $find = $href->{'machineIdentifier'};
+		my $item = $href->{'ratingKey'};
 		
+		my $d_out = "Locating IP for $href->{ratingKey}:$href->{'machineIdentifier'} [$href->{'user'}:$href->{'title'}] from $log... ";
 		my $count = 0;
 		while( defined( my $log_line = $bw->readline ) && !$ip) {
 		    last if ($count > $max_lines);
 		    $count++;
-		    if ($log_line =~ /GET.*X-Plex-Client-Identifier=$find.*\s+\[(.*)\:\d+\]/) { 
-			$ip = $1; 
-			$match = $log_line;
+
+		    if ($log_line =~ /(GET|HEAD]).*[^\d]$item.*(X-Plex-Client-Identifier|session)=$find.*\s+\[(.*)\:\d+\]/i) {
+			$ip = $3;
+			$match = $log_line . " [ by $2:$find + item:$item]";
 		    }
-		    elsif ($log_line =~ /GET.*session=$find.*\s+\[(.*)\:\d+\]/) { 
-			$ip = $1; 
-			$match = $log_line;
+		    elsif ($log_line =~ /(GET|HEAD).*(X-Plex-Client-Identifier|session)=$find.*\s+\[(.*)\:\d+\]/i) {
+			$ip = $3;
+			$match = $log_line . " [ by $2:$find only]";
 		    }
 		}
 		
@@ -975,17 +977,37 @@ sub LocateIP() {
 		&DebugLog($d_out);
 		&DebugLog("$ip log match (line $count): $match") if $ip;
 		
+		## this is a failsafe [fallback] way to get IP - it might be incorrect if multiple people are view the item at the same time
 		if (!$ip) {
 		    $count = 0;
-		    my $find = $href->{'ratingKey'};
-		    $d_out = "Locating IP for  $href->{ratingKey} from $log... ";
+		    my $find = $item;
+		    my $d_out = "Locating IP for $href->{ratingKey} [$href->{'user'}:$href->{'title'}] from $log... ";
+		    $d_out = "Locating IP for item $href->{ratingKey} from $log... ";
 		    while( defined( my $log_line = $bw->readline ) && !$ip) {
 			last if ($count > $max_lines);
 			$count++;
-			if ($log_line =~ /GET.*ratingKey=$find.*\s+\[(.*)\:\d+\]/) { 
+			
+			if ($log_line =~ /GET.*playing.*ratingKey=$find[^\d].*\s+\[(.*)\:\d+\]/) { 
 			    $ip = $1; 
-			    $match = $log_line;
+			    $match = $log_line . "[ fallback match 1 ]";
 			}
+			elsif ($log_line =~ /GET.*\/$find\?checkFiles.*\s+\[(.*)\:\d+\]/) { 
+			    $ip = $1; 
+			    $match = $log_line . "[ fallback match 2 ]";
+			}
+			elsif ($log_line =~ /GET.*[^\d]$find[^\d].*\s+\[(.*)\:\d+\]/) { 
+			    $ip = $1; 
+			    $match = $log_line . "[ fallback match 3 ]";
+			}
+			## best line to match (but not always available at start)
+			# Request: GET /:/timeline?time=0&duration=1399200&state=playing&ratingKey=87959&key=%2Flibrary%2Fmetadata%2F87959&containerKey=http%3A%2F%2F10.0.0.5%3A32400%2Flibrary%2Fmetadata%2F87958%2Fchildren [10.0.0.5:3283] (469 live)
+			
+			## option 2 (called before starting -- maybe)
+			# Request: GET /library/metadata/87959?checkFiles=1 [10.0.0.5:43515] (469 live)
+			
+			# worst of all three -- this is just a view
+			# Request: GET /photo/:/transcode?url=http%3A%2F%2F127.0.0.1%3A32400%2Flibrary%2Fmetadata%2F87959%2Fthumb%2F1377723508&width=214&height=306&format=jpeg&background=363636 [10.0.0.5:61215] (469 live)
+
 		    }
 		    $d_out .= $ip if $ip;
 		    $d_out .= "NO IP found ($count lines searched)" if !$ip;
