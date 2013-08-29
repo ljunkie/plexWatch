@@ -18,6 +18,7 @@
 # * Fix: --watched: {percent_complete} -- use the last viewOffset instead of the first.
 # * Fix: --watched: always display a 100% watched show/movie. I.E.  show two lines: if user completes show1 (100%), then restarts said show and stops at < 90% on the same day (advanced config)
 # * Fix: --watched: do NOT group shows together IF hours between start of the same show is > 3 hours. (advanced config)
+# * 'application' => $appname removed from boxcar ( not used ) 'from' is the equivalent
 # * advanced config options available. View README. (Mainly to not convolute the config more than it already is)
 # * README: updated instructions to NOT call sudo before running the script. This way the DB is not owned by root and can be run by the 'normal' user.
 

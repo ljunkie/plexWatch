@@ -97,7 +97,6 @@ $notify = {
 	'push_recentlyadded'  => 0,
 	'push_watched'        => 0,
 	'push_watching'       => 0,
-        'application' => $appname,
 	'email' => '',                          ## YOUR email address registered at boxcar
 	'from' => 'Your From Name',              ## From Name displayed on boxcar
 	'provider_key' => 'o2eI7rcwya5XFETaXdlh',                        ## plexWatch app is 'o2eI7rcwya5XFETaXdlh'. You may supply your own.
