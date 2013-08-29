@@ -1,11 +1,11 @@
 #!/usr/bin/perl
 
-my $version = '0.0.19-dev-9';
+my $version = '0.0.19-dev-10';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-08-29 14:14 PST
+# Modified: 2013-08-29 14:34 PST
 #
 #  Version: $version
 # https://github.com/ljunkie/plexWatch
@@ -1549,7 +1549,6 @@ sub NotifyProwl() {
     ## allow formatting of appname
     my $format = $prowl{'application'};
     if ($format =~ /\{.*\}/) {
-	### replacemnt templates with variables
 	my $regex = join "|", keys %{$alert_options};
 	$regex = qr/$regex/;
 	$prowl{'application'} =~ s/{($regex)}/$alert_options->{$1}/g;
@@ -1619,7 +1618,6 @@ sub NotifyPushOver() {
     ## allow formatting of appname
     my $format = $po{'title'};
     if ($format =~ /\{.*\}/) {
-	### replacemnt templates with variables
 	my $regex = join "|", keys %{$alert_options};
 	$regex = qr/$regex/;
 	$po{'title'} =~ s/{($regex)}/$alert_options->{$1}/g;
@@ -1666,7 +1664,7 @@ sub NotifyBoxcar() {
     $bc{'message'} = $alert;
     
     ## BoxCars title [from name] is set in config.pl. If there is a real title for push type, It's 'From: push_type_title'
-    ## allow formatting of appname
+    ## allow formatting of appname (boxcar it's the 'from' key)
 
     my $format = $bc{'from'};
     if ($format =~ /\{.*\}/) {

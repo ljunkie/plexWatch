@@ -10,6 +10,7 @@
 # * Added SSL support (port 32443)
 # * friendly name now allows for user+platform(title) (example in config.pl-dist)
 # * $debug_logging added to config.pl ( still need to add more debug logging though )
+# * Variables allowed in 'application' for prowl,pushover & 'from' for boxcar
 # * Fix: AM/PM for OSX (non GNU) 
 # * Fix: --watching now calls --notify before it shows now playing content. Fixes issue when content hasn't been logged as started/stopped
 # * Fix: allows season/episode fields to be empty for 'show'
