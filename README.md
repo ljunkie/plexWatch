@@ -57,6 +57,20 @@ http://forums.plexapp.com/index.php/topic/72552-plexwatch-plex-notify-script-sen
 
 * Growl::GNTP
 
+
+#### Required ONLY if 'Client IP Logging' is enable 
+
+* File::ReadBackwards
+
+* To enable: edit config.pl
+
+```
+$server_log    = '/var/lib/plexmediaserver/Library/Application Support/Plex Media Server/Logs/Plex Media Server.log'; ## used to log IP address of user (alpha)
+$log_client_ip = 1; ## requires $server_log to be available too.
+$debug_logging = 1; ## logs to $data_dir/debug.log ( only really helps debug IP logging for now )
+```
+
+
 <br/>
 
 ### Install 
@@ -388,8 +402,17 @@ Format Options for alerts
 
 
 <br/>
-## Advanced options
+## Advanced options - config.pl
 
+#### Grouping of watched shows
+
+```
+$watched_show_completed = 1; always show completed show/movie as it's own line (default 1)
+```
+
+```
+$watched_grouping_maxhr = 2; do not group shows together if start/restart is > X hours (default is 3 hours)
+```
 
 #### SQLite backups
 
