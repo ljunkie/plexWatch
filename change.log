@@ -3,21 +3,22 @@
 #      * enable this in config.pl with the $server_log, $log_client_ip (enable $debug_logging to see what matched )
 #      -- format_options: {ip_address}
 #      -- Requires parsing of PMS log file. $server_log in config.pl
-#      -- log file searched in reverse order for most recent line
-#      -- fallback to itemID (ratingKey) being watched for IP. (mainly for clients connecting from 'List of networks that are allowed without auth')
-#      -- REQUIRES perl module File::ReadBackwards
+#      -- log file searched in reverse order for most recent line (File::ReadBackwards)
+#      -- match on itemID+machineIdentifier -or- machineIdentifier
+#      -- fallback to only itemID (ratingKey). Could match wrong IP if multiple clients watch the same itemID (fallback: mainly for clients in 'List of networks that are allowed without auth')
+#      -- REQUIRES perl module File::ReadBackwards - to conserve memory)
 # * Added SSL support (port 32443)
 # * friendly name now allows for user+platform(title) (example in config.pl-dist)
 # * $debug_logging added to config.pl ( still need to add more debug logging though )
 # * Fix: AM/PM for OSX (non GNU) 
 # * Fix: --watching now calls --notify before it shows now playing content. Fixes issue when content hasn't been logged as started/stopped
 # * Fix: allows season/episode fields to be empty for 'show'
-# * Fix: Do not update XML if the XML is not valid
-# * Fix: --watched: percent_complete -- use the last viewOffset instead of the first.
-#        * TODO: break --watched into multiple if viewOffset hit 100% complete and then watched again on the same day
+# * Fix: Do not update XML in DB if the XML is not valid
+# * Fix: --watched: {percent_complete} -- use the last viewOffset instead of the first.
+# * Fix: --watched: always display a 100% watched show/movie. I.E.  show two lines: if user completes show1 (100%), then restarts said show and stops at < 90% on the same day (advanced config)
+# * Fix: --watched: do NOT group shows together IF hours between start of the same show is > 3 hours. (advanced config)
+# * advanced config options available. View README. (Mainly to not convolute the config more than it already is)
 # * README: updated instructions to NOT call sudo before running the script. This way the DB is not owned by root and can be run by the 'normal' user.
-# * Fix: always display a 100% watched show/movie. I.E.  show two lines: if user completes show1 (100%), then restarts said show and stops at < 90%
-# * Fix: do NOT group shows together IF hours between start of the same show is > 3 hours. 
 
 
 # 0.0.18-dev
