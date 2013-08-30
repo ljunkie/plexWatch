@@ -1,11 +1,11 @@
 #!/usr/bin/perl
 
-my $version = '0.0.19-RC0';
+my $version = '0.0.19-RC1';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-08-29 14:39 PST
+# Modified: 2013-08-30 11:03 PST
 #
 #  Version: $version
 # https://github.com/ljunkie/plexWatch
@@ -155,7 +155,6 @@ if ($options{debug}) {
     diagnostics->import();
 }
 
-my $date = localtime;
 
 if ($options{'format_options'}) {
     print "\nFormat Options for alerts\n";
@@ -830,6 +829,8 @@ sub ConsoleLog() {
     my $print = shift;
     
     my $console;
+    my $date = localtime;
+
     if ($debug || $print) {
 	$console = &consoletxt("$date: DEBUG: $msg"); 
 	print   $console ."\n";   
@@ -857,6 +858,7 @@ sub DebugLog() {
     my $msg = shift;
     my $print = shift;
     
+    my $date = localtime;
     my $console = &consoletxt("$date: $msg"); 
     print   $console ."\n"     if ($debug || $print);
     
@@ -949,8 +951,7 @@ sub LocateIP() {
 	    if (-f $log) {
 		my $match;
 		
-		my $bw = File::ReadBackwards->new( $log ) or
-		    die "can't read 'log_file' $!" ;
+		my $bw = File::ReadBackwards->new( $log ) or die "can't read 'log_file' $!" ;
 		
 		my $ip;
 		my $find = $href->{'machineIdentifier'};
@@ -978,7 +979,12 @@ sub LocateIP() {
 		&DebugLog("$ip log match (line $count): $match") if $ip;
 		
 		## this is a failsafe [fallback] way to get IP - it might be incorrect if multiple people are view the item at the same time
+		##  fallback seems to work sometimes -- but depending if the video was started ~10 seconds before the run of this, the log line isn't logged yet. We need to sleep for a couple seconds
 		if (!$ip) {
+		    my $sleep = 5;
+		    &DebugLog("Trying fallback mode for IP match (sleeping $sleep seconds before reloading log $log");
+		    sleep 5; # we will sleep 5 seconds before searching log again -- and load the log file again.
+		    $bw = File::ReadBackwards->new( $log ) or die "can't read 'log_file' $!" ;
 		    $count = 0;
 		    my $find = $item;
 		    my $d_out = "Locating IP for $href->{ratingKey} [$href->{'user'}:$href->{'title'}] from $log... ";

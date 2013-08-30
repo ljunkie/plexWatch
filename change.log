@@ -2,11 +2,15 @@
 # * added options for logging IP_Address of client
 #      * enable this in config.pl with the $server_log, $log_client_ip (enable $debug_logging to see what matched )
 #      -- format_options: {ip_address}
+#      -- REQUIRES perl module File::ReadBackwards - to conserve memory)
 #      -- Requires parsing of PMS log file. $server_log in config.pl
 #      -- log file searched in reverse order for most recent line (File::ReadBackwards)
 #      -- match on itemID+machineIdentifier -or- machineIdentifier
-#      -- fallback to only itemID (ratingKey). Could match wrong IP if multiple clients watch the same itemID (fallback: mainly for clients in 'List of networks that are allowed without auth')
-#      -- REQUIRES perl module File::ReadBackwards - to conserve memory)
+#      -- fallback to only itemID (ratingKey) 
+	      * Will sleep 5 seconds before searching -- allows PMS to log to it log file before we try again.
+#             * Could match wrong IP if multiple clients watch the same itemID.
+#	      * mainly for clients in 'List of networks that are allowed without auth' *only time I have seen this
+
 # * Added SSL support (port 32443)
 # * friendly name now allows for user+platform(title) (example in config.pl-dist)
 # * $debug_logging added to config.pl ( still need to add more debug logging though )

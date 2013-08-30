@@ -70,6 +70,17 @@ $log_client_ip = 1; ## requires $server_log to be available too.
 $debug_logging = 1; ## logs to $data_dir/debug.log ( only really helps debug IP logging for now )
 ```
 
+```
+# Debian/Ubuntu: apt-get 
+ sudo apt-get install libfile-readbackwards-perl
+
+# Rhel/Centos: yum
+ sudo yum install perl\(File::ReadBackwards\)
+
+# Others: cpan
+ sudo cpan File::ReadBackwards
+```
+
 
 <br/>
 
