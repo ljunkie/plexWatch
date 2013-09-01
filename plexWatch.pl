@@ -20,13 +20,25 @@ use Time::Duration;
 use Getopt::Long;
 use Pod::Usage;
 use Fcntl qw(:flock);
-use Time::ParseDate;
 use POSIX qw(strftime);
 use File::Basename;
 use warnings;
 use open qw/:std :utf8/; ## default encoding of these filehandles all at once (binmode could also be used) 
                          ## TODO: might want to allow non ascii -- would require stripping " s/[^[:ascii:]]+//g; " from the code below..
 
+## windows
+if ($^O eq 'MSWin32') {
+
+}
+## end
+
+## non windows
+if ($^O ne 'MSWin32') {
+ require Time::ParseDate;
+ Time::ParseDate->import(); 
+}
+## end
+						 
 ## load config file
 my $dirname = dirname(__FILE__);
 if (!-e $dirname .'/config.pl') {
@@ -405,16 +417,24 @@ if ($options{'watched'} || $options{'stats'}) {
     if ($options{start}) {
 	my $v = $options{start};
 	my $now = time();
-	$now = parsedate('today at midnight', FUZZY=>1) 	if ($v !~ /now/i);
-	if ($start = parsedate($v, FUZZY=>1, NOW => $now)) {	    $limit_start = localtime($start);	}
-    }
+    
+	## TODO - implememnt parsedate for windows
+	if ($^O ne 'MSWin32') {
+		$now = parsedate('today at midnight', FUZZY=>1) 	if ($v !~ /now/i);
+		if ($start = parsedate($v, FUZZY=>1, NOW => $now)) {	    $limit_start = localtime($start);	}
+		}
+	}
     
     if ($options{stop}) {
 	my $v = $options{stop};
 	my $now = time();
-	$now = parsedate('today at midnight', FUZZY=>1) if ($v !~ /now/i);
-	if ($stop = parsedate($v, FUZZY=>1, NOW => $now)) {	    $limit_end = localtime($stop);	}
-    }
+	
+	## TODO - implememnt parsedate for windows
+		if ($^O ne 'MSWin32') {
+		$now = parsedate('today at midnight', FUZZY=>1) if ($v !~ /now/i);
+		if ($stop = parsedate($v, FUZZY=>1, NOW => $now)) {	    $limit_end = localtime($stop);	}
+		}
+	}
     
     my $is_watched = &GetWatched($start,$stop);
     
@@ -465,8 +485,12 @@ if ($options{'watched'} || $options{'stats'}) {
 	    my ($sec, $min, $hour, $day,$month,$year) = (localtime($is_watched->{$k}->{time}))[0,1,2,3,4,5]; 
 	    $year += 1900;
 	    $month += 1;
-	    my $serial = parsedate("$year-$month-$day 00:00:00");
-
+	
+		## TODO - implememnt parsedate for windows
+       	my $serial = "$year-$month-$day";
+		if ($^O ne 'MSWin32') {
+		    $serial = parsedate("$year-$month-$day 00:00:00");
+		}
 	    #my $skey = $is_watched->{$k}->{user}.$year.$month.$day.$is_watched->{$k}->{title};
 	    my $skey = $user.$year.$month.$day.$is_watched->{$k}->{title};
 	    
