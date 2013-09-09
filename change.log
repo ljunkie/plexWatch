@@ -1,4 +1,4 @@
-# 0.0.19-dev
+# 0.0.19
 # * added options for logging IP_Address of client
 #      * enable this in config.pl with the $server_log, $log_client_ip (enable $debug_logging to see what matched )
 #      -- format_options: {ip_address}
