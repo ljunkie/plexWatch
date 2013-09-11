@@ -1,11 +1,11 @@
 #!/usr/bin/perl
 
-my $version = '0.0.19-RC1';
+my $version = '0.0.19-win32';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-08-30 11:03 PST
+# Modified: 2013-09-10 20:13 PST
 #
 #  Version: $version
 # https://github.com/ljunkie/plexWatch
@@ -23,6 +23,8 @@ use Fcntl qw(:flock);
 use POSIX qw(strftime);
 use File::Basename;
 use warnings;
+use Time::Local;
+        
 use open qw/:std :utf8/; ## default encoding of these filehandles all at once (binmode could also be used) 
                          ## TODO: might want to allow non ascii -- would require stripping " s/[^[:ascii:]]+//g; " from the code below..
 
@@ -483,11 +485,12 @@ if ($options{'watched'} || $options{'stats'}) {
 	    
 	    ## to cleanup - maybe subroutine
 	    my ($sec, $min, $hour, $day,$month,$year) = (localtime($is_watched->{$k}->{time}))[0,1,2,3,4,5]; 
-	    $year += 1900;
+	    my $serial = timelocal(0, 0, 0, $day, $month, $year);
+		$year += 1900;
 	    $month += 1;
-	
 		## TODO - implememnt parsedate for windows
-       	my $serial = "$year-$month-$day";
+       	#my $serial = "$year$month$day";
+		# I can probably get rid of this since the serial above works for both
 		if ($^O ne 'MSWin32') {
 		    $serial = parsedate("$year-$month-$day 00:00:00");
 		}
@@ -615,8 +618,13 @@ if ($options{'watched'} || $options{'stats'}) {
 	foreach my $user (keys %stats) {
 	    printf ("user: %s's total duration %s \n", $user, duration_exact($stats{$user}->{total_duration}));
 	    foreach my $epoch (sort keys %{$stats{$user}->{duration}}) {
-		my $h_date = strftime "%a %b %e %Y", localtime($epoch);
-		printf (" %s: %s %s\n", $h_date, $user, duration_exact($stats{$user}->{duration}->{$epoch}));
+			my $h_date;
+			if ($^O eq 'MSWin32') {
+				$h_date = strftime( "%a %b %d %Y", localtime($epoch) );
+			} else {
+				$h_date = strftime "%a %b %e %Y", localtime($epoch);
+			}
+			printf (" %s: %s %s\n", $h_date, $user, duration_exact($stats{$user}->{duration}->{$epoch}));
 	    }
 	    print "\n";
 	}
@@ -2179,6 +2187,7 @@ sub twittime() {
 
 sub rrtime() {
     ## my way of showing the date/time
+    # %e is not compatiable on non unix -- ok since this sub is not used anymore
     my $epoch = shift;
     my $date = (strftime "%I:%M%p - %a %b ", localtime($epoch)) . suffer(strftime "%e", localtime($epoch)) . (strftime " %Y", localtime($epoch));
     $date =~ s/^0//;
