@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-my $version = '0.0.19';
+my $version = '0.0.20-dev';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
@@ -34,7 +34,7 @@ if (!-e $dirname .'/config.pl') {
     exit;
 }
 do $dirname.'/config.pl';
-use vars qw/$data_dir $server $port $appname $user_display $alert_format $notify $push_titles $backup_opts $myPlex_user $myPlex_pass $server_log $log_client_ip $debug_logging $watched_show_completed $watched_grouping_maxhr/; 
+use vars qw/$data_dir $server $port $appname $user_display $alert_format $notify $push_titles $backup_opts $myPlex_user $myPlex_pass $server_log $log_client_ip $debug_logging $watched_show_completed $watched_grouping_maxhr $count_paused/; 
 if (!$data_dir || !$server || !$port || !$appname || !$alert_format || !$notify) {
     print "config file missing data\n";
     exit;
@@ -493,7 +493,8 @@ if ($options{'watched'} || $options{'stats'}) {
 	    
 	    my $is_completed = 0;
 	    if ($watched_show_completed) {
-		my $info = &info_from_xml($is_watched->{$k}->{'xml'},$ntype,$is_watched->{$k}->{'time'},$is_watched->{$k}->{'stopped'});
+		my $paused = &getSecPaused($k);
+		my $info = &info_from_xml($is_watched->{$k}->{'xml'},$ntype,$is_watched->{$k}->{'time'},$is_watched->{$k}->{'stopped'},$paused);
 		$skey = $skey . $completed{$orig_skey} if $completed{$orig_skey};
 		if ($info->{'percent_complete'} > 99) {
 		    my $d_out = "$is_watched->{$k}->{title} watched 100\% by $user on $year-$month-$day - starting a new line (more than once)\n";
@@ -529,6 +530,7 @@ if ($options{'watched'} || $options{'stats'}) {
 	    
 	    next if !$options{'watched'};
 	    next if $is_watched->{$k}->{xml} =~ /<opt><\/opt>/i; ## bug -- fixed in 0.0.19
+	    my $paused = &getSecPaused($k);
 	    if ($options{'nogrouping'}) {
 		if (!$seen_user{$user}) {
 		    $seen_user{$user} = 1;
@@ -537,7 +539,7 @@ if ($options{'watched'} || $options{'stats'}) {
 		    print "\n";
 		}
 		my $time = localtime ($is_watched->{$k}->{time} );
-		my $info = &info_from_xml($is_watched->{$k}->{'xml'},$ntype,$is_watched->{$k}->{'time'},$is_watched->{$k}->{'stopped'});
+		my $info = &info_from_xml($is_watched->{$k}->{'xml'},$ntype,$is_watched->{$k}->{'time'},$is_watched->{$k}->{'stopped'},$paused);
 		$info->{'ip_address'} = $is_watched->{$k}->{ip_address};
 		my $alert = &Notify($info,1); ## only return formated alert
 		printf(" %s: %s\n",$time, $alert);
@@ -549,7 +551,12 @@ if ($options{'watched'} || $options{'stats'}) {
 		    $seen{$skey}->{'user'} = $user;
 		    $seen{$skey}->{'orig_user'} = $orig_user;
 		    $seen{$skey}->{'stopped'} = $is_watched->{$k}->{stopped};
-		    $seen{$skey}->{'duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
+		    if (!$count_paused) {
+			$seen{$skey}->{'duration'} += ($is_watched->{$k}->{stopped}-$is_watched->{$k}->{time})-$paused;
+		    } else {
+			$seen{$skey}->{'duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
+		    }
+
 		} else {
 		    ## if same user/same movie/same day -- append duration -- must of been resumed
 		    $seen{$skey}->{'duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
@@ -577,7 +584,8 @@ if ($options{'watched'} || $options{'stats'}) {
 		print "\n";
 	    }
 	    my $time = localtime ($seen{$k}->{time} );
-	    my $info = &info_from_xml($seen{$k}->{xml},$ntype,$seen{$k}->{'time'},$seen{$k}->{'stopped'},$seen{$k}->{'duration'});
+	    
+	    my $info = &info_from_xml($seen{$k}->{xml},$ntype,$seen{$k}->{'time'},$seen{$k}->{'stopped'},0,$seen{$k}->{'duration'});
 	    $info->{'ip_address'} = $seen{$k}->{ip_address};
 	    my $alert = &Notify($info,1); ## only return formated alert
 	    printf(" %s: %s\n",$time, $alert);
@@ -614,7 +622,7 @@ $options{'notify'} = 1 if $options{'watching'};
 ## Notify -notify || no options = notify on watch/stopped streams
 ##--notify
 if (!%options || $options{'notify'}) {
-    my $vid = &GetSessions();    ## query API for current streams
+    my $live = &GetSessions();    ## query API for current streams
     my $started= &GetStarted(); ## query streams already started/not stopped
     my $playing = ();            ## container of now playing id's - used for stopped status/notification
     
@@ -622,14 +630,15 @@ if (!%options || $options{'notify'}) {
     ## nothing being watched.. verify all notification went out
     ## this shouldn't happen ( only happened during development when I was testing -- but just in case )
     #### to fix
-    if (!ref($vid)) {
+    if (!ref($live)) {
 	my $un = &GetUnNotified();
 	foreach my $k (keys %{$un}) {
 	    if (!$playing->{$k}) {
 		my $ntype = 'start';
 		my $start_epoch = $un->{$k}->{time} if $un->{$k}->{time};
 		my $stop_epoch = '';
-		my $info = &info_from_xml($un->{$k}->{'xml'},'start',$start_epoch,$stop_epoch);
+		my $paused = &getSecPaused($k);
+		my $info = &info_from_xml($un->{$k}->{'xml'},'start',$start_epoch,$stop_epoch,$paused);
 		$info->{'ip_address'} = $un->{$k}->{ip_address};
 		&Notify($info);
 		&SetNotified($un->{$k}->{id});
@@ -641,10 +650,10 @@ if (!%options || $options{'notify'}) {
     ## end unnotified
     
     ## Quick hack to notify stopped content before start -- get a list of playing content
-    foreach my $k (keys %{$vid}) {
-	my $user = (split('\@',$vid->{$k}->{User}->{title}))[0];
+    foreach my $k (keys %{$live}) {
+	my $user = (split('\@',$live->{$k}->{User}->{title}))[0];
 	if (!$user) {	$user = 'Local';    }
-	my $db_key = $k . '_' . $vid->{$k}->{key} . '_' . $user;
+	my $db_key = $k . '_' . $live->{$k}->{key} . '_' . $user;
 	$playing->{$db_key} = 1;
     }
     
@@ -655,7 +664,8 @@ if (!%options || $options{'notify'}) {
 	    if (!$playing->{$k}) {
 		my $start_epoch = $started->{$k}->{time} if $started->{$k}->{time};
 		my $stop_epoch = time();
-		my $info = &info_from_xml($started->{$k}->{'xml'},'stop',$start_epoch,$stop_epoch);
+		my $paused = &getSecPaused($k);
+		my $info = &info_from_xml($started->{$k}->{'xml'},'stop',$start_epoch,$stop_epoch,$paused);
 		$info->{'ip_address'} = $started->{$k}->{ip_address};
 		&Notify($info);
 		&SetStopped($started->{$k}->{id},$stop_epoch);
@@ -664,25 +674,25 @@ if (!%options || $options{'notify'}) {
     }
     
     ## Notify on start/now playing
-    foreach my $k (keys %{$vid}) {
+    foreach my $k (keys %{$live}) {
 	my $start_epoch = time();
 	my $stop_epoch = ''; ## not stopped yet
-	my $info = &info_from_xml(XMLout($vid->{$k}),'start',$start_epoch,$stop_epoch);
+	my $info = &info_from_xml(XMLout($live->{$k}),'start',$start_epoch,$stop_epoch,0);
 
 	## for insert 
-	my $db_key = $k . '_' . $vid->{$k}->{key} . '_' . $info->{orig_user};
+	my $db_key = $k . '_' . $live->{$k}->{key} . '_' . $info->{orig_user};
 	
 	## these shouldn't be neede any more - to clean up as we now use XML data from DB
-	$info->{'orig_title'} = $vid->{$k}->{title};
+	$info->{'orig_title'} = $live->{$k}->{title};
 	$info->{'orig_title_ep'} = '';
 	$info->{'episode'} = '';
 	$info->{'season'} = '';
 	$info->{'genre'} = '';
-	if ($vid->{$k}->{grandparentTitle}) {
-	    $info->{'orig_title'} = $vid->{$k}->{grandparentTitle};
-	    $info->{'orig_title_ep'} = $vid->{$k}->{title};
-	    $info->{'episode'} = $vid->{$k}->{index};
-	    $info->{'season'} = $vid->{$k}->{parentIndex};
+	if ($live->{$k}->{grandparentTitle}) {
+	    $info->{'orig_title'} = $live->{$k}->{grandparentTitle};
+	    $info->{'orig_title_ep'} = $live->{$k}->{title};
+	    $info->{'episode'} = $live->{$k}->{index};
+	    $info->{'season'} = $live->{$k}->{parentIndex};
 	    if ($info->{'episode'} < 10) { $info->{'episode'} = 0 . $info->{'episode'};}
 	    if ($info->{'season'} < 10) { $info->{'season'} = 0 . $info->{'season'}; }
 	}
@@ -698,7 +708,7 @@ if (!%options || $options{'notify'}) {
 	    if (!$info->{'ip_address'}) {
 		$info->{'ip_address'} = &LocateIP($info) if ref $info;
 	    }
-	    &ProcessUpdate($vid->{$k},$db_key,$info->{'ip_address'}); ## update XML
+	    &ProcessUpdate($live->{$k},$db_key,$info->{'ip_address'}); ## update XML
 	    
 	    if ($debug) { 
 		&Notify($info);
@@ -711,7 +721,7 @@ if (!%options || $options{'notify'}) {
 	    $info->{'ip_address'} = &LocateIP($info) if ref $info;
 	    ## end the dirty feeling
 	    
-	    my $insert_id = &ProcessStart($vid->{$k},$db_key,$info->{'title'},$info->{'platform'},$info->{'orig_user'},$info->{'orig_title'},$info->{'orig_title_ep'},$info->{'genre'},$info->{'episode'},$info->{'season'},$info->{'summary'},$info->{'rating'},$info->{'year'},$info->{'ip_address'});
+	    my $insert_id = &ProcessStart($live->{$k},$db_key,$info->{'title'},$info->{'platform'},$info->{'orig_user'},$info->{'orig_title'},$info->{'orig_title_ep'},$info->{'genre'},$info->{'episode'},$info->{'season'},$info->{'summary'},$info->{'rating'},$info->{'year'},$info->{'ip_address'});
 	    &Notify($info);
 	    &SetNotified($insert_id);
 	}
@@ -762,10 +772,14 @@ if ($options{'watching'}) {
 
 	    ## switched to LIVE info
 	    #my $info = &info_from_xml($in_progress->{$k}->{'xml'},'watching',$in_progress->{$k}->{time});
-	    my $info = &info_from_xml(XMLout($live->{$live_key}),'watching',$in_progress->{$k}->{time});
+
+
+	    my $paused = &getSecPaused($k);
+	    my $info = &info_from_xml(XMLout($live->{$live_key}),'watching',$in_progress->{$k}->{time},time(),$paused);
 	    $info->{'ip_address'} = $in_progress->{$k}->{ip_address};
 
-	    &ProcessUpdate($live->{$live_key},$k); ## update XML  ## probably redundant as --watching calls --notify now -- (TODO)
+	    ## disabled - --watching calls --notify ( so this is redundant)
+	    #&ProcessUpdate($live->{$live_key},$k); ## update XML  ## probably redundant as --watching calls --notify now -- (TODO)
 
 	    ## overwrite progress and time_left from live -- should be pulling live xml above at some point
 	    #$info->{'progress'} = &durationrr($live->{$live_key}->{viewOffset}/1000);
@@ -1029,21 +1043,70 @@ sub LocateIP() {
 sub ProcessUpdate() {
     my ($xmlref,$db_key,$ip_address) = @_;
     my ($sess,$key) = split("_",$db_key);
+
+    
+    #print "processing update";
+    #print Dumper($xmlref);
+
     my $xml =  XMLout($xmlref);
     
     ## multiple checks to verify the xml we update is valid
     return if !$xmlref->{'title'}; ## xml must have title
     return if !$xmlref->{'key'}; ## xml ref must have key
     return if $xml !~ /$key/i; ## xml must contain key
-    
+
+    my ($cmd,$sth);
     if ($db_key) {
-	if ($ip_address) {
-	    my $sth = $dbh->prepare("update processed set xml = ?, ip_address = ? where session_id = ?");
-	    $sth->execute($xml,$ip_address,$db_key) or die("Unable to execute query: $dbh->errstr\n");
-	} else {
-	    my $sth = $dbh->prepare("update processed set xml = ? where session_id = ?");
-	    $sth->execute($xml,$db_key) or die("Unable to execute query: $dbh->errstr\n");
+	
+	## get paused status -- needed for real time watched
+	my $extra ='';
+	my $p_counter = 0;
+
+	my $state =  $xmlref->{Player}->{'state'} if $xmlref->{Player}->{state};
+	$cmd = "select paused,paused_counter from processed where session_id = ?";
+	$sth = $dbh->prepare($cmd);
+	$sth->execute($db_key) or die("Unable to execute query: $dbh->errstr\n");
+	my $p = $sth->fetchrow_hashref;
+	
+	$p_counter = $p->{'paused_counter'} if $p->{'paused_counter'};
+	my $p_epoch = $p->{'paused'} if $p->{'paused'};
+	my $prev_state = (defined($p_epoch)) ? "paused" : "playing";
+	## video is paused: verify DB has the pause epoch set
+	print "\n* Video State: $state [prev: $prev_state]\n" if ($debug && defined($state));
+	
+	my $now = time();
+	if (defined($state) && $state =~ /paused/i) {
+	    #my $sec = $now-$p_epoch;
+	    #my $total_sec = $p_counter+$sec;
+	    if (!$p_epoch) {
+		$extra .= sprintf(",paused = %s",$now);
+		printf "* Marking as as Paused on %s [%s]\n",scalar localtime($now),$now if ($debug && defined($state));
+	    } else {
+		$p_counter += $now-$p_epoch; ## only for display on debug -- do NOT update db with this.
+		printf "* Already marked as Paused on %s [%s]\n",scalar localtime($p_epoch),$p_epoch if ($debug && defined($state));
+		#$extra .= sprintf(",paused_counter = %s",$total_sec); #update counter
+	    }
+	} 
+	## Video is not paused -- verify DB not paused and update counter
+	else {
+	    if ($p_epoch) {
+		my $sec = $now-$p_epoch;
+		$p_counter += $sec;
+		$extra .= sprintf(",paused = %s",'NULL'); # set Paused to NULL
+		$extra .= sprintf(",paused_counter = %s",$p_counter); #update counter
+		printf "* Un-Marking as as Paused and setting paused counter to %s seconds [this duration %s sec]\n",$p_counter,$sec;
+	    }
 	}
+	print "* Total Paused duration: " . &durationrr($p_counter) . " [$p_counter seconds]\n" if $p_counter;
+	
+	# include IP update if we have it
+	$extra .= sprintf(",ip_address = '%s'",$ip_address) if $ip_address;
+	
+	
+	$cmd = sprintf("update processed set xml = ?%s where session_id = ?",$extra);
+	print "\n" . $cmd , " XMLcut ", $db_key, "\n";
+	$sth = $dbh->prepare($cmd);
+	$sth->execute($xml,$db_key) or die("Unable to execute query: $dbh->errstr\n");	
 	
     }
     return  $dbh->sqlite_last_insert_rowid();
@@ -1119,6 +1182,24 @@ sub PMSToken() {
 	return $token;
     }
     return 0;
+}
+
+
+sub getSecPaused() {
+    my $db_key = shift;
+    if ($db_key) {
+	my $cmd = "select paused,paused_counter from processed where session_id = '$db_key'";
+	my $sth = $dbh->prepare($cmd);
+	$sth->execute or die("Unable to execute query: $dbh->errstr\n");
+	my $row = $sth->fetchrow_hashref;
+	my $total=0;
+	$total=$row->{'paused_counter'} if $row->{'paused_counter'};
+	if (defined($row->{'paused'})) {
+	    $total += time()-$row->{'paused'};
+	}
+	$total = 0 if !$total || $total !~ /\d+/;
+	return $total;
+    }
 }
 
 sub CheckNotified() {
@@ -1271,6 +1352,8 @@ sub initDB() {
 	{ 'name' => 'summary', 'definition' => 'text', },
 	{ 'name' => 'notified', 'definition' => 'INTEGER', },
 	{ 'name' => 'stopped', 'definition' => 'timestamp',},
+	{ 'name' => 'paused', 'definition' => 'timestamp',},
+	{ 'name' => 'paused_counter', 'definition' => 'INTEGER',},
 	{ 'name' => 'xml', 'definition' => 'text',},
 	{ 'name' => 'ip_address', 'definition' => 'text',},
 	);
@@ -1944,10 +2027,15 @@ sub info_from_xml() {
     my $ntype = shift;
     my $start_epoch = shift;
     my $stop_epoch = shift;
+    my $paused = shift;
     my $duration = shift; ## special case to group start/stops
+    $paused = 0 if !$paused;
+
     ## start time is in xml
+
     
     my $vid = XMLin($hash,KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
+
 
     ## paused or playing? stopped is forced and required from ntype
     my $state = 'unknown';
@@ -1956,6 +2044,7 @@ sub info_from_xml() {
     } else {
 	$state =  $vid->{Player}->{'state'} if $vid->{Player}->{state};
     }
+
     
     my $ma_id = '';
     $ma_id = $vid->{Player}->{'machineIdentifier'} if $vid->{Player}->{'machineIdentifier'};
@@ -1997,18 +2086,22 @@ sub info_from_xml() {
     
     ## Duration Watched
     my $duration_raw;
+
     if (!$duration) {
 	if ($time && $stop_epoch) {
 	    $duration = $stop_epoch-$time;
-	    $duration_raw = $duration;
-	    $duration = &durationrr($duration);
-	}    
-    } else {
-	$duration_raw = $duration;
-	$duration = &durationrr($duration);
-	
+	} else {
+	    $duration = time()-$time;
+	}
     }
+    # set original duration
+    $duration_raw = $duration;
     
+    #exclude paused time
+    $duration = $duration-$paused if !$count_paused;
+    
+    $duration = &durationrr($duration);
+
     ## Percent complete -- this is correct ongoing in verison 0.0.18
     my $percent_complete;
     if ( ($vid->{viewOffset} && $vid->{duration}) && $vid->{viewOffset} > 0 && $vid->{duration} > 0) {
@@ -2017,15 +2110,18 @@ sub info_from_xml() {
     }
     ## version prior to 0.0.18 -- we will have to use duration watched to figure out percent
     ## not the best, but if percent complete is < 10 -- let's go with duration watched (including paused) vs duration of the video
-    if (!$percent_complete || $percent_complete < 10) {
-	#$percent_complete = 0;
+    
+    #if (!$percent_complete || $percent_complete < 10) { # no clue why I had < 10%.. lame
+    if (!$percent_complete || $percent_complete == 0) {
+	$percent_complete = 0;
+	# $duration_raw is correct as we didn't have paused seconds yet. 
+	# When we had pasued seconds, the percent_complete would have already applied above
 	if ( ($vid->{duration} && $vid->{duration} > 0) && ($duration_raw && $duration_raw > 0) )  {
 	    $percent_complete = sprintf("%2d",($duration_raw/($vid->{duration}/1000))*100);
 	    if ($percent_complete >= 90) {	$percent_complete = 100;    } 
 	}
     }
     $percent_complete = 0 if !$percent_complete;
-    
     
     my ($rating,$year,$summary,$extra_title,$genre,$platform,$title,$episode,$season);    
     $rating = $year = $summary = $extra_title = $genre = $platform = $title = $episode = $season = '';
@@ -2128,7 +2224,7 @@ sub RunTestNotify() {
 	    foreach my $k (keys %{$test_info}) {
 		my $start_epoch = $test_info->{$k}->{time} if $test_info->{$k}->{time}; ## DB only
 		my $stop_epoch = $test_info->{$k}->{stopped} if $test_info->{$k}->{stopped}; ## DB only
-		my $info = &info_from_xml($test_info->{$k}->{'xml'},$ntype,$start_epoch,$stop_epoch);
+		my $info = &info_from_xml($test_info->{$k}->{'xml'},$ntype,$start_epoch,$stop_epoch,0);
 		$info->{'ip_address'} = $test_info->{$k}->{ip_address};
 		&Notify($info);
 		## nothing to set as notified - this is a test
