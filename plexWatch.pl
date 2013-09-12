@@ -1,11 +1,11 @@
 #!/usr/bin/perl
 
-my $version = '0.0.19-win32';
+my $version = '0.0.19-1-win32';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-09-10 20:13 PST
+# Modified: 2013-09-11 17:06 PST
 #
 #  Version: $version
 # https://github.com/ljunkie/plexWatch
@@ -33,8 +33,9 @@ if ($^O eq 'MSWin32') {
 
 }
 ## end
+  #BEGIN { $ENV{PERL_LWP_SSL_VERIFY_HOSTNAME} = 0 }
 
-## non windows
+  ## non windows
 if ($^O ne 'MSWin32') {
  require Time::ParseDate;
  Time::ParseDate->import(); 
@@ -1100,7 +1101,10 @@ sub GetSessions() {
     
     # Generate our HTTP request.
     my ($userAgent, $request, $response);
-    $userAgent = LWP::UserAgent->new();
+    $userAgent = LWP::UserAgent->new(  ssl_opts => {
+         verify_hostname => 0,
+         SSL_verify_mode => "SSL_VERIFY_NONE",
+      });
     
     $userAgent->timeout(20);
     $userAgent->agent($appname);
@@ -1138,7 +1142,10 @@ sub PMSToken() {
     
     # Generate our HTTP request.
     my ($userAgent, $request, $response);
-    $userAgent = LWP::UserAgent->new();
+    $userAgent = LWP::UserAgent->new(  ssl_opts => {
+         verify_hostname => 0,
+         SSL_verify_mode => "SSL_VERIFY_NONE",
+      });
     $userAgent->timeout(10);
     $userAgent->agent($appname);
     $userAgent->env_proxy();
@@ -1604,7 +1611,10 @@ sub NotifyProwl() {
     
     # Generate our HTTP request.
     my ($userAgent, $request, $response, $requestURL);
-    $userAgent = LWP::UserAgent->new();
+    $userAgent = LWP::UserAgent->new(  ssl_opts => {
+         verify_hostname => 0,
+         SSL_verify_mode => "SSL_VERIFY_NONE",
+      });
     $userAgent->timeout(20);
     $userAgent->agent($appname);
     $userAgent->env_proxy();
@@ -1647,7 +1657,10 @@ sub NotifyPushOver() {
     }
     
     my %po = %{$notify->{pushover}};    
-    my $ua      = LWP::UserAgent->new();
+    my $ua      = LWP::UserAgent->new(  ssl_opts => {
+         verify_hostname => 0,
+         SSL_verify_mode => "SSL_VERIFY_NONE",
+      });
     $ua->timeout(20);
     $po{'message'} = $alert;
     	    
@@ -1725,7 +1738,10 @@ sub NotifyBoxcar() {
 	}
 
 	if ($response->{'_rc'} == 401) {
-	    my $ua      = LWP::UserAgent->new();
+	    my $ua      = LWP::UserAgent->new(  ssl_opts => {
+         verify_hostname => 0,
+         SSL_verify_mode => "SSL_VERIFY_NONE",
+      });
 	    $ua->timeout(20);
 	    my $msg = "$bc{'email'} is not subscribed to plexWatch service... trying to subscribe now";
 	    &ConsoleLog($msg);
@@ -1869,7 +1885,10 @@ sub NotifyBoxcarPOST() {
     ## the actual post to boxcar
     my %bc = %{$_[0]};
     
-    my $ua      = LWP::UserAgent->new();
+    my $ua      = LWP::UserAgent->new(  ssl_opts => {
+         verify_hostname => 0,
+         SSL_verify_mode => "SSL_VERIFY_NONE",
+      });
     $ua->timeout(20);
     my $url = 'http://boxcar.io/devices/providers/'. $bc{'provider_key'} .'/notifications';
     my $response = $ua->post( $url, [
@@ -2247,7 +2266,10 @@ sub GetSectionsIDs() {
     $proto = 'https' if $port == 32443;
     my $host = "$proto://$server:$port";
     
-    my $ua = LWP::UserAgent->new();
+    my $ua = LWP::UserAgent->new(  ssl_opts => {
+         verify_hostname => 0,
+         SSL_verify_mode => "SSL_VERIFY_NONE",
+      });
     $ua->timeout(20);
     
     my $sections = ();
@@ -2272,7 +2294,10 @@ sub GetItemMetadata() {
     $proto = 'https' if $port == 32443;
     my $host = "$proto://$server:$port";
     
-    my $ua = LWP::UserAgent->new();
+    my $ua = LWP::UserAgent->new(  ssl_opts => {
+         verify_hostname => 0,
+         SSL_verify_mode => "SSL_VERIFY_NONE",
+      });
     $ua->timeout(20);
 
     my $item = shift;
@@ -2307,7 +2332,10 @@ sub GetRecentlyAdded() {
     $proto = 'https' if $port == 32443;
     my $host = "$proto://$server:$port";
 
-    my $ua = LWP::UserAgent->new();
+    my $ua = LWP::UserAgent->new(  ssl_opts => {
+         verify_hostname => 0,
+         SSL_verify_mode => "SSL_VERIFY_NONE",
+      });
     $ua->timeout(20);
 
     my $info = ();
@@ -2618,7 +2646,10 @@ sub myPlexToken() {
 	print " \$myPlex_pass = 'your password'\n\n";
 	exit;
     } 
-    my $ua = LWP::UserAgent->new();
+    my $ua = LWP::UserAgent->new(  ssl_opts => {
+         verify_hostname => 0,
+         SSL_verify_mode => "SSL_VERIFY_NONE",
+      });
     $ua->timeout(20);
     $ua->agent($appname);
     $ua->env_proxy();
