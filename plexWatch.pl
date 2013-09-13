@@ -26,7 +26,7 @@ use File::Basename;
 use warnings;
 use open qw/:std :utf8/; ## default encoding of these filehandles all at once (binmode could also be used) 
                          ## TODO: might want to allow non ascii -- would require stripping " s/[^[:ascii:]]+//g; " from the code below..
-
+use Data::Dumper;
 
 ## load config file
 my $dirname = dirname(__FILE__);
@@ -713,9 +713,10 @@ if (!%options || $options{'notify'}) {
 	    
 	    ## notify on pause/resume -- only providers with push_resume or push_pause will be notified
 	    if ($state_change) {
-		&Notify($info,,1);
+		&DebugLog($info->{'user'} . ':' . $info->{'title'} . ': state change [' . $info->{'state'} . '] notify called');
+		&Notify($info,'',1);
 	    }
-
+	    
 	    if ($debug) { 
 		&Notify($info);
 		print &consoletxt("Already Notified -- Sent again due to --debug") . "\n"; 
@@ -853,6 +854,19 @@ sub ConsoleLog() {
     my $msg = shift;
     my $alert_options = shift;
     my $print = shift;
+
+    my $prefix = '';
+    
+    if (ref($alert_options)) {
+	if ($msg !~ /$alert_options->{'user'}/) {
+	    $prefix .= $alert_options->{'user'} . ' ' if $alert_options->{'user'};
+	    $prefix .= $push_type_titles->{$alert_options->{'push_type'}} . ' ' if $alert_options->{'push_type'};
+	    $msg = $prefix . $msg;
+	}
+    }
+    
+    #print Dumper($alert_options);
+    #my $dinfo = $info->{'user'}.':'.$info->{'title'};
     
     my $console;
     my $date = localtime;
@@ -878,6 +892,49 @@ sub ConsoleLog() {
     return 1;
 }
 
+sub NotifyFile() {
+    my $msg = shift;
+    my $alert_options = shift;
+    my $print = shift;
+    
+    my $prefix = '';
+    
+    if (ref($alert_options)) {
+	if ($msg !~ /\b$alert_options->{'user'}\b/i) {
+	    $prefix .= $alert_options->{'user'} . ' ' if $alert_options->{'user'};
+	}
+	if ($msg !~ /\b$push_type_titles->{$alert_options->{'push_type'}}\b/i) {
+	    $prefix .= $push_type_titles->{$alert_options->{'push_type'}} . ' ' if $alert_options->{'push_type'};
+	}
+	$msg = $prefix . $msg if $prefix;
+    }
+    
+    my $console;
+    my $date = localtime;
+    
+    if ($debug || $print) {
+	$console = &consoletxt("$date: DEBUG: $msg"); 
+	print   $console ."\n";   
+    } elsif ($options{test_notify}) {
+	$console = &consoletxt("$date: DEBUG test_notify: $msg"); 
+	print   $console ."\n";   
+    } else {
+	$console = &consoletxt("$date: $msg"); 
+    }
+    
+    ## file logging
+    if (&ProviderEnabled('file')) {
+	open FILE, ">>", $notify->{'file'}->{'filename'}  or die $!;
+	print FILE "$console\n";
+	close(FILE);
+	print "FILE Notification successfully logged.\n" if $debug;
+	
+    }
+    return 1;
+}
+
+
+
 
 sub DebugLog() {
     ## still need to add this routine to many other places (TODO)
@@ -898,16 +955,20 @@ sub DebugLog() {
 sub Notify() {
     my $info = shift;
     my $ret_alert = shift;
-    
     my $state_change = shift; ## we will check what the state is and notify accordingly
+
+    my $dinfo = $info->{'user'}.':'.$info->{'title'};
+    #&DebugLog($dinfo . ': '."ret_alert:$ret_alert, state_change:$state_change");
     
     my $type = $info->{'ntype'};
+
 
     ## to fix
     if ($state_change) {
 	$type = "resumed" if $info->{'state'} =~ /playing/i;
 	$type = "paused" if $info->{'state'} =~ /pause/i;
 	$info->{'ntype'} = $type;
+	&DebugLog($dinfo . ': '."state:$info->{'state'}, ntype:$type ");
     }
     
     my ($alert,$orig) = &formatAlert($info);
@@ -926,12 +987,15 @@ sub Notify() {
     if ($type =~ /resume/)  {	$push_type = 'push_resumed';     } 
     if ($type =~ /pause/) {	$push_type = 'push_paused';      } 
 
+    &DebugLog($dinfo . ': '.'push_type:' . $push_type);
+    
     #my $alert_options = ();
     my $alert_options = $info; ## include $info href
     
     $alert_options->{'push_type'} = $push_type;
     foreach my $provider (keys %{$notify}) {
 	if (&ProviderEnabled($provider,$push_type)) {
+	    &DebugLog($dinfo . ': '.$provider . ' ' . $push_type . ' enabled -> sending notify');
 	    $notify_func{$provider}->($alert,$alert_options);
 	}
     }
@@ -1875,8 +1939,23 @@ sub NotifyGNTP() {
 	
 	my %gntp = %{$notify->{GNTP}->{$k}};    
 	$gntp{'message'} = $alert;
+
+	$gntp{'title'} = '{user}' if !$gntp{'title'};	
 	
-	$gntp{'title'} =  $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
+	## allow formatting of appname
+	
+	if ($gntp{'title'} =~ /\{.*\}/) {
+	    my $regex = join "|", keys %{$alert_options};
+	    $regex = qr/$regex/;
+	    $gntp{'title'} =~ s/{($regex)}/$alert_options->{$1}/g;
+	    $gntp{'title'} =~ s/{\w+}//g; ## remove any {word} - templates that failed
+	    $gntp{'title'} = $appname if !$gntp{'title'}; ## replace appname if empty
+	    $gntp{'title'} = $gntp{'title'} . ' ';
+	}
+	
+	$gntp{'title'} .= $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
+
+
 
 	if ($gntp{'sticky'} =~ /1/) {
 	    $gntp{'sticky'} = 'true'; 
@@ -2565,7 +2644,7 @@ sub GetNotifyfuncs() {
 	pushover => \&NotifyPushOver,
 	twitter => \&NotifyTwitter,
 	boxcar => \&NotifyBoxcar,
-	file => \&ConsoleLog,
+	file => \&NotifyFile,
 	GNTP => \&NotifyGNTP,
 	
 	);

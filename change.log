@@ -1,3 +1,9 @@
+# 0.0.20
+# * redundant titles are now fixed -- to do - fix defaults to use {user}
+# * paused/resumed push type enabled - push_paused, pushed_resumed added to each provider
+# * watched duraction corrected going forward with content is paused ( can be overridden with $count_paused )
+#
+
 # 0.0.19
 # * added options for logging IP_Address of client
 #      * enable this in config.pl with the $server_log, $log_client_ip (enable $debug_logging to see what matched )
