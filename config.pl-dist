@@ -28,15 +28,16 @@ $user_display = {'REAL_USER1' => 'Frank',
 
 ## format of alert - default. You can also override this per provider  ($notify below)
 ## run ./plexWatch.pl --format_options -- to see all
-#
-#       start = notification for start of video
-#       stop = notification for stop of video
+#       start = notificaion for start of video
+#       stop = notificaion for stop of video
 #       watched = cli output for watched content
 #       watching = cli output content being watched
 $alert_format = {'start'    =>  '{user} watching {title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in] {ip_address}',
+                 'paused'   =>  '{user} paused {title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in] [{percent_complete}%] {ip_address}',
+                 'resumed'  =>  '{user} resumed {title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in] [{percent_complete}%] {ip_address}',
 		 'stop'     =>  '{user} watched {title} [{streamtype}] [{year}] [{rating}] on {platform} for {duration} [{percent_complete}%] {ip_address}',
 		 'watched'  =>  '{user} watched {title} [{streamtype}] [{year}] [{length}] [{rating}] on {platform} for {duration} [{percent_complete}%] {ip_address}',
-		 'watching' =>  '{user} watching {title} [{streamtype}] [{year}] [{rating}] [{length}] on {platform} [{time_left} left] {ip_address}'
+		 'watching' =>  '{user} {state} {title} [{streamtype}] [{year}] [{rating}] [{length}] on {platform} for {duration} [{percent_complete}%] [{time_left} left] {ip_address}'
 };
 
 $notify = {
@@ -51,6 +52,8 @@ $notify = {
        'push_recentlyadded'  => 0,
        'push_watched'        => 0,
        'push_watching'       => 0,
+       'push_paused'         => 0,
+       'push_resumed'        => 0,
        'apikey' => 'YOUR API KEY', ## your API key
        'application' => $appname,
        'priority' => 0,
@@ -63,6 +66,8 @@ $notify = {
        'push_recentlyadded'  => 0,
        'push_watched'        => 0,
        'push_watching'       => 0,
+       'push_paused'         => 0,
+       'push_resumed'        => 0,
        'token' => 'YOUR APP TOKEN', ## your app token
        'user' => 'YOUR USER TOKEN',  ## your user token
        'title' => $appname,
@@ -74,6 +79,8 @@ $notify = {
        'push_recentlyadded'  => 0,
        'push_watched'        => 0,
        'push_watching'       => 0,
+       'push_paused'         => 0,
+       'push_resumed'        => 0,
        'application' => $appname,
        'script' => '/usr/local/bin/growlnotify',
        'icon' => '/Applications/Plex Media Server.app/Contents/Resources/MyPlex.icns',
@@ -85,6 +92,8 @@ $notify = {
 	'push_recentlyadded'  => 0,
 	'push_watched'        => 0,
 	'push_watching'       => 0,
+        'push_paused'         => 0,
+        'push_resumed'        => 0,
         'application'         => $appname,
 	'consumer_key'        => '',
         'consumer_secret'     => '',
@@ -97,6 +106,8 @@ $notify = {
 	'push_recentlyadded'  => 0,
 	'push_watched'        => 0,
 	'push_watching'       => 0,
+        'push_paused'         => 0,
+        'push_resumed'        => 0,
 	'email' => '',                          ## YOUR email address registered at boxcar
 	'from' => 'Your From Name',              ## From Name displayed on boxcar
 	'provider_key' => 'o2eI7rcwya5XFETaXdlh',                        ## plexWatch app is 'o2eI7rcwya5XFETaXdlh'. You may supply your own.
@@ -111,6 +122,8 @@ $notify = {
 	    'push_recentlyadded'  => 0,
 	    'push_watched'        => 0,
 	    'push_watching'       => 0,
+            'push_paused'         => 0,
+            'push_resumed'        => 0,
 	    'application' => $appname,
 	    'server' => '10.0.0.1', # destination ip/host
 	    'port' => '23053',      # default 23053
@@ -124,6 +137,8 @@ $notify = {
 	    'push_recentlyadded'  => 0,
 	    'push_watched'        => 0,
 	    'push_watching'       => 0,
+            'push_paused'         => 0,
+            'push_resumed'        => 0,
 	    'application' => $appname,
 	    'server' => '192.168.10.100', # destination ip/host
 	    'port' => '23053',      # default 23053
@@ -140,5 +155,15 @@ $notify = {
 $push_titles = {
     'push_watched'        =>  'Watched',
     'push_watching'       =>  'Watching',
+    'push_resumed'        =>  'Reesumed',
+    'push_paused'         =>  'Paused',
     'push_recentlyadded'  =>  'New',
 };
+
+
+# Advanced
+$watched_show_completed = 1; ## advanced config -- always show completed show/movie as it's own line
+$watched_grouping_maxhr = 2; ## advanced config -- do not group shows together if start/restart is > X hours
+$count_paused = 0; ## included paused time in time watched ( probably do not want this )
+
+
