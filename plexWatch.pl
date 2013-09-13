@@ -27,6 +27,9 @@ use warnings;
 use open qw/:std :utf8/; ## default encoding of these filehandles all at once (binmode could also be used) 
                          ## TODO: might want to allow non ascii -- would require stripping " s/[^[:ascii:]]+//g; " from the code below..
 
+    require Data::Dumper;
+    Data::Dumper->import(); 
+
 ## load config file
 my $dirname = dirname(__FILE__);
 if (!-e $dirname .'/config.pl') {
@@ -700,16 +703,21 @@ if (!%options || $options{'notify'}) {
 	
 	## ignore content that has already been notified
 	## However, UPDATE the XML in the DB
-
-
+	
+	
 	if ($started->{$db_key}) {
 	    $info->{'ip_address'} = $started->{$db_key}->{ip_address};
 	    ## try and locate IP address on each run ( if empty )
 	    if (!$info->{'ip_address'}) {
 		$info->{'ip_address'} = &LocateIP($info) if ref $info;
 	    }
-	    &ProcessUpdate($live->{$k},$db_key,$info->{'ip_address'}); ## update XML
+	    my $state_change = &ProcessUpdate($live->{$k},$db_key,$info->{'ip_address'}); ## update XML
 	    
+	    ## notify on pause/resume -- only providers with push_resume or push_pause will be notified
+	    if ($state_change) {
+		&Notify($info,1);
+	    }
+
 	    if ($debug) { 
 		&Notify($info);
 		print &consoletxt("Already Notified -- Sent again due to --debug") . "\n"; 
@@ -816,6 +824,12 @@ sub formatAlert() {
     } elsif ($type =~ /watching/i) {
 	$format = $alert_format->{'watching'};
 	$orig = $orig_watching;
+    } elsif ($type =~ /pause/i) {
+	$format = $alert_format->{'paused'};
+	$orig = $orig_watching;
+    } elsif ($type =~ /resumed/i) {
+	$format = $alert_format->{'resumed'};
+	$orig = $orig_watching;
     }
     if ($debug) { print "\nformat: $format\n";}
     my $s = $format;
@@ -885,10 +899,19 @@ sub DebugLog() {
 
 sub Notify() {
     my $info = shift;
-
-
+    my $state_change = shift; ## we will check what the state is and notify accordingly
+    
+    
     my $ret_alert = shift;
     my $type = $info->{'ntype'};
+
+    ## to fix
+    if ($state_change) {
+	$type = "resumed" if $info->{'state'} =~ /playing/i;
+	$type = "paused" if $info->{'state'} =~ /pause/i;
+	$info->{'ntype'} = $type;
+    }
+    
     my ($alert,$orig) = &formatAlert($info);
     
     ## --exclude_user array ref -- do not notify if user is excluded.. however continue processing -- logging to DB - logging to file still happens.
@@ -899,8 +922,11 @@ sub Notify() {
     return &consoletxt($alert) if $ret_alert;
         
     my $push_type;
+    
     if ($type =~ /start/) {	$push_type = 'push_watching';    } 
-    if ($type =~ /stop/) {	$push_type = 'push_watched';    } 
+    if ($type =~ /stop/)  {	$push_type = 'push_watched';     } 
+    if ($type =~ /resume/)  {	$push_type = 'push_resumed';     } 
+    if ($type =~ /pause/) {	$push_type = 'push_paused';      } 
 
     #my $alert_options = ();
     my $alert_options = $info; ## include $info href
@@ -1056,6 +1082,8 @@ sub ProcessUpdate() {
     return if $xml !~ /$key/i; ## xml must contain key
 
     my ($cmd,$sth);
+	my $state_change=0;
+
     if ($db_key) {
 	
 	## get paused status -- needed for real time watched
@@ -1073,6 +1101,9 @@ sub ProcessUpdate() {
 	my $prev_state = (defined($p_epoch)) ? "paused" : "playing";
 	## video is paused: verify DB has the pause epoch set
 	print "\n* Video State: $state [prev: $prev_state]\n" if ($debug && defined($state));
+	if ($state && ($prev_state !~ /$state/i)) {
+	    $state_change=1;
+	}
 	
 	my $now = time();
 	if (defined($state) && $state =~ /paused/i) {
@@ -1094,22 +1125,22 @@ sub ProcessUpdate() {
 		$p_counter += $sec;
 		$extra .= sprintf(",paused = %s",'NULL'); # set Paused to NULL
 		$extra .= sprintf(",paused_counter = %s",$p_counter); #update counter
-		printf "* Un-Marking as as Paused and setting paused counter to %s seconds [this duration %s sec]\n",$p_counter,$sec;
+		printf "* removing Paused state and setting paused counter to %s seconds [this duration %s sec]\n",$p_counter,$sec if $debug;
 	    }
 	}
-	print "* Total Paused duration: " . &durationrr($p_counter) . " [$p_counter seconds]\n" if $p_counter;
+	print "* Total Paused duration: " . &durationrr($p_counter) . " [$p_counter seconds]\n" if $p_counter && $debug;
 	
 	# include IP update if we have it
 	$extra .= sprintf(",ip_address = '%s'",$ip_address) if $ip_address;
 	
 	
 	$cmd = sprintf("update processed set xml = ?%s where session_id = ?",$extra);
-	print "\n" . $cmd , " XMLcut ", $db_key, "\n";
 	$sth = $dbh->prepare($cmd);
 	$sth->execute($xml,$db_key) or die("Unable to execute query: $dbh->errstr\n");	
 	
     }
-    return  $dbh->sqlite_last_insert_rowid();
+    #return  $dbh->sqlite_last_insert_rowid();
+    return $state_change;
 }
 sub ProcessRecentlyAdded() {
     my ($db_key) = @_;
@@ -1618,10 +1649,12 @@ sub NotifyProwl() {
     }
     
     my %prowl = %{$notify->{prowl}};
+
+    
     
     $prowl{'event'} = '';
     $prowl{'event'} = $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};
-    
+
     $prowl{'notification'} = $alert;
     
     #if ($prowl{'collapse'}) {
@@ -1878,6 +1911,18 @@ sub NotifyGNTP() {
 		     
 		     { Name => 'push_recentlyadded',
 		       DisplayName => 'push_recentlyadded',
+		       Enabled     => 'True',
+		       Icon => $gntp{'icon_url'},
+		     },
+
+		     { Name => 'push_resumed',
+		       DisplayName => 'push_resumed',
+		       Enabled     => 'True',
+		       Icon => $gntp{'icon_url'},
+		     },
+
+		     { Name => 'push_paused',
+		       DisplayName => 'push_paused',
 		       Enabled     => 'True',
 		       Icon => $gntp{'icon_url'},
 		     },
@@ -2536,6 +2581,8 @@ sub GetPushTitles() {
     my  $push_type_display = ();
     $push_type_display->{'push_watched'} = 'Watched';
     $push_type_display->{'push_watching'} = 'Watching';
+    $push_type_display->{'push_paused'} = 'Paused';
+    $push_type_display->{'push_resumed'} = 'Resumed';
     $push_type_display->{'push_recentlyadded'} = 'New';
     
     foreach my $type (keys %{$push_type_display}) {
