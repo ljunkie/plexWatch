@@ -1731,7 +1731,9 @@ sub NotifyProwl() {
     $prowl{'url'} ||= "";
     
     ## allow formatting of appname
+    $prowl{'application'} = '{user}' if $prowl{'application'} eq $appname; ## force {user} if people still use $appname in config -- forcing update with the need to modify config.
     my $format = $prowl{'application'};
+
     if ($format =~ /\{.*\}/) {
 	my $regex = join "|", keys %{$alert_options};
 	$regex = qr/$regex/;
@@ -1802,7 +1804,9 @@ sub NotifyPushOver() {
     ## PushOver title is AppName by default. If there is a real title for push type, It's 'AppName: push_type'
 
     ## allow formatting of appname
+    $po{'title'} = '{user}' if $po{'title'} eq $appname; ## force {user} if people still use $appname in config -- forcing update with the need to modify config.
     my $format = $po{'title'};
+
     if ($format =~ /\{.*\}/) {
 	my $regex = join "|", keys %{$alert_options};
 	$regex = qr/$regex/;
@@ -1854,6 +1858,7 @@ sub NotifyBoxcar() {
     ## BoxCars title [from name] is set in config.pl. If there is a real title for push type, It's 'From: push_type_title'
 
     ## allow formatting of appname (boxcar it's the 'from' key)
+    $bc{'from'} = '{user}' if $bc{'from'} eq $appname; ## force {user} if people still use $appname in config -- forcing update with the need to modify config.
     my $format = $bc{'from'};
     if ($format =~ /\{.*\}/) {
 	### replacemnt templates with variables
