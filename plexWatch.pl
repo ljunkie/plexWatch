@@ -27,8 +27,6 @@ use warnings;
 use open qw/:std :utf8/; ## default encoding of these filehandles all at once (binmode could also be used) 
                          ## TODO: might want to allow non ascii -- would require stripping " s/[^[:ascii:]]+//g; " from the code below..
 
-    require Data::Dumper;
-    Data::Dumper->import(); 
 
 ## load config file
 my $dirname = dirname(__FILE__);
@@ -715,7 +713,7 @@ if (!%options || $options{'notify'}) {
 	    
 	    ## notify on pause/resume -- only providers with push_resume or push_pause will be notified
 	    if ($state_change) {
-		&Notify($info,1);
+		&Notify($info,,1);
 	    }
 
 	    if ($debug) { 
@@ -899,10 +897,10 @@ sub DebugLog() {
 
 sub Notify() {
     my $info = shift;
+    my $ret_alert = shift;
+    
     my $state_change = shift; ## we will check what the state is and notify accordingly
     
-    
-    my $ret_alert = shift;
     my $type = $info->{'ntype'};
 
     ## to fix
