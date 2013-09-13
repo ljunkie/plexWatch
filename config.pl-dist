@@ -3,12 +3,12 @@ $data_dir = '/opt/plexWatch/'; ## to store the DB, logfile - can be the same as 
 $server_log = '/var/lib/plexmediaserver/Library/Application Support/Plex Media Server/Logs/Plex Media Server.log'; ## used to log IP address of user (alpha)
 $log_client_ip = 0; ## requires $server_log to be available too. (requires File::ReadBackwards)
 
-$debug_logging = 0; ## logs to $data_dir/debug.log ( not verbose enought yet.. still todo )
+$debug_logging = 0; ## logs to $data_dir/debug.log ( not verbose enough yet.. still todo )
 
 ## myplex user/pass ONLY required if you have set the PMS to 'Require authentication on local networks' and $server is not set to localhost
 $myPlex_user = '';
 $myPlex_pass = '';
-	
+
 $server = 'localhost'; ## IP of PMS - or localhost
 $port = 32400;         ## port of PMS
 
@@ -28,8 +28,8 @@ $user_display = {'REAL_USER1' => 'Frank',
 
 ## format of alert - default. You can also override this per provider  ($notify below)
 ## run ./plexWatch.pl --format_options -- to see all
-#       start = notificaion for start of video
-#       stop = notificaion for stop of video
+#       start = notification for start of video
+#       stop = notification for stop of video
 #       watched = cli output for watched content
 #       watching = cli output content being watched
 $alert_format = {'start'    =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in] {ip_address}',
@@ -40,53 +40,54 @@ $alert_format = {'start'    =>  '{title} [{streamtype}] [{year}] [{rating}] on {
 		 'watching' =>  '{user} {state} {title} [{streamtype}] [{year}] [{rating}] [{length}] on {platform} for {duration} [{percent_complete}%] [{time_left} left] {ip_address}'
 };
 
+## Notification Options
 $notify = {
-
+    
     'file' => {
-    'enabled' => 1,  ## 0 or 1 - set to 1 to enable File Logging
-    'filename' => "$data_dir/plexWatch.log", ## default is plexWatch.log
+        'enabled' => 1,  ## 0 or 1 - set to 1 to enable File Logging
+        'filename' => "$data_dir/plexWatch.log", ## default is plexWatch.log
     },
     
-   'prowl' => {
-       'enabled' => 0, ## 0 or 1 - set to 1 to enable PROWL
-       'push_recentlyadded'  => 0,
-       'push_watched'        => 0,
-       'push_watching'       => 0,
-       'push_paused'         => 0,
-       'push_resumed'        => 0,
-       'apikey' => 'YOUR API KEY', ## your API key
-       'application' => $appname,
-       'priority' => 0,
-       'url' => '',
-       'collapse' => 0, ## will change for mating if collapsed notification are set in prowl   (deprecated)
+    'prowl' => {
+	'enabled' => 0, ## 0 or 1 - set to 1 to enable PROWL
+	'push_recentlyadded'  => 0,
+	'push_watched'        => 0,
+	'push_watching'       => 0,
+	'push_paused'         => 0,
+	'push_resumed'        => 0,
+	'apikey' => 'YOUR API KEY', ## your API key
+	'application' => $appname,
+	'priority' => 0,
+	'url' => '',
+	'collapse' => 0, ## will change for mating if collapsed notification are set in prowl   (deprecated)
     },
     
     'pushover' => {
-       'enabled' => 0, ## set to 1 to enable Pushover
-       'push_recentlyadded'  => 0,
-       'push_watched'        => 0,
-       'push_watching'       => 0,
-       'push_paused'         => 0,
-       'push_resumed'        => 0,
-       'token' => 'YOUR APP TOKEN', ## your app token
-       'user' => 'YOUR USER TOKEN',  ## your user token
-       'title' => $appname,
-       'sound' => 'intermission',
+	'enabled' => 0, ## set to 1 to enable Pushover
+	'push_recentlyadded'  => 0,
+	'push_watched'        => 0,
+	'push_watching'       => 0,
+	'push_paused'         => 0,
+	'push_resumed'        => 0,
+	'token' => 'YOUR APP TOKEN', ## your app token
+	'user' => 'YOUR USER TOKEN',  ## your user token
+	'title' => $appname,
+	'sound' => 'intermission',
     },
-
+    
     'growl' => {
-       'enabled' => 0, ## set to 1 to enable local growl (You should probably used GNTP - growl supported for multiple platforms - below)
-       'push_recentlyadded'  => 0,
-       'push_watched'        => 0,
-       'push_watching'       => 0,
-       'push_paused'         => 0,
-       'push_resumed'        => 0,
-       'application' => $appname,
-       'script' => '/usr/local/bin/growlnotify',
-       'icon' => '/Applications/Plex Media Server.app/Contents/Resources/MyPlex.icns',
+	'enabled' => 0, ## set to 1 to enable local growl (You should probably used GNTP - growl supported for multiple platforms - below)
+	'push_recentlyadded'  => 0,
+	'push_watched'        => 0,
+	'push_watching'       => 0,
+	'push_paused'         => 0,
+	'push_resumed'        => 0,
+	'application' => $appname,
+	'script' => '/usr/local/bin/growlnotify',
+	'icon' => '/Applications/Plex Media Server.app/Contents/Resources/MyPlex.icns',
     },
-
-
+    
+    
     'twitter' => {
         'enabled'             => 0, ## set to 1 to enable local growl
 	'push_recentlyadded'  => 0,
@@ -100,7 +101,7 @@ $notify = {
         'access_token'        => '',
         'access_token_secret' => '',
     },
-
+    
     'boxcar' => {
         'enabled' => 0, ## set to 1 to enable local growl
 	'push_recentlyadded'  => 0,
@@ -114,7 +115,7 @@ $notify = {
 	'provider_secret' => 'h4pJjyBoEMk1rwK2EH3NLemO4fQ0ql9HnRgVfwg4', ## plexWatch app is 'h4pJjyBoEMk1rwK2EH3NLemO4fQ0ql9HnRgVfwg4'. You may supply your own.
 	'icon_url' => '', # Leave empty ('') for plexWatch icon. You may supply your own (57x57)
     },
-
+    
     ## GNTP (GROWL) -- multiple destinations are supported 
     'GNTP' => { 
 	'1' => 	{
@@ -147,15 +148,13 @@ $notify = {
 	    'sticky' => 0,
 	},
     },
-
-
+    
 };
-
 
 $push_titles = {
     'push_watched'        =>  'Watched',
     'push_watching'       =>  'Watching',
-    'push_resumed'        =>  'Reesumed',
+    'push_resumed'        =>  'Resumed',
     'push_paused'         =>  'Paused',
     'push_recentlyadded'  =>  'New',
 };
