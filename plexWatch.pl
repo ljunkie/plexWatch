@@ -1674,6 +1674,8 @@ sub NotifyProwl() {
 	my $regex = join "|", keys %{$alert_options};
 	$regex = qr/$regex/;
 	$prowl{'application'} =~ s/{($regex)}/$alert_options->{$1}/g;
+	$prowl{'application'} =~ s/{\w+}//g; ## remove any {word} - templates that failed
+	$prowl{'application'} = $appname if !$prowl{'application'}; ## replace appname if empty
     }
 
     # URL encode our arguments
@@ -1743,6 +1745,8 @@ sub NotifyPushOver() {
 	my $regex = join "|", keys %{$alert_options};
 	$regex = qr/$regex/;
 	$po{'title'} =~ s/{($regex)}/$alert_options->{$1}/g;
+	$po{'title'} =~ s/{\w+}//g; ## remove any {word} - templates that failed
+	$po{'title'} = $appname if !$po{'title'}; ## replace appname if empty
     }
     $po{'title'} .= ': ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
     
@@ -1786,14 +1790,16 @@ sub NotifyBoxcar() {
     $bc{'message'} = $alert;
     
     ## BoxCars title [from name] is set in config.pl. If there is a real title for push type, It's 'From: push_type_title'
-    ## allow formatting of appname (boxcar it's the 'from' key)
 
+    ## allow formatting of appname (boxcar it's the 'from' key)
     my $format = $bc{'from'};
     if ($format =~ /\{.*\}/) {
 	### replacemnt templates with variables
 	my $regex = join "|", keys %{$alert_options};
 	$regex = qr/$regex/;
 	$bc{'from'} =~ s/{($regex)}/$alert_options->{$1}/g;
+	$bc{'from'} =~ s/{\w+}//g; ## remove any {word} - templates that failed
+	$bc{'from'} = $appname if !$bc{'from'}; ## replace appname if empty
     }
     
     $bc{'from'} .= ': ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
