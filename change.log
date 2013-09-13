@@ -1,8 +1,16 @@
 # 0.0.20
-# * redundant titles are now fixed -- to do - fix defaults to use {user}
-# * paused/resumed push type enabled - push_paused, pushed_resumed added to each provider
-# * watched duraction corrected going forward with content is paused ( can be overridden with $count_paused )
-#
+# * NEW: paused/resumed state and time are now accounted for
+# * NEW: paused/resumed push types enabled - push_paused, pushed_resumed added to each provider
+# * FIX: watched duration corrected going forward (accounts for paused content and can be overridden with $count_paused )
+#         paused/resumed states have allowed this to work
+# * FIX: Redundant titles are now fixed - Title/Application also will always show {user} unless overridden in config.pl
+#         $appname is no longer used and replaced with {user} -- {user} if used even if config.pl has $appname ( no need to update config.pl )
+#         before:  title: "plexWatch watched" msg: "user watched title etc...."
+#          after:  title: "{user} watched"    msg: "title etc...."
+# * FIX: --test_notify will not print options to test ( and they actually correspond to the right notification type now!)
+# * FIX: do not print backup info every time --debug is called
+# * Screenshots added to screenshots folder for iOS and Windows
+
 
 # 0.0.19
 # * added options for logging IP_Address of client
@@ -16,7 +24,6 @@
 	      * Will sleep 5 seconds before searching -- allows PMS to log to it log file before we try again.
 #             * Could match wrong IP if multiple clients watch the same itemID.
 #	      * mainly for clients in 'List of networks that are allowed without auth' *only time I have seen this
-
 # * Added SSL support (port 32443)
 # * friendly name now allows for user+platform(title) (example in config.pl-dist)
 # * $debug_logging added to config.pl ( still need to add more debug logging though )
@@ -33,7 +40,7 @@
 # * README: updated instructions to NOT call sudo before running the script. This way the DB is not owned by root and can be run by the 'normal' user.
 
 
-# 0.0.18-dev
+# 0.0.18
 #
 # * MyPlex Login Token: The script can now be ran from any computer.
 #	-- Specify a $myPlex_user and $myPlex_pass in config.pl

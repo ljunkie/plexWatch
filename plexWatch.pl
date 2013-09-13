@@ -26,7 +26,6 @@ use File::Basename;
 use warnings;
 use open qw/:std :utf8/; ## default encoding of these filehandles all at once (binmode could also be used) 
                          ## TODO: might want to allow non ascii -- would require stripping " s/[^[:ascii:]]+//g; " from the code below..
-use Data::Dumper;
 
 ## load config file
 my $dirname = dirname(__FILE__);
@@ -145,6 +144,7 @@ if ($options{version}) {
     exit;
 }
 
+
 my $debug = $options{'debug'};
 my $debug_xml = $options{'show_xml'};
 
@@ -196,7 +196,7 @@ my $PMS_token = &PMSToken(); # sets token if required
 ########################################## START MAIN #######################################################
 
 ## show what the notify alerts will look like
-if  ($options{test_notify}) {
+if  (defined($options{test_notify})) {
     &RunTestNotify();
     exit;
 }
@@ -244,7 +244,7 @@ if ($options{'recently_added'}) {
 	    if ($debug) {
 		print "Skipping KEY '$k' (expected key =~ '/library/metadata/###') -- it's not a hash ref?\n";
 		print "\$info->{'$k'} is not a hash ref?\n";
-		print Dumper($info->{$k});
+		print Dumper($info->{$k}) if $options{debug};
 	    }
 	    next;
 	}
@@ -814,15 +814,16 @@ sub formatAlert() {
     my $orig_watched = $orig_stop; # not really needed.. just keeping standards
     my $orig_watching = $orig_start; # not really needed.. just keeping standards
     my $orig = $orig_start;
-    if ($type =~ /stop/i) {
-	$format = $alert_format->{'stop'};
-	$orig = $orig_stop;
-    } elsif ($type =~ /watched/i) {
+
+    if ($type =~ /watched/i) {
 	$format = $alert_format->{'watched'};
 	$orig = $orig_watched;
     } elsif ($type =~ /watching/i) {
 	$format = $alert_format->{'watching'};
 	$orig = $orig_watching;
+    } elsif ($type =~ /stop/i) {
+	$format = $alert_format->{'stop'};
+	$orig = $orig_stop;
     } elsif ($type =~ /pause/i) {
 	$format = $alert_format->{'paused'};
 	$orig = $orig_watching;
@@ -864,9 +865,6 @@ sub ConsoleLog() {
 	    $msg = $prefix . $msg;
 	}
     }
-    
-    #print Dumper($alert_options);
-    #my $dinfo = $info->{'user'}.':'.$info->{'title'};
     
     my $console;
     my $date = localtime;
@@ -2337,10 +2335,35 @@ sub info_from_xml() {
 
 sub RunTestNotify() {
     my $ntype = 'start'; ## default
-    $ntype = 'stop' if $options{test_notify} =~ /stop/;
-    $ntype = 'stop' if $options{test_notify} =~ /watched/;
     
-    $ntype = 'push_recentlyadded' if $options{test_notify} =~ /recent/;
+    my $map ={
+	'start' =>  'start',
+	'watching' =>  'start-watching',
+	'watched' =>  'stop-watched',
+	'stop' =>  'stop',
+	'pause' =>  'push_paused',
+	'resumed' =>  'push_resumed',
+	#'new' =>  'push_recentlyadded',
+	'recent' =>  'push_recentlyadded',
+    };
+    
+    if (!$options{test_notify} || !$map->{lc($options{test_notify})}) {
+	print "Usage: $0 --test_notify=[option]\n\n";
+	print "\t[option]\n";
+	print "\t" . join("\n\t", sort keys %{$map});
+	print "\n\n";
+	exit;
+    }
+
+    $ntype = 'start' if $options{test_notify} =~ /start/i;
+    $ntype = 'start-watching' if $options{test_notify} =~ /watching/i;
+    $ntype = 'stop-watched' if $options{test_notify} =~ /watched/i;
+    $ntype = 'stop' if $options{test_notify} =~ /stop/i;
+    $ntype = 'push_paused' if $options{test_notify} =~ /pause/i;
+    $ntype = 'push_resumed' if $options{test_notify} =~ /resumed/i;
+    $ntype = 'push_recentlyadded' if $options{test_notify} =~ /recent|new/i;
+
+
     if ($ntype =~ /push_recentlyadded/) {
 	my $alerts = ();
 	$alerts->{'test'}->{'alert'} = $push_type_titles->{$ntype} .' test recently added alert';
@@ -2733,7 +2756,8 @@ sub BackupSQlite() {
 	foreach my $key (keys %{$backups->{$type}}) {
 	    $backups->{$type}->{$key} = $backup_opts->{$type}->{$key} if defined($backup_opts->{$type}->{$key});
 	}
-	
+
+
 	if ($debug && $options{'backup'}) {
 	    print "Backup Type: " .uc($type) . "\n";
 	    print "\tenabled: ". $backups->{$type}->{enabled} . "\n";
@@ -2774,9 +2798,9 @@ sub BackupSQlite() {
 		$do_backup=1;
 		$extra = "Do backup - older than allowed ($hum_diff > $hum_max)";
 	    } else {
-		$extra = "Backup is current ($hum_diff < $hum_max)" if $debug;
+		$extra = "Backup is current ($hum_diff < $hum_max)" if $debug && $options{'backup'};
 	    }
-	    printf("\n\t%-10s %-15s %s [%s]\n", uc($type), &durationrr($diff), $file, $extra) if $debug;
+	    printf("\n\t%-10s %-15s %s [%s]\n", uc($type), &durationrr($diff), $file, $extra) if $debug && $options{'backup'};
 	    
 	} else {
 	    print '* ' . uc($type) ." backup not found -- trying now\n";
@@ -2786,13 +2810,13 @@ sub BackupSQlite() {
 	    $keep = $backups->{$type}->{'keep'} if $backups->{$type}->{'keep'};
 	    
 	    if ($keep > 1) {
-		print "\t* Rotating files: keep $keep total\n" if $debug;
+		print "\t* Rotating files: keep $keep total\n"  if $debug && $options{'backup'};
 		for (my $count = $keep-1; $count >= 0; $count--) {
 		    my $to = $file .'.'. ($count+1);
 		    my $from = $file .'.'. ($count);
 		    $from = $file if $count == 0;
 		    if (-f $from) { 
-			print "\trotating $from -> $to \n" if $debug;
+			print "\trotating $from -> $to \n"  if $debug && $options{'backup'};
 			rename $from, $to; 
 		    }
 		}
