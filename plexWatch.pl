@@ -74,6 +74,10 @@ if (&ProviderEnabled('GNTP')) {
     Growl::GNTP->import();
 }
 
+if (&ProviderEnabled('EMAIL')) {
+    require MIME::Lite;
+    MIME::Lite->import();
+}
 
 if ($log_client_ip) {
     require File::ReadBackwards;
@@ -340,7 +344,7 @@ sub RAdataAlert() {
 	$alert .= " [$item->{'contentRating'}]" if $item->{'contentRating'};
 	$alert .= " [$item->{'year'}]" if $item->{'year'};
 	if ($item->{'duration'} && ($item->{'duration'} =~ /\d+/ && $item->{'duration'} > 1000)) {
-	    $alert .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
+	    $alert .=  ' '. sprintf("%.0f",$item->{'duration'}/1000/60) . 'min';
 	}
 	$alert .= " [$media]" if $media;
 	$alert .= " [$add_date]";
@@ -357,7 +361,7 @@ sub RAdataAlert() {
 	$alert .= " [$item->{'contentRating'}]" if $item->{'contentRating'};
 	$alert .= " [$item->{'year'}]" if $item->{'year'};
 	if ($item->{'duration'} && ($item->{'duration'} =~ /\d+/ && $item->{'duration'} > 1000)) {
-	    $alert .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
+	    $alert .=  ' '. sprintf("%.0f",$item->{'duration'}/1000/60) . 'min';
 	}
 	$alert .= " [$media]" if $media;
 	$alert .= " [$add_date]";
@@ -804,51 +808,59 @@ if ($options{'watching'}) {
 
 sub formatAlert() {
     my $info = shift;
+    my $provider = shift;
+    my $provider_multi = shift;
+    
+    ## n_prov_format: alert_format override in the config.pl per provider
+    my $n_prov_format = {};
+    if ($provider) {
+	$n_prov_format = $notify->{$provider};
+	$n_prov_format = $notify->{$provider}->{$provider_multi} if $provider_multi;
+    }
+    
     $info->{'ip_address'} = '' if !$info->{'ip_address'};
-    my %alert = %{$info};
-    my $type = $alert{'ntype'};
-    my $format = $alert_format->{'start'};
-    ## to fix at some point -- allow users to custome event/collapse/etc... just more logic to work on later.
-    my $orig_start = '{user} watching {title} on {platform}'; # used for prowl 'EVENT' (if collapse is enabled)
-    my $orig_stop = '{user} watched {title} on {platform} for {duration}'; # used for prowl 'EVENT' (if collapse is enabled)
-    my $orig_watched = $orig_stop; # not really needed.. just keeping standards
-    my $orig_watching = $orig_start; # not really needed.. just keeping standards
-    my $orig = $orig_start;
-
-    if ($type =~ /watched/i) {
-	$format = $alert_format->{'watched'};
-	$orig = $orig_watched;
-    } elsif ($type =~ /watching/i) {
-	$format = $alert_format->{'watching'};
-	$orig = $orig_watching;
-    } elsif ($type =~ /stop/i) {
-	$format = $alert_format->{'stop'};
-	$orig = $orig_stop;
-    } elsif ($type =~ /pause/i) {
-	$format = $alert_format->{'paused'};
-	$orig = $orig_watching;
-    } elsif ($type =~ /resumed/i) {
-	$format = $alert_format->{'resumed'};
-	$orig = $orig_watching;
+    
+    my $type = $info->{'ntype'};
+    my @types = qw(start watched watching stop paused resumed);
+    my $format;
+    foreach my $tkey (@types) {
+	if ($type =~ /$tkey/i) {
+	    $format = $alert_format->{$tkey}; # default alert formats per notify type
+	    $format = $n_prov_format->{'alert_format'}->{$tkey} if $n_prov_format->{'alert_format'}->{$tkey}; # provider override
+	}
     }
     if ($debug) { print "\nformat: $format\n";}
-    my $s = $format;
-    ## replacemnt templates with variables
-    my $regex = join "|", keys %alert;
+
+    my $regex = join "|", keys %{$info};
     $regex = qr/$regex/;
+    $format =~ s/{($regex)}/$info->{$1}/g; ## regex replace variables
+    $format =~ s/\[\]//g;                 ## trim any empty variable encapsulated in []
+    $format =~ s/\s+/ /g;                 ## remove double spaces
+    $format =~ s/[^[:ascii:]]+//g;        ## remove non ascii
+    $format =~ s/\\n/\n/g;                ## allow \n to be an actual new line
+    $format =~ s/{newline}/\n/g;                ## allow \n to be an actual new line
 
-    $s =~ s/{($regex)}/$alert{$1}/g;
-    $orig =~ s/{($regex)}/$alert{$1}/g;
-
-    ## done
     
-    $s =~ s/\[\]//g; ## trim any empty variable encapsulated in []
-    $s =~ s/\s+/ /g; ## remove double spaces
-    
-    $s =~ s/[^[:ascii:]]+//g;  ## remove non ascii
-    
-    ## $orig is pretty much deprecated..
-    return ($s,$orig);
+    ## special for now.. might make ths more useful -- just thrown together since email can include a ton of info
+    if ($format =~ /{all_details}/i) {
+	$format =~ s/\s*{all_details}\s*//i;
+	$format .= sprintf("\n\n%10s %s\n","","-----All Details-----");
+	my $f_extra;
+	foreach my $key (keys %{$info} ) {
+	    if (!ref($info->{$key})) {
+		$format .= sprintf("%20s: %s\n",$key,$info->{$key});
+	    } else {
+		$f_extra .= sprintf("\n\n%10s %s\n","","-----$key-----");
+		foreach my $k2 (keys %{$info->{$key}} ) {
+		    if (!ref($info->{$key}->{$k2})) {
+			$f_extra .= sprintf("%20s: %s\n",$k2,$info->{$key}->{$k2});
+		    }
+		}
+	    }
+	}
+	$format .= $f_extra if $f_extra;
+    }
+    return ($format);
 }
 
 sub ConsoleLog() {
@@ -891,7 +903,14 @@ sub ConsoleLog() {
 }
 
 sub NotifyFile() {
-    my $msg = shift;
+    my $provider = 'file';
+
+    #my $msg = shift;
+    my $info = shift;
+    my ($alert) = &formatAlert($info,$provider);
+
+    my $msg = $alert;
+
     my $alert_options = shift;
     my $print = shift;
     
@@ -969,7 +988,7 @@ sub Notify() {
 	&DebugLog($dinfo . ': '."state:$info->{'state'}, ntype:$type ");
     }
     
-    my ($alert,$orig) = &formatAlert($info);
+    my ($alert) = &formatAlert($info);
     
     ## --exclude_user array ref -- do not notify if user is excluded.. however continue processing -- logging to DB - logging to file still happens.
     return 1 if ( grep { $_ =~ /$info->{'orig_user'}/i } @{$options{'exclude_user'}});
@@ -994,7 +1013,8 @@ sub Notify() {
     foreach my $provider (keys %{$notify}) {
 	if (&ProviderEnabled($provider,$push_type)) {
 	    &DebugLog($dinfo . ': '.$provider . ' ' . $push_type . ' enabled -> sending notify');
-	    $notify_func{$provider}->($alert,$alert_options);
+	    $notify_func{$provider}->($info,$alert_options);
+	    #$notify_func{$provider}->($alert,$alert_options);
 	}
     }
 }
@@ -1619,15 +1639,17 @@ sub initDBtable() {
 }
 
 sub NotifyTwitter() {
-    #use Net::Twitter::Lite::WithAPIv1_1;
-    #use Scalar::Util 'blessed';
     my $provider = 'twitter';
+
     if ($provider_452->{$provider}) {
 	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
 	return 0;
     }
     
-    my $alert = shift;
+    #my $alert = shift;
+    my $info = shift;
+    my ($alert) = &formatAlert($info,$provider);
+
     my $alert_options = shift;
 
     my $url = $alert_options->{'url'} if $alert_options->{'url'};
@@ -1699,10 +1721,14 @@ sub NotifyTwitter() {
 
 sub NotifyProwl() {
     ## modified from: https://www.prowlapp.com/static/prowl.pl
-    my $alert = shift;
+    my $provider = 'prowl';
+
+    #my $alert = shift;
+    my $info = shift;
+    my ($alert) = &formatAlert($info,$provider);
+
     my $alert_options = shift;
 
-    my $provider = 'prowl';
     if ($provider_452->{$provider}) {
 	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
 	return 0;
@@ -1716,13 +1742,6 @@ sub NotifyProwl() {
     $prowl{'event'} = $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};
 
     $prowl{'notification'} = $alert;
-    
-    #if ($prowl{'collapse'}) {
-    #	my $orig = shift;
-    #	#my @p = split(':',shift);
-    #	#$prowl{'application'} .= ' - ' . shift(@p);
-    #	$prowl{'event'} = $orig;
-    #   }
     
     $prowl{'priority'} ||= 0;
     $prowl{'application'} ||= $appname;
@@ -1785,10 +1804,14 @@ sub NotifyProwl() {
 }
 
 sub NotifyPushOver() {
-    my $alert = shift;
+    my $provider = 'pushover';
+
+    #my $alert = shift;
+    my $info = shift;
+    my ($alert) = &formatAlert($info,$provider);
+
     my $alert_options = shift;
 
-    my $provider = 'pushover';
     if ($provider_452->{$provider}) {
 	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
 	return 0;
@@ -1839,12 +1862,16 @@ sub NotifyPushOver() {
 }
 
 sub NotifyBoxcar() {
+    my $provider = 'boxcar';
     ## this will try to notifiy via box car 
     # It will try to subscribe to the plexWatch service on boxcar if we get a 401 and resend the notification
-    my $alert = shift;
+
+    #my $alert = shift;
+    my $info = shift;
+    my ($alert) = &formatAlert($info,$provider);
+
     my $alert_options = shift;
 
-    my $provider = 'boxcar';
     if ($provider_452->{$provider}) {
 	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
 	return 0;
@@ -1870,7 +1897,7 @@ sub NotifyBoxcar() {
     $bc{'from'} .= ': ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
     
     if (!$bc{'email'}) {
-	my $msg = "Please specify and email address for boxcar in config.pl";
+	my $msg = "FAIL: Please specify and email address for boxcar in config.pl";
 	&ConsoleLog($msg);
     } else {
         my $response = &NotifyBoxcarPOST(\%bc);
@@ -1914,13 +1941,13 @@ sub NotifyBoxcar() {
 
 
 sub NotifyGNTP() {
+    my $provider = 'GNTP';
     ## this will try to notifiy via box car 
     # It will try to subscribe to the plexWatch service on boxcar if we get a 401 and resend the notification
-    my $alert = shift;
-    my $alert_options = shift;
-    my $provider = 'GNTP';
 
-    
+    #my $alert = shift;
+    my $info = shift;
+    my $alert_options = shift;
 
     ## TODO -- make the 452 per multi provider
     if ($provider_452->{$provider}) {
@@ -1928,15 +1955,16 @@ sub NotifyGNTP() {
 	return 0;
     }
     
-    my $success;
+    my ($success,$alert);
     foreach my $k (keys %{$notify->{$provider}}) {
+	($alert) = &formatAlert($info,$provider,$k);
 	
 	## the ProviderEnabled check before doesn't work for multi (i.e. GNTP for now) we will have to verify this provider is actually enabled in the foreach..
 	my $push_type = $alert_options->{'push_type'};
 	if (ref $notify->{$provider}->{$k} && $notify->{$provider}->{$k}->{'enabled'}  &&  $notify->{$provider}->{$k}->{$push_type}) {
-	    print "GNTP key:$k enabled for this $alert_options->{'push_type'}\n" if $debug;
+	    print "$provider key:$k enabled for this $alert_options->{'push_type'}\n" if $debug;
 	} else {
-	    print "GNTP key:$k NOT enabled for this $alert_options->{'push_type'} - skipping\n" if $debug;
+	    print "$provider key:$k NOT enabled for this $alert_options->{'push_type'} - skipping\n" if $debug;
 	    next;
 	}
 	
@@ -1967,7 +1995,7 @@ sub NotifyGNTP() {
 	}
 	
 	if (!$gntp{'server'} || !$gntp{'port'} ) {
-	    my $msg = "Please specify a server and port for GNTP (growl) in config.pl";
+	    my $msg = "FAIL: Please specify a server and port for $provider [$k] in config.pl";
 	    &ConsoleLog($msg,,1);
 	} else {
 	    
@@ -2047,6 +2075,94 @@ sub NotifyGNTP() {
 }
 
 
+
+sub NotifyEMAIL() {
+    my $provider = 'EMAIL';
+    ## this will try to notifiy via box car 
+    # It will try to subscribe to the plexWatch service on boxcar if we get a 401 and resend the notification
+
+    #my $alert = shift;
+    my $info = shift;
+    my $alert_options = shift;
+
+    ## TODO -- make the 452 per multi provider
+    if ($provider_452->{$provider}) {
+	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
+	return 0;
+    }
+    
+    my ($success,$alert);
+    foreach my $k (keys %{$notify->{$provider}}) {
+	($alert) = &formatAlert($info,$provider,$k);
+	## the ProviderEnabled check before doesn't work for multi 
+	# (i.e. GNTP & EMAIL for now) we will have to verify this provider is actually enabled in the foreach..
+	my $push_type = $alert_options->{'push_type'};
+	if (ref $notify->{$provider}->{$k} && $notify->{$provider}->{$k}->{'enabled'}  &&  $notify->{$provider}->{$k}->{$push_type}) {
+	    print "$provider key:$k enabled for this $alert_options->{'push_type'}\n" if $debug;
+	} else {
+	    print "$provider key:$k NOT enabled for this $alert_options->{'push_type'} - skipping\n" if $debug;
+	    next;
+	}
+	
+	my %email = %{$notify->{EMAIL}->{$k}};    
+	$email{'message'} = $alert;
+
+	$email{'subject'} = '{user}' if !$email{'subject'};	
+	
+	## allow formatting of appname
+	
+	$email{'subject'} =~ s/{push_title}/$push_type_titles->{$alert_options->{'push_type'}}/g if $alert_options->{'push_type'};  
+	if ($email{'subject'} =~ /\{.*\}/) {
+	    my $regex = join "|", keys %{$alert_options};
+	    $regex = qr/$regex/;
+	    $email{'subject'} =~ s/{($regex)}/$alert_options->{$1}/g;
+	    $email{'subject'} =~ s/{\w+}//g; ## remove any {word} - templates that failed
+	    $email{'subject'} = $appname if !$email{'subject'}; ## replace appname if empty
+	    $email{'subject'} = $email{'subject'} . ' ';
+	}
+	
+	
+	#$email{'subject'} .= $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
+
+
+
+	if (!$email{'server'} || !$email{'port'} || !$email{'from'} || !$email{'to'} ) {
+	    my $msg = "FAIL: Please specify a server, port, to and from address for $provider [$k] in config.pl";
+	    &ConsoleLog($msg,,1);
+	} else {
+	    
+	    
+	    # Configure smtp server - required one time only
+	    MIME::Lite->send ("smtp", $email{'server'}); 
+	    
+	    my $msg = MIME::Lite->new
+		(
+		 From    => $email{'from'},
+		 To      => $email{'to'},
+		 Data    => $alert,
+		 Subject => $email{'subject'},
+		);
+	    
+	    $msg->send ();
+	    print uc($provider) . " Notification successfully posted.\n" if $debug;
+	    #return 1;     ## success
+	    $success++; ## increment success -- can't return as we might have multiple destinations
+	}
+	
+    }
+    
+    ## TODO - look into checking if multi providers failed - and continue trying them -- sometime.
+    return 1 if $success;
+    
+    ## this could be moved above scope to 452 specific GNTP dest that failed -- need to look into RecentlyAdded code to see how it affect that.
+    $provider_452->{$provider} = 1;
+    my $msg452 = uc($provider) . " failed: $alert - setting $provider to back off additional notifications\n";
+    &ConsoleLog($msg452,,1);
+    return 0;
+    
+}
+
+
 sub NotifyBoxcarPOST() {
     ## the actual post to boxcar
     my %bc = %{$_[0]};
@@ -2066,11 +2182,15 @@ sub NotifyBoxcarPOST() {
 }
 
 sub NotifyGrowl() { 
-    my $alert = shift;
+    my $provider = 'growl';
+
+    #my $alert = shift;
+    my $info = shift;
+    my ($alert) = &formatAlert($info,$provider);
+
     my $alert_options = shift;
     my $extra_cmd = '';
 
-    my $provider = 'growl';
     if ($provider_452->{$provider}) {
 	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
 	return 0;
@@ -2236,7 +2356,7 @@ sub info_from_xml() {
     ## Percent complete -- this is correct ongoing in verison 0.0.18
     my $percent_complete;
     if ( ($vid->{viewOffset} && $vid->{duration}) && $vid->{viewOffset} > 0 && $vid->{duration} > 0) {
-	$percent_complete = sprintf("%2d",($vid->{viewOffset}/$vid->{duration})*100);
+	$percent_complete = sprintf("%.0f",($vid->{viewOffset}/$vid->{duration})*100);
 	if ($percent_complete >= 90) {	$percent_complete = 100;    } 
     }
     ## version prior to 0.0.18 -- we will have to use duration watched to figure out percent
@@ -2248,7 +2368,7 @@ sub info_from_xml() {
 	# $duration_raw is correct as we didn't have paused seconds yet. 
 	# When we had pasued seconds, the percent_complete would have already applied above
 	if ( ($vid->{duration} && $vid->{duration} > 0) && ($duration_raw && $duration_raw > 0) )  {
-	    $percent_complete = sprintf("%2d",($duration_raw/($vid->{duration}/1000))*100);
+	    $percent_complete = sprintf("%.0f",($duration_raw/($vid->{duration}/1000))*100);
 	    if ($percent_complete >= 90) {	$percent_complete = 100;    } 
 	}
     }
@@ -2266,7 +2386,7 @@ sub info_from_xml() {
     
     ## length of the video
     my $length;
-    $length = sprintf("%02d",$vid->{duration}/1000) if $vid->{duration};
+    $length = sprintf("%.0f",$vid->{duration}/1000) if $vid->{duration};
     $length = &durationrr($length);
     
     my $orig_user = (split('\@',$vid->{User}->{title}))[0]     if $vid->{User}->{title};
@@ -2674,6 +2794,7 @@ sub GetNotifyfuncs() {
 	boxcar => \&NotifyBoxcar,
 	file => \&NotifyFile,
 	GNTP => \&NotifyGNTP,
+	EMAIL => \&NotifyEMAIL,
 	
 	);
     my $error;

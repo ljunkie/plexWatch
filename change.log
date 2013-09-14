@@ -1,15 +1,21 @@
 # 0.0.20
+# * NEW: Email provider ( requires MIME::Lite )
+#         centos: yum install perl\(MIME::Lite\)
+#         debian: apt-get install libmime-lite-perl
+#         others: cpan install MIME::Lite
 # * NEW: paused/resumed state and time are now accounted for
 # * NEW: paused/resumed push types enabled - push_paused, pushed_resumed added to each provider
+# * NEW: you can override 'alert_format' per provider ( check out the EMAIL provider for an example )
 # * FIX: watched duration corrected going forward (accounts for paused content and can be overridden with $count_paused )
 #         paused/resumed states have allowed this to work
-# * FIX: Redundant titles are now fixed - Title/Application also will always show {user} unless overridden in config.pl
+# * FIX: Redundant titles are now fixed 	- Title/Application also will always show {user} unless overridden in config.pl
 #         $appname is no longer used and replaced with {user} -- {user} if used even if config.pl has $appname ( no need to update config.pl )
 #         before:  title: "plexWatch watched" msg: "user watched title etc...."
 #          after:  title: "{user} watched"    msg: "title etc...."
 # * FIX: --test_notify will not print options to test ( and they actually correspond to the right notification type now!)
 # * FIX: do not print backup info every time --debug is called
 # * Screenshots added to screenshots folder for iOS and Windows
+
 
 
 # 0.0.19
