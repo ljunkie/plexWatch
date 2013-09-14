@@ -2138,21 +2138,14 @@ sub NotifyEMAIL() {
 
 	    eval {
 		my $mailer;
-		if ($email{'username'} && $email{'password'}) {
-		    $mailer = new Net::SMTP::TLS(
-			$email{'server'},
-			Hello   =>      $email{'server'},
-			Port    =>      $email{'port'},
-			User    =>      $email{'username'},
-			Password=>      $email{'password'},
-			);
-		}  else {
-		    $mailer = new Net::SMTP::TLS(
-			$email{'server'},
-			Hello   =>      $email{'server'},
-			Port    =>      $email{'port'},
-			);
-		}
+		$mailer = new Net::SMTP::TLS(
+		    $email{'server'},
+		    ( $email{'server'} ? (Hello => $email{'server'}) : () ),
+		    ( $email{'port'} ? (Port => $email{'port'}) : () ),
+		    ( $email{'username'} ? (User => $email{'username'}) : () ),
+		    ( $email{'password'} ? (Password => $email{'password'}) : () ),
+		    ( $email{enable_tls}  ? () : (NoTLS => 1) ) ,
+		    );
 		
 		
 		$mailer->mail($email{'from'});

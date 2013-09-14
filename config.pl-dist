@@ -167,6 +167,7 @@ $notify = {
 	    'username' => '', # AUTH if needed [optional]
 	    'password' => '', # AUTH if needed [optional]
 	    'subject' => '{user} {push_title} {title}', ## push_title is special for EMAIL (for now)
+	    'enable_tls' => 0,  # ENABLE for TLS support ( your smtp server must allow STARTTLS )
 	    'alert_format' => {
 	    	'start'    =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in] {ip_address} {all_details}',
 		'paused'   =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in] [{percent_complete}%] {ip_address} {all_details}',
