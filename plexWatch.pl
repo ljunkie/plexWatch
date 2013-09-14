@@ -1984,10 +1984,9 @@ sub NotifyGNTP() {
 	    $gntp{'title'} =~ s/{($regex)}/$alert_options->{$1}/g;
 	    $gntp{'title'} =~ s/{\w+}//g; ## remove any {word} - templates that failed
 	    $gntp{'title'} = $appname if !$gntp{'title'}; ## replace appname if empty
-	    $gntp{'title'} = $gntp{'title'} . ' ';
 	}
 	
-	$gntp{'title'} .= $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
+	$gntp{'title'} .= ' ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
 
 
 
