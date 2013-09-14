@@ -75,18 +75,10 @@ if (&ProviderEnabled('GNTP')) {
 }
 
 if (&ProviderEnabled('EMAIL')) {
-    require MIME::Lite;
-    MIME::Lite->import();
-
-    my $provider = 'EMAIL';
-    foreach my $k (keys %{$notify->{$provider}}) {
-	if (ref $notify->{$provider}->{$k} && 
-	    $notify->{$provider}->{$k}->{'enabled'}  && 
-	    $notify->{$provider}->{$k}->{'SSL/TLS'} ) {
-	    require Net::SMTP::TLS;
-	    Net::SMTP::TLS->import();
-	}
-    }
+    #require MIME::Lite; mime::lite sucks
+    #MIME::Lite->import();
+    require Net::SMTP::TLS;
+    Net::SMTP::TLS->import();
 }
 
 if ($log_client_ip) {
@@ -858,7 +850,7 @@ sub formatAlert() {
 	my $f_extra;
 	foreach my $key (keys %{$info} ) {
 	    if (!ref($info->{$key})) {
-		$format .= sprintf("%20s: %s\n",$key,$info->{$key});
+		$format .= sprintf("%20s: %s\n",$key,$info->{$key}) if $info->{$key};
 	    } else {
 		$f_extra .= sprintf("\n\n%10s %s\n","","-----$key-----");
 		foreach my $k2 (keys %{$info->{$key}} ) {
@@ -2101,7 +2093,7 @@ sub NotifyEMAIL() {
 	return 0;
     }
     
-    my ($success,$alert);
+    my ($success,$alert,$error);
     foreach my $k (keys %{$notify->{$provider}}) {
 	($alert) = &formatAlert($info,$provider,$k);
 	## the ProviderEnabled check before doesn't work for multi 
@@ -2135,7 +2127,6 @@ sub NotifyEMAIL() {
 	#$email{'subject'} .= $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
 
 
-
 	if (!$email{'server'} || !$email{'port'} || !$email{'from'} || !$email{'to'} ) {
 	    my $msg = "FAIL: Please specify a server, port, to and from address for $provider [$k] in config.pl";
 	    &ConsoleLog($msg,,1);
@@ -2144,42 +2135,25 @@ sub NotifyEMAIL() {
 	    
 	    # Configure smtp server - required one time only
 
-	    my $MIMElite = 1;
-	    my $SMTPtls = 0;
-	    my $mailer;
-	    if ($email{'username'} && $email{'password'}) {
-		if (!$email{'SSL/TLS'} ) {
-		    MIME::Lite->send ("smtp", $email{'server'},  HELLO=> $email{'server'}, PORT=> $email{'port'}, AuthUser=>$email{'username'}, AuthPass=> $email{'password'}, Debug=>0);
-		} else {
-		    $SMTPtls = 1;
-		    $MIMElite = 0;
+	    eval {
+		my $mailer;
+		if ($email{'username'} && $email{'password'}) {
 		    $mailer = new Net::SMTP::TLS(
 			$email{'server'},
-			Hello   =>      'plexWatch.local',
+			Hello   =>      $email{'server'},
 			Port    =>      $email{'port'},
 			User    =>      $email{'username'},
 			Password=>      $email{'password'},
 			);
+		}  else {
+		    $mailer = new Net::SMTP::TLS(
+			$email{'server'},
+			Hello   =>      $email{'server'},
+			Port    =>      $email{'port'},
+			);
 		}
-	    } 
-
-	    else {
-		MIME::Lite->send ("smtp", $email{'server'}, HELLO=> $email{'server'}, PORT=> $email{'port'});
-	    }
-	    
-	    if ($MIMElite) {
-		my $msg = MIME::Lite->new
-		    (
-		     From    => $email{'from'},
-		     To      => $email{'to'},
-		     Data    => $alert,
-		     Subject => $email{'subject'},
-		    );
-		$msg->send();
-		$success++ if $msg->last_send_successful();
-	    }
-	    
-	    if ($SMTPtls) {
+		
+		
 		$mailer->mail($email{'from'});
 		$mailer->to($email{'to'});
 		$mailer->data;
@@ -2190,21 +2164,25 @@ sub NotifyEMAIL() {
 		$mailer->datasend($alert);
 		$mailer->dataend;
 		$mailer->quit;
-		$success++; ## increment success -- can't return as we might have multiple destinations
+	    };
+	    if ($@) {
+		$error .= $@;
+		print STDERR uc($provider) . " failed " . substr($alert,0,30) . " setting $provider to back off additional notifications :: $error\n";
+	    } else {
+		$success++; ## increment success -- can't return as we might have multiple destinations (however it one works, they all work--TODO tofix)
+		print uc($provider) . " Notification successfully posted.\n" if $debug && $success;
 	    }
 	    
-	    print uc($provider) . " Notification successfully posted.\n" if $debug && $success;
-	    #return 1;     ## success
 	}
 	
     }
     
-    ## TODO - look into checking if multi providers failed - and continue trying them -- sometime.
     return 1 if $success;
     
     ## this could be moved above scope to 452 specific GNTP dest that failed -- need to look into RecentlyAdded code to see how it affect that.
     $provider_452->{$provider} = 1;
-    my $msg452 = uc($provider) . " failed: $alert - setting $provider to back off additional notifications\n";
+    my $msg452 = uc($provider) . " failed: ". substr($alert,0,30) . " - setting $provider to back off additional notifications";
+    $msg452 .= $error if $error;
     &ConsoleLog($msg452,,1);
     return 0;
     
