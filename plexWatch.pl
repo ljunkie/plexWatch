@@ -736,6 +736,7 @@ if (!%options || $options{'notify'}) {
 	    
 	    my $insert_id = &ProcessStart($live->{$k},$db_key,$info->{'title'},$info->{'platform'},$info->{'orig_user'},$info->{'orig_title'},$info->{'orig_title_ep'},$info->{'genre'},$info->{'episode'},$info->{'season'},$info->{'summary'},$info->{'rating'},$info->{'year'},$info->{'ip_address'});
 	    &Notify($info);
+	    ## should probably have some checks to make sure we were notified.. TODO
 	    &SetNotified($insert_id);
 	}
     }
@@ -2129,7 +2130,7 @@ sub NotifyEMAIL() {
 
 	if (!$email{'server'} || !$email{'port'} || !$email{'from'} || !$email{'to'} ) {
 	    my $msg = "FAIL: Please specify a server, port, to and from address for $provider [$k] in config.pl";
-	    &ConsoleLog($msg,,1);
+	    &DebugLog($msg,1);
 	} else {
 	    
 	    
@@ -2167,11 +2168,14 @@ sub NotifyEMAIL() {
 	    };
 	    if ($@) {
 		$error .= $@;
-		print STDERR uc($provider) . " failed " . substr($alert,0,100) . "\n";
-		print STDERR uc($provider) . " error: $error\n";
+		my $d_out =  uc($provider) . " failed " . substr($alert,0,100);
+		&DebugLog($d_out,1);
+		$d_out = uc($provider) . " error: $error";
+		&DebugLog($d_out,1);
 	    } else {
 		$success++; ## increment success -- can't return as we might have multiple destinations (however it one works, they all work--TODO tofix)
-		print uc($provider) . " Notification successfully posted.\n" if $debug && $success;
+		my $d_out = uc($provider) . " Notification successfully posted to . " . $email{'to'} . "\n";
+		&DebugLog($d_out);
 	    }
 	    
 	}
@@ -2183,7 +2187,8 @@ sub NotifyEMAIL() {
     ## this could be moved above scope to 452 specific GNTP dest that failed -- need to look into RecentlyAdded code to see how it affect that.
     $provider_452->{$provider} = 1;
     my $msg452 = uc($provider) . " failed: - setting $provider to back off additional notifications";
-    &ConsoleLog($msg452,,1);
+    &DebugLog($msg452,1);
+    #&ConsoleLog($msg452,,1);
     return 0;
     
 }
