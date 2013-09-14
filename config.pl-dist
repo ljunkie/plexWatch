@@ -3,7 +3,7 @@ $data_dir = '/opt/plexWatch/'; ## to store the DB, logfile - can be the same as 
 $server_log = '/var/lib/plexmediaserver/Library/Application Support/Plex Media Server/Logs/Plex Media Server.log'; ## used to log IP address of user (alpha)
 $log_client_ip = 0; ## requires $server_log to be available too. (requires File::ReadBackwards)
 
-$debug_logging = 0; ## logs to $data_dir/debug.log ( not verbose enough yet.. still todo )
+$debug_logging = 1; ## logs to $data_dir/debug.log ( not verbose enough yet.. still todo )
 
 ## myplex user/pass ONLY required if you have set the PMS to 'Require authentication on local networks' and $server is not set to localhost
 $myPlex_user = '';
