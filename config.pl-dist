@@ -154,7 +154,7 @@ $notify = {
     'EMAIL' => { 
 
 	'1' => 	{
-	    'enabled' => 1, ## set to 1 to enable local growl
+	    'enabled' => 0, ## set to 1 to enable local EMAIL
 	    'push_recentlyadded'  => 0,
 	    'push_watched'        => 1,
 	    'push_watching'       => 1,
@@ -176,7 +176,7 @@ $notify = {
 	},
 	
 	'2' => 	{
-	    'enabled' => 0, ## set to 1 to enable local growl
+	    'enabled' => 0, ## set to 1 to enable EMAIL
 	    ## fill in the rest if you need more then 1 email notification
 	},
 	
