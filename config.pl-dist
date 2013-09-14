@@ -15,7 +15,7 @@ $port = 32400;         ## port of PMS
 $notify_started = 1;   # !deprecated -- does nothing anymore (use push_watched, push_watching in $notify)
 $notify_stopped = 1;   # !deprecated -- does nothing anymore (use push_watched, push_watching in $notify)
 
-$appname = 'plexWatch';
+$appname = 'plexWatchApp';
 
 ## Give a user a more friendly name. I.E. REAL_USER will now be Frank
 ## you may also specify the platform with user+platform
@@ -126,6 +126,7 @@ $notify = {
             'push_paused'         => 0,
             'push_resumed'        => 0,
 	    'application' => $appname,
+            'title' => '{user}',
 	    'server' => '10.0.0.1', # destination ip/host
 	    'port' => '23053',      # default 23053
 	    'password' => '',       # '' for no pass
