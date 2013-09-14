@@ -2167,7 +2167,8 @@ sub NotifyEMAIL() {
 	    };
 	    if ($@) {
 		$error .= $@;
-		print STDERR uc($provider) . " failed " . substr($alert,0,30) . " setting $provider to back off additional notifications :: $error\n";
+		print STDERR uc($provider) . " failed " . substr($alert,0,100) . "\n";
+		print STDERR uc($provider) . " error: $error\n";
 	    } else {
 		$success++; ## increment success -- can't return as we might have multiple destinations (however it one works, they all work--TODO tofix)
 		print uc($provider) . " Notification successfully posted.\n" if $debug && $success;
@@ -2181,8 +2182,7 @@ sub NotifyEMAIL() {
     
     ## this could be moved above scope to 452 specific GNTP dest that failed -- need to look into RecentlyAdded code to see how it affect that.
     $provider_452->{$provider} = 1;
-    my $msg452 = uc($provider) . " failed: ". substr($alert,0,30) . " - setting $provider to back off additional notifications";
-    $msg452 .= $error if $error;
+    my $msg452 = uc($provider) . " failed: - setting $provider to back off additional notifications";
     &ConsoleLog($msg452,,1);
     return 0;
     

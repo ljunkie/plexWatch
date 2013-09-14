@@ -161,7 +161,7 @@ $notify = {
 	    'push_paused'         => 1,
 	    'push_resumed'        => 1,
 	    'server' => '', # your mail server
-	    'port' => '25', # your mail server port defalt 25
+	    'port' => '25', # your mail server port defalt 25 (587 is also a good choice)
 	    'from' => '',   # your From email address: 'user@domain.com'
 	    'to' => '',     # Email address to receive notification: 'user@domain.com'
 	    'username' => '', # AUTH if needed [optional]
@@ -173,7 +173,6 @@ $notify = {
 		'resumed'  =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in] [{percent_complete}%] {ip_address} {all_details}',
 		'stop'     =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} for {duration} [{percent_complete}%] {ip_address} {all_details}',
 	    },
-	    'SSL/TLS' => 0, ## Enable if you requires encrypted authentication,
 	},
 	
 	'2' => 	{
