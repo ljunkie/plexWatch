@@ -2164,7 +2164,7 @@ sub NotifyEMAIL() {
 	    } 
 
 	    else {
-		eval {MIME::Lite->send ("smtp", $email{'server'}, HELLO=> $email{'server'}, PORT=> $email{'port'}); }
+		MIME::Lite->send ("smtp", $email{'server'}, HELLO=> $email{'server'}, PORT=> $email{'port'});
 	    }
 	    
 	    if ($MIMElite) {
@@ -2176,6 +2176,7 @@ sub NotifyEMAIL() {
 		     Subject => $email{'subject'},
 		    );
 		$msg->send();
+		$success++ if $msg->last_send_successful();
 	    }
 	    
 	    if ($SMTPtls) {
@@ -2189,13 +2190,11 @@ sub NotifyEMAIL() {
 		$mailer->datasend($alert);
 		$mailer->dataend;
 		$mailer->quit;
+		$success++; ## increment success -- can't return as we might have multiple destinations
 	    }
-
-	    ## todo - email checking
 	    
-	    print uc($provider) . " Notification successfully posted.\n" if $debug;
+	    print uc($provider) . " Notification successfully posted.\n" if $debug && $success;
 	    #return 1;     ## success
-	    $success++; ## increment success -- can't return as we might have multiple destinations
 	}
 	
     }
