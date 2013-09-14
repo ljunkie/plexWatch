@@ -148,6 +148,41 @@ $notify = {
 	    'sticky' => 0,
 	},
     },
+
+
+    ## EMAIL -- multiple destinations are supported 
+    'EMAIL' => { 
+
+	'1' => 	{
+	    'enabled' => 1, ## set to 1 to enable local growl
+	    'push_recentlyadded'  => 0,
+	    'push_watched'        => 1,
+	    'push_watching'       => 1,
+	    'push_paused'         => 1,
+	    'push_resumed'        => 1,
+	    'server' => '', # your mail server
+	    'port' => '25', # your mail server port defalt 25
+	    'from' => '',   # your From email address: 'user@domain.com'
+	    'to' => '',     # Email address to receive notification: 'user@domain.com'
+	    'username' => '', # AUTH if needed [optional]
+	    'password' => '', # AUTH if needed [optional]
+	    'subject' => '{user} {push_title} {title}', ## push_title is special for EMAIL (for now)
+	    'alert_format' => {
+	    	'start'    =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in] {ip_address} {all_details}',
+		'paused'   =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in] [{percent_complete}%] {ip_address} {all_details}',
+		'resumed'  =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in] [{percent_complete}%] {ip_address} {all_details}',
+		'stop'     =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} for {duration} [{percent_complete}%] {ip_address} {all_details}',
+	    },
+	    'SSL/TLS' => 0, ## Enable if you requires encrypted authentication,
+	},
+	
+	'2' => 	{
+	    'enabled' => 0, ## set to 1 to enable local growl
+	    ## fill in the rest if you need more then 1 email notification
+	},
+	
+    },
+    
     
 };
 

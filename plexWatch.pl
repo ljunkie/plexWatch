@@ -77,6 +77,16 @@ if (&ProviderEnabled('GNTP')) {
 if (&ProviderEnabled('EMAIL')) {
     require MIME::Lite;
     MIME::Lite->import();
+
+    my $provider = 'EMAIL';
+    foreach my $k (keys %{$notify->{$provider}}) {
+	if (ref $notify->{$provider}->{$k} && 
+	    $notify->{$provider}->{$k}->{'enabled'}  && 
+	    $notify->{$provider}->{$k}->{'SSL/TLS'} ) {
+	    require Net::SMTP::TLS;
+	    Net::SMTP::TLS->import();
+	}
+    }
 }
 
 if ($log_client_ip) {
@@ -2133,17 +2143,56 @@ sub NotifyEMAIL() {
 	    
 	    
 	    # Configure smtp server - required one time only
-	    MIME::Lite->send ("smtp", $email{'server'}); 
+
+	    my $MIMElite = 1;
+	    my $SMTPtls = 0;
+	    my $mailer;
+	    if ($email{'username'} && $email{'password'}) {
+		if (!$email{'SSL/TLS'} ) {
+		    MIME::Lite->send ("smtp", $email{'server'},  HELLO=> $email{'server'}, PORT=> $email{'port'}, AuthUser=>$email{'username'}, AuthPass=> $email{'password'}, Debug=>0);
+		} else {
+		    $SMTPtls = 1;
+		    $MIMElite = 0;
+		    $mailer = new Net::SMTP::TLS(
+			$email{'server'},
+			Hello   =>      'plexWatch.local',
+			Port    =>      $email{'port'},
+			User    =>      $email{'username'},
+			Password=>      $email{'password'},
+			);
+		}
+	    } 
+
+	    else {
+		eval {MIME::Lite->send ("smtp", $email{'server'}, HELLO=> $email{'server'}, PORT=> $email{'port'}); }
+	    }
 	    
-	    my $msg = MIME::Lite->new
-		(
-		 From    => $email{'from'},
-		 To      => $email{'to'},
-		 Data    => $alert,
-		 Subject => $email{'subject'},
-		);
+	    if ($MIMElite) {
+		my $msg = MIME::Lite->new
+		    (
+		     From    => $email{'from'},
+		     To      => $email{'to'},
+		     Data    => $alert,
+		     Subject => $email{'subject'},
+		    );
+		$msg->send();
+	    }
 	    
-	    $msg->send ();
+	    if ($SMTPtls) {
+		$mailer->mail($email{'from'});
+		$mailer->to($email{'to'});
+		$mailer->data;
+		$mailer->datasend("To: $email{'to'}\r\n");
+		$mailer->datasend("From: $email{'from'}\r\n");
+		$mailer->datasend("Subject: $email{'subject'}\r\n");
+		$mailer->datasend("X-Mailer: plexWatch\r\n");
+		$mailer->datasend($alert);
+		$mailer->dataend;
+		$mailer->quit;
+	    }
+
+	    ## todo - email checking
+	    
 	    print uc($provider) . " Notification successfully posted.\n" if $debug;
 	    #return 1;     ## success
 	    $success++; ## increment success -- can't return as we might have multiple destinations

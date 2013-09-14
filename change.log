@@ -3,6 +3,11 @@
 #         centos: yum install perl\(MIME::Lite\)
 #         debian: apt-get install libmime-lite-perl
 #         others: cpan install MIME::Lite
+#   ** TLS (SSL support) support requires Net::SMTP::TLS
+#  	  centos: yum install perl\(Net::SMTP::TLS\)
+#  	  debian: apt-get install libnet-smtp-tls-perl
+#  	  other: cpan install MIME::Lite
+#
 # * NEW: paused/resumed state and time are now accounted for
 # * NEW: paused/resumed push types enabled - push_paused, pushed_resumed added to each provider
 # * NEW: you can override 'alert_format' per provider ( check out the EMAIL provider for an example )
