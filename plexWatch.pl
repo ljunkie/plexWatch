@@ -1254,7 +1254,8 @@ sub GetSessions() {
     $response = $userAgent->request($request);
 
     if ($response->is_success) {
-	my $XML  = $response->decoded_content();
+	#my $XML  = $response->decoded_content();
+	my $XML  = $response->content();
 	
 	if ($debug_xml) {
 	    print "URL: $url\n";
@@ -1266,7 +1267,8 @@ sub GetSessions() {
 	return $data->{'Video'};
     } else {
 	print "\nFailed to get request $url - The result: \n\n";
-	print $response->decoded_content() . "\n\n";
+	#print $response->decoded_content() . "\n\n";
+	print $response->content() . "\n\n";
 	if ($options{debug}) {	 	
 	    print "\n-----------------------------------DEBUG output----------------------------------\n\n";
 	    print Dumper($response);
@@ -2619,7 +2621,8 @@ sub GetSectionsIDs() {
 	print "Failed to get Library Sections from $url\n";
 	exit(2);
     } else {
-	my $content  = $response->decoded_content();
+	#my $content  = $response->decoded_content();
+	my $content  = $response->content();
 	my $data = XMLin($content);
 	foreach  my $k (keys %{$data->{'Directory'}}) {
 	    $sections->{'raw'}->{$k} = $data->{'Directory'}->{$k};
@@ -2653,7 +2656,8 @@ sub GetItemMetadata() {
 	return $response->{'_rc'} if $response->{'_rc'} == 404;
 	exit(2);
     } else {
-	my $content  = $response->decoded_content();
+	#my $content  = $response->decoded_content();
+	my $content  = $response->content();
 	#my $vid = XMLin($hash,KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
 	#my $data = XMLin($content, KeyAttr => { Role => ''} );
 	my $data = XMLin($content);
@@ -2686,7 +2690,8 @@ sub GetRecentlyAdded() {
 	    print "Failed to get Library Sections from $url\n";
 	    exit(2);
 	} else {
-	    my $content  = $response->decoded_content();
+	    #my $content  = $response->decoded_content();
+	    my $content  = $response->content();
 	    my $data = XMLin($content, ForceArray => ['Video']);
 	    ## verify we are recieving what we expect. -- extra output for debugging
 	    if (!ref $data && $debug) {
