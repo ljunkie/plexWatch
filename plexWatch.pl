@@ -5,7 +5,7 @@ my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-09-15 00:04 PST
+# Modified: 2013-09-15 12:53 PST
 #
 #  Version: $version
 # https://github.com/ljunkie/plexWatch
