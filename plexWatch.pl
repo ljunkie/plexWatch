@@ -25,7 +25,9 @@ use POSIX qw(strftime);
 use File::Basename;
 use warnings;
 use open qw/:std :utf8/; ## default encoding of these filehandles all at once (binmode could also be used) 
-                         ## TODO: might want to allow non ascii -- would require stripping " s/[^[:ascii:]]+//g; " from the code below..
+use utf8;
+#use Encode;
+
 
 ## load config file
 my $dirname = dirname(__FILE__);
@@ -371,7 +373,7 @@ sub RAdataAlert() {
 	$alert_url .= ' http://www.imdb.com/find?s=tt&q=' . urlencode($item->{'imdb_title'});
     }
     
-    $alert =~ s/[^[:ascii:]]+//g;  ## remove non ascii
+    #$alert =~ s/[^[:ascii:]]+//g;  ## remove non ascii ( now UTF8 )
     
     $result->{'alert'} = $alert;
     $result->{'alert_short'} = $alert_short;
@@ -839,7 +841,7 @@ sub formatAlert() {
     $format =~ s/{($regex)}/$info->{$1}/g; ## regex replace variables
     $format =~ s/\[\]//g;                 ## trim any empty variable encapsulated in []
     $format =~ s/\s+/ /g;                 ## remove double spaces
-    $format =~ s/[^[:ascii:]]+//g;        ## remove non ascii
+    #$format =~ s/[^[:ascii:]]+//g;        ## remove non ascii ( now UTF8 )
     $format =~ s/\\n/\n/g;                ## allow \n to be an actual new line
     $format =~ s/{newline}/\n/g;                ## allow \n to be an actual new line
 
@@ -1263,6 +1265,12 @@ sub GetSessions() {
 	    print $XML;
 	    print "===================================XML END=================================================\n";
 	}
+
+	## I might want to encode it before I push it to XMLIN ( it seems it XMLIN wants it encoded )
+	#my $string = "Résumé";
+	#print decode_utf8($XML.$string);
+	#print encode_utf8($XML.$string);
+
 	my $data = XMLin($XML,KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
 	return $data->{'Video'};
     } else {
@@ -2244,7 +2252,7 @@ sub consoletxt() {
     $console =~ s/\n\n/\n/g;
     $console =~ s/\n/,/g;
     $console =~ s/,$//; # get rid of last comma
-    $console =~ s/[^[:ascii:]]+//g; 
+#    $console =~ s/[^[:ascii:]]+//g;  Now UTF8
     return $console;
 }
 
