@@ -2628,6 +2628,12 @@ sub GetSectionsIDs() {
 	exit(2);
     } else {
 	my $content  = $response->decoded_content();
+	if ($debug_xml) {
+	    print "URL: $url\n";
+	    print "===================================XML CUT=================================================\n";
+	    print $content;
+	    print "===================================XML END=================================================\n";
+	}
 	my $data = XMLin(encode('utf8',$content));
 	foreach  my $k (keys %{$data->{'Directory'}}) {
 	    $sections->{'raw'}->{$k} = $data->{'Directory'}->{$k};
@@ -2662,6 +2668,12 @@ sub GetItemMetadata() {
 	exit(2);
     } else {
 	my $content  = $response->decoded_content();
+	if ($debug_xml) {
+	    print "URL: $url\n";
+	    print "===================================XML CUT=================================================\n";
+	    print $content;
+	    print "===================================XML END=================================================\n";
+	}
 	#my $vid = XMLin($hash,KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
 	#my $data = XMLin($content, KeyAttr => { Role => ''} );
 	my $data = XMLin(encode('utf8',$content));
@@ -2695,6 +2707,14 @@ sub GetRecentlyAdded() {
 	    exit(2);
 	} else {
 	    my $content  = $response->decoded_content();
+
+	    if ($debug_xml) {
+		print "URL: $url\n";
+		print "===================================XML CUT=================================================\n";
+		print $content;
+		print "===================================XML END=================================================\n";
+	    }
+
 	    my $data = XMLin(encode('utf8',$content), ForceArray => ['Video']);
 	    ## verify we are recieving what we expect. -- extra output for debugging
 	    if (!ref $data && $debug) {
@@ -3010,7 +3030,14 @@ sub myPlexToken() {
     #print $response->as_string;
 
     if ($response->is_success) {
-	my $data = XMLin(encode('utf8',$response->decoded_content()));
+	my $content = $response->decoded_content();
+	if ($debug_xml) {
+	    print "URL: $url\n";
+	    print "===================================XML CUT=================================================\n";
+	    print $content;
+	    print "===================================XML END=================================================\n";
+	}
+	my $data = XMLin(encode('utf8',$content));
 	return $data->{'authenticationToken'} if $data->{'authenticationToken'};
 	return $data->{'authentication-token'} if $data->{'authentication-token'};
     } else {
