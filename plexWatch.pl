@@ -1265,11 +1265,6 @@ sub GetSessions() {
 	    print "===================================XML END=================================================\n";
 	}
 
-	## I might want to encode it before I push it to XMLIN ( it seems it XMLIN wants it encoded )
-	#my $string = "Résumé";
-	#print decode_utf8($XML.$string);
-	#print encode_utf8($XML.$string);
-
 	my $data = XMLin(encode('utf8',$XML),KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
 	return $data->{'Video'};
     } else {
