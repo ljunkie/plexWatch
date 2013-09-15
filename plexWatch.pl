@@ -26,7 +26,7 @@ use File::Basename;
 use warnings;
 use open qw/:std :utf8/; ## default encoding of these filehandles all at once (binmode could also be used) 
 use utf8;
-#use Encode;
+use Encode;
 
 
 ## load config file
@@ -1270,7 +1270,7 @@ sub GetSessions() {
 	#print decode_utf8($XML.$string);
 	#print encode_utf8($XML.$string);
 
-	my $data = XMLin($XML,KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
+	my $data = XMLin(encode('utf8',$XML),KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
 	return $data->{'Video'};
     } else {
 	print "\nFailed to get request $url - The result: \n\n";
@@ -2316,7 +2316,7 @@ sub info_from_xml() {
     ## start time is in xml
 
     
-    my $vid = XMLin($hash,KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
+    my $vid = XMLin(encode('utf8',$hash),KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
 
 
     ## paused or playing? stopped is forced and required from ntype
@@ -2628,7 +2628,7 @@ sub GetSectionsIDs() {
 	exit(2);
     } else {
 	my $content  = $response->decoded_content();
-	my $data = XMLin($content);
+	my $data = XMLin(encode('utf8',$content));
 	foreach  my $k (keys %{$data->{'Directory'}}) {
 	    $sections->{'raw'}->{$k} = $data->{'Directory'}->{$k};
 	    push @{$sections->{'types'}->{$data->{'Directory'}->{$k}->{'type'}}}, $k;
@@ -2664,7 +2664,7 @@ sub GetItemMetadata() {
 	my $content  = $response->decoded_content();
 	#my $vid = XMLin($hash,KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
 	#my $data = XMLin($content, KeyAttr => { Role => ''} );
-	my $data = XMLin($content);
+	my $data = XMLin(encode('utf8',$content));
 	return $data->{'Video'} if $data->{'Video'};
     }
 }
@@ -2695,7 +2695,7 @@ sub GetRecentlyAdded() {
 	    exit(2);
 	} else {
 	    my $content  = $response->decoded_content();
-	    my $data = XMLin($content, ForceArray => ['Video']);
+	    my $data = XMLin(encode('utf8',$content), ForceArray => ['Video']);
 	    ## verify we are recieving what we expect. -- extra output for debugging
 	    if (!ref $data && $debug) {
 		print " result from $url is not in an expected format\n";
@@ -3010,7 +3010,7 @@ sub myPlexToken() {
     #print $response->as_string;
 
     if ($response->is_success) {
-	my $data = XMLin($response->decoded_content());
+	my $data = XMLin(encode('utf8',$response->decoded_content()));
 	return $data->{'authenticationToken'} if $data->{'authenticationToken'};
 	return $data->{'authentication-token'} if $data->{'authentication-token'};
     } else {
