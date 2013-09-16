@@ -1170,7 +1170,7 @@ sub ProcessUpdate() {
     return if $xml !~ /$key/i; ## xml must contain key
 
     my ($cmd,$sth);
-	my $state_change=0;
+    my $state_change=0;
 
     if ($db_key) {
 	
@@ -1308,13 +1308,14 @@ sub PMSToken() {
 sub getSecPaused() {
     my $db_key = shift;
     if ($db_key) {
-	my $cmd = "select paused,paused_counter from processed where session_id = '$db_key'";
+	my $cmd = "select paused,paused_counter,stopped from processed where session_id = '$db_key'";
 	my $sth = $dbh->prepare($cmd);
 	$sth->execute or die("Unable to execute query: $dbh->errstr\n");
 	my $row = $sth->fetchrow_hashref;
 	my $total=0;
 	$total=$row->{'paused_counter'} if $row->{'paused_counter'};
-	if (defined($row->{'paused'})) {
+	## subtract current time from paused it not yet stopped ( currently paused )
+	if (defined($row->{'paused'}) && !$row->{'stopped'}) {
 	    $total += time()-$row->{'paused'};
 	}
 	$total = 0 if !$total || $total !~ /\d+/;
@@ -1436,9 +1437,13 @@ sub SetStopped() {
     my $time = shift;
     if ($db_key) {
 	$time = time() if !$time;
-	my $sth = $dbh->prepare("update processed set stopped = ? where id = ?");
+	my $sth = $dbh->prepare("update processed set stopped = ?,paused = NULL where id = ?");
 	$sth->execute($time,$db_key) or die("Unable to execute query: $dbh->errstr\n");
     }
+    ## BUG FIX - remove paused state for any stopped item - this can be removed at a later date (TODO)
+    ## fixes in place to account for this anyways. It's just DB cleanup
+    my $sth = $dbh->prepare("update processed set paused = NULL where stopped is not NULL");
+    $sth->execute() or die("Unable to execute query: $dbh->errstr\n");
 }
 
 sub initDB() {
