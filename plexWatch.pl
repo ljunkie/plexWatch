@@ -382,6 +382,7 @@ sub RAdataAlert() {
     $result->{'item_id'} = $item_id;
     $result->{'debug_done'} = $debug_done;
     $result->{'alert_url'} = $alert_url;
+    $result->{'item_type'} = $item->{'type'};
 
     return $result;
 }
@@ -885,12 +886,20 @@ sub ConsoleLog() {
     my $prefix = '';
     
     if (ref($alert_options)) {
-	if ($msg !~ /$alert_options->{'user'}/) {
-	    $prefix .= $alert_options->{'user'} . ' ' if $alert_options->{'user'};
-	    $prefix .= $push_type_titles->{$alert_options->{'push_type'}} . ' ' if $alert_options->{'push_type'};
-	    $msg = $prefix . $msg;
+	if ($alert_options->{'user'}) {
+	    if ($msg !~ /\b$alert_options->{'user'}\b/i) {
+		$prefix .= $alert_options->{'user'} . ' ' if $alert_options->{'user'};
+	    }
+	    if ($msg !~ /\b$push_type_titles->{$alert_options->{'push_type'}}\b/i) {
+		$prefix .= $push_type_titles->{$alert_options->{'push_type'}} . ' ' if $alert_options->{'push_type'};
+	    }
 	}
+	## append type (movie, episode) if supplied
+	$prefix .= ucfirst($alert_options->{'item_type'}) . ' ' if $alert_options->{'item_type'};
+	$prefix =~ s/\s+$//g;
     }
+
+    $msg = $prefix . ': ' . $msg if $prefix;
     
     my $console;
     my $date = localtime;
@@ -937,8 +946,15 @@ sub NotifyFile() {
 	if ($msg !~ /\b$push_type_titles->{$alert_options->{'push_type'}}\b/i) {
 	    $prefix .= $push_type_titles->{$alert_options->{'push_type'}} . ' ' if $alert_options->{'push_type'};
 	}
-	$msg = $prefix . $msg if $prefix;
+    } else {
+	$prefix .= $push_type_titles->{$alert_options->{'push_type'}} . ' ' if $alert_options->{'push_type'};
     }
+
+    ## append type (movie, episode) if supplied
+    $prefix .= ucfirst($alert_options->{'item_type'}) . ' ' if $alert_options->{'item_type'};
+    $prefix =~ s/\s+$//g if $prefix;
+    $msg = $prefix . ': ' . $msg if $prefix;
+    
     
     my $console;
     my $date = localtime;
@@ -1570,6 +1586,7 @@ sub DB_ra_table() {
 	{ 'name' => 'growl', 'definition' => 'INTEGER',},
 	{ 'name' => 'prowl', 'definition' => 'INTEGER',},
 	{ 'name' => 'GNTP', 'definition' => 'INTEGER',},
+	{ 'name' => 'EMAIL', 'definition' => 'INTEGER',},
 	{ 'name' => 'pushover', 'definition' => 'INTEGER',},
 	{ 'name' => 'boxcar', 'definition' => 'INTEGER',},
 	
@@ -1661,6 +1678,7 @@ sub NotifyTwitter() {
 	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
 	return 0;
     }
+    my %tw = %{$notify->{'twitter'}};        
     
     #my $alert = shift;
     my $info = shift;
@@ -1669,7 +1687,23 @@ sub NotifyTwitter() {
     my $alert_options = shift;
 
     my $url = $alert_options->{'url'} if $alert_options->{'url'};
-    $alert = $push_type_titles->{$alert_options->{'push_type'}} . ': ' . $alert if $alert_options->{'push_type'};        
+    
+    my $prefix = '{user}';
+    $prefix = $tw{'title'} if $tw{'title'};
+    $prefix = '{user}' if $prefix eq $appname; ## force {user} if people still use $appname in config -- forcing update with the need to modify config.
+    
+    if ($prefix =~ /\{.*\}/) {
+	my $regex = join "|", keys %{$alert_options};
+	$regex = qr/$regex/;
+	$prefix =~ s/{($regex)}/$alert_options->{$1}/g;
+	$prefix =~ s/{\w+}//g; ## remove any {word} - templates that failed
+	$prefix = $appname if !$prefix; ## replace appname if empty
+    }
+    $prefix .= ' ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
+    $prefix .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};    
+   
+    $prefix =~ s/\s+$//g if $prefix;
+    $alert = $prefix . ': ' . $alert if $prefix;
     
     ## trim down alert..
     if (length($alert) > 139) {	
@@ -1696,7 +1730,6 @@ sub NotifyTwitter() {
 	print "Twitter Alert: $alert\n";
     }
     
-    my %tw = %{$notify->{'twitter'}};        
     my $nt = Net::Twitter::Lite::WithAPIv1_1->new(
 	consumer_key        => $tw{'consumer_key'},
 	consumer_secret     => $tw{'consumer_secret'},
@@ -1756,6 +1789,7 @@ sub NotifyProwl() {
     
     $prowl{'event'} = '';
     $prowl{'event'} = $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};
+    $prowl{'event'} .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};
 
     $prowl{'notification'} = $alert;
     
@@ -1766,6 +1800,7 @@ sub NotifyProwl() {
     ## allow formatting of appname
     $prowl{'application'} = '{user}' if $prowl{'application'} eq $appname; ## force {user} if people still use $appname in config -- forcing update with the need to modify config.
     my $format = $prowl{'application'};
+
 
     if ($format =~ /\{.*\}/) {
 	my $regex = join "|", keys %{$alert_options};
@@ -1844,6 +1879,7 @@ sub NotifyPushOver() {
     $po{'title'} = '{user}' if $po{'title'} eq $appname; ## force {user} if people still use $appname in config -- forcing update with the need to modify config.
     my $format = $po{'title'};
 
+
     if ($format =~ /\{.*\}/) {
 	my $regex = join "|", keys %{$alert_options};
 	$regex = qr/$regex/;
@@ -1852,7 +1888,7 @@ sub NotifyPushOver() {
 	$po{'title'} = $appname if !$po{'title'}; ## replace appname if empty
     }
     $po{'title'} .= ': ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
-    
+    $po{'title'} .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};    
     
     my $response = $ua->post( "https://api.pushover.net/1/messages.json", [
 				  "token" => $po{'token'},
@@ -1911,6 +1947,7 @@ sub NotifyBoxcar() {
     }
     
     $bc{'from'} .= ': ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
+    $bc{'from'} .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};
     
     if (!$bc{'email'}) {
 	my $msg = "FAIL: Please specify and email address for boxcar in config.pl";
@@ -2000,8 +2037,7 @@ sub NotifyGNTP() {
 	}
 	
 	$gntp{'title'} .= ' ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
-
-
+	$gntp{'title'} .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};
 
 	if ($gntp{'sticky'} =~ /1/) {
 	    $gntp{'sticky'} = 'true'; 
@@ -2127,6 +2163,7 @@ sub NotifyEMAIL() {
 	## allow formatting of appname
 	
 	$email{'subject'} =~ s/{push_title}/$push_type_titles->{$alert_options->{'push_type'}}/g if $alert_options->{'push_type'};  
+	$email{'subject'} .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};
 	if ($email{'subject'} =~ /\{.*\}/) {
 	    my $regex = join "|", keys %{$alert_options};
 	    $regex = qr/$regex/;
@@ -2235,6 +2272,7 @@ sub NotifyGrowl() {
     my %growl = %{$notify->{growl}};    
     
     $growl{'title'} = $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
+    $growl{'title'} .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};
     $extra_cmd = "$growl{'title'}" if $growl{'title'};
     
     if (!-f  $growl{'script'} ) {
@@ -2810,6 +2848,7 @@ sub ProcessRAalerts() {
 
 	$alert_options->{'url'} = $alerts->{$k}->{'alert_url'} if $alerts->{$k}->{'alert_url'};
 	$alert_options->{'push_type'} = $push_type;
+	$alert_options->{'item_type'} = $alerts->{$k}->{'item_type'};
 
 	
 	## 'recently_added' table has columns for each provider -- we will notify and verify each provider has success. 
@@ -2820,7 +2859,7 @@ sub ProcessRAalerts() {
 	foreach my $provider (keys %{$notify}) {
 	    # provider is globaly enable and provider push type is enable or is file
 	    if (&ProviderEnabled($provider,$push_type)) {
-	    #if ( ( $notify->{$provider}->{'enabled'} ) && ( $notify->{$provider}->{$push_type} || $provider =~ /file/)) { 
+		#if ( ( $notify->{$provider}->{'enabled'} ) && ( $notify->{$provider}->{$push_type} || $provider =~ /file/)) { 
 		if ($ra_done->{$item_id}->{$provider}) {
 		    printf("%s: %-8s %s [%s]\n", scalar localtime($ra_done->{$item_id}->{'time'}) , uc($provider) , $debug_done, $done_keys->{$ra_done->{$item_id}->{$provider}}) if $debug;
 		} elsif ($is_old) {
