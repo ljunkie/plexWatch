@@ -1314,7 +1314,7 @@ sub getSecPaused() {
 	my $row = $sth->fetchrow_hashref;
 	my $total=0;
 	$total=$row->{'paused_counter'} if $row->{'paused_counter'};
-	## subtract current time from paused it not yet stopped ( currently paused )
+	## subtract current time from paused epoch as it's not yet stopped ( currently paused )
 	if (defined($row->{'paused'}) && !$row->{'stopped'}) {
 	    $total += time()-$row->{'paused'};
 	}
