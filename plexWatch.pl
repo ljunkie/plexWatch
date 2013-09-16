@@ -673,6 +673,12 @@ if (!%options || $options{'notify'}) {
 	    if (!$playing->{$k}) {
 		my $start_epoch = $started->{$k}->{time} if $started->{$k}->{time};
 		my $stop_epoch = time();
+		
+		## process the update - need to supply the original XML (as an xml_ref) and session_id
+		my $xml_ref = XMLin(encode('utf8',$started->{$k}->{'xml'}),KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
+		$xml_ref->{Player}->{'state'} = 'stopped'; # force state as 'stopped' (since this XML is from the DB)
+		&ProcessUpdate($xml_ref, $started->{$k}->{'session_id'} ); ## go through normal update -- will set paused counter etc..
+		
 		my $paused = &getSecPaused($k);
 		my $info = &info_from_xml($started->{$k}->{'xml'},'stop',$start_epoch,$stop_epoch,$paused);
 		$info->{'ip_address'} = $started->{$k}->{ip_address};
@@ -1157,11 +1163,7 @@ sub LocateIP() {
 sub ProcessUpdate() {
     my ($xmlref,$db_key,$ip_address) = @_;
     my ($sess,$key) = split("_",$db_key);
-
     
-    #print "processing update";
-    #print Dumper($xmlref);
-
     my $xml =  XMLout($xmlref);
     
     ## multiple checks to verify the xml we update is valid
