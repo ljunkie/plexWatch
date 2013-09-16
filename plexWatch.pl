@@ -813,6 +813,9 @@ if ($options{'watching'}) {
 
 sub formatAlert() {
     my $info = shift;
+
+    return ($info) if !ref($info);
+
     my $provider = shift;
     my $provider_multi = shift;
     
@@ -921,7 +924,7 @@ sub NotifyFile() {
     
     my $prefix = '';
     
-    if (ref($alert_options)) {
+    if (ref($alert_options) && $alert_options->{'user'}) {
 	if ($msg !~ /\b$alert_options->{'user'}\b/i) {
 	    $prefix .= $alert_options->{'user'} . ' ' if $alert_options->{'user'};
 	}
