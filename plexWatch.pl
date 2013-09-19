@@ -32,13 +32,16 @@ use Encode;
 ## load config file
 my $dirname = dirname(__FILE__);
 if (!-e $dirname .'/config.pl') {
-    print "\n** missing file $dirname/config.pl. Did you move edit config.pl-dist and copy to config.pl?\n\n";
+    my $msg = "** missing file $dirname/config.pl. Did you move edit config.pl-dist and copy to config.pl?";
+    &DebugLog($msg,1) if $msg;
     exit;
 }
 do $dirname.'/config.pl';
 use vars qw/$data_dir $server $port $appname $user_display $alert_format $notify $push_titles $backup_opts $myPlex_user $myPlex_pass $server_log $log_client_ip $debug_logging $watched_show_completed $watched_grouping_maxhr $count_paused/; 
 if (!$data_dir || !$server || !$port || !$appname || !$alert_format || !$notify) {
-    print "config file missing data\n";
+    ## TODO - make this information a little more useful!
+    my $msg = "config file missing data";
+    &DebugLog($msg,1) if $msg;
     exit;
 }
 ## end
@@ -58,7 +61,8 @@ $watched_grouping_maxhr = 3 if !defined($watched_grouping_maxhr);
 
 ## for now, let's warn the user if they have enabled logging of clients IP's and the server log is not found
 if ($server_log && !-f $server_log) {
-    print "warning: \$server_log is specified in config.pl and $server_log does not exist (required for logging of the clients IP address)\n" if $log_client_ip;
+    my $msg = "warning: \$server_log is specified in config.pl and $server_log does not exist (required for logging of the clients IP address)\n" if $log_client_ip;
+    &DebugLog($msg,1) if $msg;
 }
 
 ## ONLY Load modules if used
@@ -111,7 +115,8 @@ my $format_options = {
 };
 
 if (!-d $data_dir) {
-    print "\n** Sorry. Please create your datadir $data_dir\n\n";
+    my $msg = "** Sorry. Please create your datadir $data_dir";
+    &DebugLog($msg,1) if $msg;
     exit;
 }
 
@@ -231,7 +236,8 @@ if ($options{'recently_added'}) {
     
     if (!@want) {
 	#print "\n 'recently_added' must be: movie, show or artist\n\n";
-	print "\n 'recently_added' must be: 'movie' or 'show' -- or a comma separated list \n\n";
+	my $msg = "'recently_added' must be: 'movie' or 'show' -- or a comma separated list";
+	&DebugLog($msg,1) if $msg;
 	exit;
     }
     
@@ -249,11 +255,10 @@ if ($options{'recently_added'}) {
 	
 	$seen{$k} = 1; ## alert seen
 	if (!ref($info->{$k})) {
-	    if ($debug) {
-		print "Skipping KEY '$k' (expected key =~ '/library/metadata/###') -- it's not a hash ref?\n";
-		print "\$info->{'$k'} is not a hash ref?\n";
-		print Dumper($info->{$k}) if $options{debug};
-	    }
+	    my $msg = "Skipping KEY '$k' (expected key =~ '/library/metadata/###') -- it's not a hash ref?\n";
+	    $msg .= "\$info->{'$k'} is not a hash ref?\n";
+	    &DebugLog($msg,1) if $msg;
+	    print Dumper($info->{$k}) if $options{debug};
 	    next;
 	}
 	
@@ -308,7 +313,8 @@ if ($options{'recently_added'}) {
 		    ## redundant code from above hash %seen 
 		    #print "$item->{'title'} is already in current releases... nothing missed\n";
 		} else {
-		    print "$item->{'title'} is NOT in current releases -- we failed to notify previously, so trying again\n" if $options{'debug'};
+		    my $msg = "$item->{'title'} is NOT in current releases -- we failed to notify previously, so trying again";
+		    &DebugLog($msg,1) if $msg;
 		    my $res = &RAdataAlert($key,$item);
 		    $alerts->{$item->{addedAt}.$key} = $res;
 		}
@@ -734,7 +740,8 @@ if (!%options || $options{'notify'}) {
 	    
 	    if ($debug) { 
 		&Notify($info);
-		print &consoletxt("Already Notified -- Sent again due to --debug") . "\n"; 
+		my $msg = "Already Notified -- Sent again due to --debug";
+		&DebugLog($msg,1) if $msg;
 	    };
 	} 
 	## unnotified - insert into DB and notify
@@ -1206,10 +1213,16 @@ sub ProcessUpdate() {
 	my $p_epoch = $p->{'paused'} if $p->{'paused'};
 	my $prev_state = (defined($p_epoch)) ? "paused" : "playing";
 	## video is paused: verify DB has the pause epoch set
-	print "\n* Video State: $state [prev: $prev_state]\n" if ($debug && defined($state));
+
+	my $dmsg = "* Video State: $state [prev: $prev_state]\n" if defined($state);
+	&DebugLog($dmsg,1) if $dmsg;
+
 	if ($state && ($prev_state !~ /$state/i)) {
 	    $state_change=1;
 	}
+	
+	## bug fix for now -- might want to add buffering as an option to notify later
+	my $state_change=0 if $state =~ /buffering/i;
 	
 	my $now = time();
 	if (defined($state) && $state =~ /paused/i) {
@@ -1217,10 +1230,12 @@ sub ProcessUpdate() {
 	    #my $total_sec = $p_counter+$sec;
 	    if (!$p_epoch) {
 		$extra .= sprintf(",paused = %s",$now);
-		printf "* Marking as as Paused on %s [%s]\n",scalar localtime($now),$now if ($debug && defined($state));
+		$dmsg = sprintf "* Marking as as Paused on %s [%s]\n",scalar localtime($now),$now if defined($state);
+		&DebugLog($dmsg,1) if $dmsg;
 	    } else {
 		$p_counter += $now-$p_epoch; ## only for display on debug -- do NOT update db with this.
-		printf "* Already marked as Paused on %s [%s]\n",scalar localtime($p_epoch),$p_epoch if ($debug && defined($state));
+		$dmsg = sprintf "* Already marked as Paused on %s [%s]\n",scalar localtime($p_epoch),$p_epoch if defined($state);
+		&DebugLog($dmsg,1) if $dmsg;
 		#$extra .= sprintf(",paused_counter = %s",$total_sec); #update counter
 	    }
 	} 
@@ -1231,19 +1246,19 @@ sub ProcessUpdate() {
 		$p_counter += $sec;
 		$extra .= sprintf(",paused = %s",'NULL'); # set Paused to NULL
 		$extra .= sprintf(",paused_counter = %s",$p_counter); #update counter
-		printf "* removing Paused state and setting paused counter to %s seconds [this duration %s sec]\n",$p_counter,$sec if $debug;
+		$dmsg = sprintf "* removing Paused state and setting paused counter to %s seconds [this duration %s sec]\n",$p_counter,$sec;
+		&DebugLog($dmsg,1) if $dmsg;
 	    }
 	}
-	print "* Total Paused duration: " . &durationrr($p_counter) . " [$p_counter seconds]\n" if $p_counter && $debug;
-	
+	$dmsg = sprintf "* Total Paused duration: " . &durationrr($p_counter) . " [$p_counter seconds]\n" if $p_counter;
+	&DebugLog($dmsg,1) if $dmsg;
+
 	# include IP update if we have it
 	$extra .= sprintf(",ip_address = '%s'",$ip_address) if $ip_address;
-	
 	
 	$cmd = sprintf("update processed set xml = ?%s where session_id = ?",$extra);
 	$sth = $dbh->prepare($cmd);
 	$sth->execute($xml,$db_key) or die("Unable to execute query: $dbh->errstr\n");	
-	
     }
     #return  $dbh->sqlite_last_insert_rowid();
     return $state_change;
@@ -1289,8 +1304,10 @@ sub GetSessions() {
 	my $data = XMLin(encode('utf8',$XML),KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
 	return $data->{'Video'};
     } else {
-	print "\nFailed to get request $url - The result: \n\n";
-	print $response->decoded_content() . "\n\n";
+	my $dmsg = "Failed to get request $url - The result:";
+	$dmsg .= $response->decoded_content();
+	&DebugLog($dmsg,1) if $dmsg;
+	
 	if ($options{debug}) {	 	
 	    print "\n-----------------------------------DEBUG output----------------------------------\n\n";
 	    print Dumper($response);
@@ -1444,7 +1461,7 @@ sub SetNotified_RA() {
     $status = 1 if !$status; ## status = 1 by default (success), 2 = failed - day old.. do not process anymore
     if ($id) {
 	my $cmd = "update recently_added set $provider = $status where item_id = '$id'";
-	print $cmd . "\n" if ($debug);
+	&DebugLog($cmd);
 	my $sth = $dbh->prepare($cmd);
 	$sth->execute or die("Unable to execute query: $dbh->errstr\n");
     }
@@ -1525,7 +1542,9 @@ sub initDB() {
     }
 
     if ($alter_def) {
-	print "New Table definitions.. upgrading DB\n";
+	my $dmsg = "New Table definitions.. upgrading DB";
+	&DebugLog($dmsg,1) if $dmsg;
+	
 	$dbh->begin_work;
 	
 	eval {
@@ -1538,10 +1557,12 @@ sub initDB() {
 	    $dbh->commit; 
 	};
 	if ($@) {
-	    print "Could not upgrade table definitions - Transaction aborted because $@\n";
+	    $dmsg = "Could not upgrade table definitions - Transaction aborted because $@";
+	    &DebugLog($dmsg,1) if $dmsg;
 	    eval { $dbh->rollback };
 	}
-	print "DB update DONE\n";
+	$dmsg = "DB update DONE\n";
+	&DebugLog($dmsg,1) if $dmsg;
     }
     
     
@@ -1613,9 +1634,10 @@ sub DB_ra_table() {
     }
     
     if ($alter_def) {
-	print "New Table definitions.. upgrading DB\n";
+	my $dmsg = "New Table definitions.. upgrading DB";
+	&DebugLog($dmsg,1) if $dmsg;
+
 	$dbh->begin_work;
-	
 	eval {
 	    local $dbh->{RaiseError} = 1;
 	    my $tmp_table = 'tmp_update_table';
@@ -1626,10 +1648,12 @@ sub DB_ra_table() {
 	    $dbh->commit; 
 	};
 	if ($@) {
-	    print "Could not upgrade table definitions - Transaction aborted because $@\n";
+	    $dmsg = "Could not upgrade table definitions - Transaction aborted because $@";
+	    &DebugLog($dmsg,1) if $dmsg;
 	    eval { $dbh->rollback };
 	}
-	print "DB update DONE\n";
+	$dmsg = "DB update DONE";
+	&DebugLog($dmsg,1) if $dmsg;
     }
     
     ## now verify indexes
@@ -1675,7 +1699,8 @@ sub NotifyTwitter() {
     my $provider = 'twitter';
 
     if ($provider_452->{$provider}) {
-	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
+	my $dmsg = uc($provider) . " 452: backing off"; 
+	&DebugLog($dmsg,1) if $dmsg;
 	return 0;
     }
     my %tw = %{$notify->{'twitter'}};        
@@ -1764,7 +1789,8 @@ sub NotifyTwitter() {
 	return 0;
     }
 
-    print uc($provider) . " Notification successfully posted.\n" if $debug;
+    my $dmsg = uc($provider) . " Notification successfully posted.\n" if $debug;
+    &DebugLog($dmsg) if $dmsg && $debug;
     return 1;     ## success
 }
 
@@ -1909,7 +1935,8 @@ sub NotifyPushOver() {
 	return 0;
     } 
     
-    print uc($provider) . " Notification successfully posted.\n" if $debug;
+    my $dmsg = uc($provider) . " Notification successfully posted.\n" if $debug;
+    &DebugLog($dmsg) if $dmsg && $debug;
     return 1;     ## success
 }
 
