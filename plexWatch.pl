@@ -1,11 +1,11 @@
 #!/usr/bin/perl
 
-my $version = '0.0.20-dev-4';
+my $version = '0.0.20-dev-5';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-09-20 12:44 PST
+# Modified: 2013-09-20 13:06 PST
 #
 #  Version: $version
 # https://github.com/ljunkie/plexWatch
@@ -673,8 +673,9 @@ if ($options{'notify'}) {
 	    my $ntype = 'stop';
 	    $ntype = 'start' if ($playing->{$k});
 	    my $paused = &getSecPaused($k);
-	    my $info = &info_from_xml($un->{$k}->{'xml'},'start',$start_epoch,$stop_epoch,$paused);
+	    my $info = &info_from_xml($un->{$k}->{'xml'},$ntype,$start_epoch,$stop_epoch,$paused);
 	    $info->{'ip_address'} = $un->{$k}->{ip_address};
+	    &DebugLog("sending unnotify for alert for ".$un->{$k}->{user}.':'.$un->{$k}->{title});
 	    &Notify($info);
 	    &SetNotified($un->{$k}->{id});
 	    $did_unnotify = 1;
