@@ -633,40 +633,27 @@ if (%options && !$options{'notify'} && !$options{'stats'} && !$options{'watched'
 }
 
 ## set notify to 1 if we call --watching ( we need to either log start/update/stop current progress)
-$options{'notify'} = 1 if $options{'watching'};
-			   
+if ($options{'watching'} && !$options{'notify'}) {
+    $options{'notify'} = 2; #set notify to 2 -- meaning will will run through notify process to update current info, but we wiill not set as notified
+} 
+elsif (!%options) {
+    $options{'notify'} = 1;
+}
+		   
 
 #################################################################
 ## Notify -notify || no options = notify on watch/stopped streams
 ##--notify
-if (!%options || $options{'notify'}) {
+if ($options{'notify'}) {
     my $live = &GetSessions();    ## query API for current streams
-    my $started= &GetStarted(); ## query streams already started/not stopped
-    my $playing = ();            ## container of now playing id's - used for stopped status/notification
+    my $started= &GetStarted();   ## query streams already started/not stopped
+    my $playing = ();             ## container of now playing id's - used for stopped status/notification
     
     ###########################################################################
     ## nothing being watched.. verify all notification went out
     ## this shouldn't happen ( only happened during development when I was testing -- but just in case )
     #### to fix
-    if (!ref($live)) {
-	my $un = &GetUnNotified();
-	foreach my $k (keys %{$un}) {
-	    if (!$playing->{$k}) {
-		my $ntype = 'start';
-		my $start_epoch = $un->{$k}->{time} if $un->{$k}->{time};
-		my $stop_epoch = '';
-		my $paused = &getSecPaused($k);
-		my $info = &info_from_xml($un->{$k}->{'xml'},'start',$start_epoch,$stop_epoch,$paused);
-		$info->{'ip_address'} = $un->{$k}->{ip_address};
-		&Notify($info);
-		&SetNotified($un->{$k}->{id});
-		## another notification will go out about being stopped..
-		## next run it will be marked as watched and notified
-	    }
-	}
-    }
-    ## end unnotified
-    
+
     ## Quick hack to notify stopped content before start -- get a list of playing content
     foreach my $k (keys %{$live}) {
 	my $user = (split('\@',$live->{$k}->{User}->{title}))[0];
@@ -674,7 +661,28 @@ if (!%options || $options{'notify'}) {
 	my $db_key = $k . '_' . $live->{$k}->{key} . '_' . $user;
 	$playing->{$db_key} = 1;
     }
-    
+
+    my $did_unnotify = 0;
+    if ($options{'notify'} != 2) {
+	my $un = &GetUnNotified();
+	foreach my $k (keys %{$un}) {
+	    my $start_epoch = $un->{$k}->{time} if $un->{$k}->{time};
+	    my $stop_epoch = $un->{$k}->{stopped} if $un->{$k}->{stopped};
+	    $stop_epoch = time() if !$stop_epoch; # we may not have a stop time yet.. lets set it.
+	    my $ntype = 'stop';
+	    $ntype = 'start' if ($playing->{$k});
+	    my $paused = &getSecPaused($k);
+	    my $info = &info_from_xml($un->{$k}->{'xml'},'start',$start_epoch,$stop_epoch,$paused);
+	    $info->{'ip_address'} = $un->{$k}->{ip_address};
+	    print "Notify on $ntype from unotified";
+	    &Notify($info);
+	    &SetNotified($un->{$k}->{id});
+	    print "set notified $un->{$k}->{id}";
+	    $did_unnotify = 1;
+	}
+    }
+    $started= &GetStarted() if $did_unnotify; ## refresh started if we notified
+
     ## Notify on any Stop
     ## Iterate through all non-stopped content and notify if not playing
     if (ref($started)) {
@@ -691,8 +699,10 @@ if (!%options || $options{'notify'}) {
 		my $paused = &getSecPaused($k);
 		my $info = &info_from_xml($started->{$k}->{'xml'},'stop',$start_epoch,$stop_epoch,$paused);
 		$info->{'ip_address'} = $started->{$k}->{ip_address};
-		&Notify($info);
-		&SetStopped($started->{$k}->{id},$stop_epoch);
+		&SetStopped($started->{$k}->{id},$stop_epoch);  # will mark as unnotified
+		
+		&Notify($info) if $options{'notify'} != 2;
+		&SetNotified($started->{$k}->{id}) if $options{'notify'} != 2;
 	    }
 	}
     }
@@ -737,13 +747,13 @@ if (!%options || $options{'notify'}) {
 	    ## notify on pause/resume -- only providers with push_resume or push_pause will be notified
 	    if ($state_change) {
 		&DebugLog($info->{'user'} . ':' . $info->{'title'} . ': state change [' . $info->{'state'} . '] notify called');
-		&Notify($info,'',1);
+		&Notify($info,'',1)  if $options{'notify'} != 2;
 	    }
 	    
 	    if ($debug) { 
-		&Notify($info);
+		&Notify($info) if $options{'notify'} != 2;
 		my $msg = "Already Notified -- Sent again due to --debug";
-		&DebugLog($msg,1) if $msg;
+		&DebugLog($msg,1) if $msg && $options{'notify'} != 2;
 	    };
 	} 
 	## unnotified - insert into DB and notify
@@ -753,9 +763,9 @@ if (!%options || $options{'notify'}) {
 	    ## end the dirty feeling
 	    
 	    my $insert_id = &ProcessStart($live->{$k},$db_key,$info->{'title'},$info->{'platform'},$info->{'orig_user'},$info->{'orig_title'},$info->{'orig_title_ep'},$info->{'genre'},$info->{'episode'},$info->{'season'},$info->{'summary'},$info->{'rating'},$info->{'year'},$info->{'ip_address'});
-	    &Notify($info);
+	    &Notify($info) if $options{'notify'} != 2;
 	    ## should probably have some checks to make sure we were notified.. TODO
-	    &SetNotified($insert_id);
+	    &SetNotified($insert_id)  if $options{'notify'} != 2;
 	}
     }
 }
@@ -767,13 +777,20 @@ if (!%options || $options{'notify'}) {
 if ($options{'watching'}) {
     my $in_progress = &GetInProgress();
     my $live = &GetSessions();    ## query API for current streams
-    
+    my $found_live = 0;
+
     printf ("\n======================================= %s ========================================",'Watching');
     
     my %seen = ();
     if (keys %{$in_progress}) {
 	print "\n";
 	foreach my $k (sort { $in_progress->{$a}->{user} cmp $in_progress->{$b}->{'user'} || $in_progress->{$a}->{time} cmp $in_progress->{$b}->{'time'} } (keys %{$in_progress}) ) {
+	    my $live_key = (split("_",$k))[0];
+	    if (!$live->{$live_key}) {
+		print "must of been stopped-- but unnotified";
+		next;
+	    }
+	    $found_live = 1;
 	    ## use display name 
 	    my ($user,$orig_user) = &FriendlyName($in_progress->{$k}->{user},$in_progress->{$k}->{platform});
 
@@ -789,8 +806,6 @@ if ($options{'watching'}) {
 	    }  else {	$skip = 0;    }
 	    
 	    next if $skip;
-	    
-	    my $live_key = (split("_",$k))[0];
 	    
 	    
 	    if (!$seen{$user}) {
@@ -821,7 +836,8 @@ if ($options{'watching'}) {
 	    printf(" %s: %s\n",$time, $alert);
 	}
 	
-    } else {	    print "\n * nothing in progress\n";	}
+    } 
+    print "\n * nothing in progress\n"	if !$found_live;
     print " \n";
 }
 
@@ -1220,8 +1236,7 @@ sub ProcessUpdate() {
 	if ($state && ($prev_state !~ /$state/i)) {
 	    $state_change=1;
 	    my $dmsg = "* Video State: $state [prev: $prev_state]\n" if defined($state);
-	    &DebugLog($dmsg,1) if $dmsg;
-
+	    &DebugLog($dmsg) if $dmsg;
 	}
 	
 	## bug fix for now -- might want to add buffering as an option to notify later
@@ -1234,11 +1249,11 @@ sub ProcessUpdate() {
 	    if (!$p_epoch) {
 		$extra .= sprintf(",paused = %s",$now);
 		my $dmsg = sprintf "* Marking as as Paused on %s [%s]\n",scalar localtime($now),$now if defined($state);
-		&DebugLog($dmsg,1) if $dmsg;
+		&DebugLog($dmsg) if $dmsg;
 	    } else {
 		$p_counter += $now-$p_epoch; ## only for display on debug -- do NOT update db with this.
 		my $dmsg = sprintf "* Already marked as Paused on %s [%s]\n",scalar localtime($p_epoch),$p_epoch if defined($state);
-		&DebugLog($dmsg,1) if $dmsg;
+		&DebugLog($dmsg) if $dmsg;
 		#$extra .= sprintf(",paused_counter = %s",$total_sec); #update counter
 	    }
 	} 
@@ -1250,11 +1265,11 @@ sub ProcessUpdate() {
 		$extra .= sprintf(",paused = %s",'NULL'); # set Paused to NULL
 		$extra .= sprintf(",paused_counter = %s",$p_counter); #update counter
 		my $dmsg = sprintf "* removing Paused state and setting paused counter to %s seconds [this duration %s sec]\n",$p_counter,$sec;
-		&DebugLog($dmsg,1) if $dmsg;
+		&DebugLog($dmsg) if $dmsg;
 	    }
 	}
 	my $dmsg = sprintf "* Total Paused duration: " . &durationrr($p_counter) . " [$p_counter seconds]\n" if $p_counter;
-	&DebugLog($dmsg,1) if $dmsg;
+	&DebugLog($dmsg) if $dmsg;
 
 	# include IP update if we have it
 	$extra .= sprintf(",ip_address = '%s'",$ip_address) if $ip_address;
@@ -1400,7 +1415,8 @@ sub GetTestNotify() {
 
 sub GetStarted() {
     my $info = ();
-    my $cmd = "select * from processed where notified = 1 and stopped is null";
+#    my $cmd = "select * from processed where notified = 1 and stopped is null";
+    my $cmd = "select * from processed where time is not null and stopped is null";
     my $sth = $dbh->prepare($cmd);
     $sth->execute or die("Unable to execute query: $dbh->errstr\n");
     while (my $row_hash = $sth->fetchrow_hashref) {
@@ -1439,7 +1455,7 @@ sub GetWatched() {
 
 sub GetInProgress() {
     my $info = ();
-    my $cmd = "select * from processed where notified = 1 and stopped is null";
+    my $cmd = "select * from processed where time is not null and stopped is null";
     my $sth = $dbh->prepare($cmd);
     $sth->execute or die("Unable to execute query: $dbh->errstr\n");
     while (my $row_hash = $sth->fetchrow_hashref) {
@@ -1475,7 +1491,7 @@ sub SetStopped() {
     my $time = shift;
     if ($db_key) {
 	$time = time() if !$time;
-	my $sth = $dbh->prepare("update processed set stopped = ?,paused = NULL where id = ?");
+	my $sth = $dbh->prepare("update processed set stopped = ?,paused = NULL,notified = NULL where id = ?");
 	$sth->execute($time,$db_key) or die("Unable to execute query: $dbh->errstr\n");
     }
     ## BUG FIX - remove paused state for any stopped item - this can be removed at a later date (TODO)
