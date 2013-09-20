@@ -626,7 +626,9 @@ if ($options{'watched'} || $options{'stats'}) {
 
 ## no options -- we can continue.. otherwise --stats, --watched, --watching or --notify MUST be specified
 if (%options && !$options{'notify'} && !$options{'stats'} && !$options{'watched'} && !$options{'watching'} && !$options{'recently_added'} ) {
-    print "\n* Skipping any Notifications -- command line options set, use '--notify' or supply no options to enable notifications\n";
+    my $msg =  "* Skipping any Notifications -- command line options set, use '--notify' or supply no options to enable notifications";
+    print "\n$msg\n\n";
+    &DebugLog($msg) if $msg;
     exit;
 }
 
@@ -1214,11 +1216,12 @@ sub ProcessUpdate() {
 	my $prev_state = (defined($p_epoch)) ? "paused" : "playing";
 	## video is paused: verify DB has the pause epoch set
 
-	my $dmsg = "* Video State: $state [prev: $prev_state]\n" if defined($state);
-	&DebugLog($dmsg,1) if $dmsg;
-
+	
 	if ($state && ($prev_state !~ /$state/i)) {
 	    $state_change=1;
+	    my $dmsg = "* Video State: $state [prev: $prev_state]\n" if defined($state);
+	    &DebugLog($dmsg,1) if $dmsg;
+
 	}
 	
 	## bug fix for now -- might want to add buffering as an option to notify later
@@ -1230,11 +1233,11 @@ sub ProcessUpdate() {
 	    #my $total_sec = $p_counter+$sec;
 	    if (!$p_epoch) {
 		$extra .= sprintf(",paused = %s",$now);
-		$dmsg = sprintf "* Marking as as Paused on %s [%s]\n",scalar localtime($now),$now if defined($state);
+		my $dmsg = sprintf "* Marking as as Paused on %s [%s]\n",scalar localtime($now),$now if defined($state);
 		&DebugLog($dmsg,1) if $dmsg;
 	    } else {
 		$p_counter += $now-$p_epoch; ## only for display on debug -- do NOT update db with this.
-		$dmsg = sprintf "* Already marked as Paused on %s [%s]\n",scalar localtime($p_epoch),$p_epoch if defined($state);
+		my $dmsg = sprintf "* Already marked as Paused on %s [%s]\n",scalar localtime($p_epoch),$p_epoch if defined($state);
 		&DebugLog($dmsg,1) if $dmsg;
 		#$extra .= sprintf(",paused_counter = %s",$total_sec); #update counter
 	    }
@@ -1246,11 +1249,11 @@ sub ProcessUpdate() {
 		$p_counter += $sec;
 		$extra .= sprintf(",paused = %s",'NULL'); # set Paused to NULL
 		$extra .= sprintf(",paused_counter = %s",$p_counter); #update counter
-		$dmsg = sprintf "* removing Paused state and setting paused counter to %s seconds [this duration %s sec]\n",$p_counter,$sec;
+		my $dmsg = sprintf "* removing Paused state and setting paused counter to %s seconds [this duration %s sec]\n",$p_counter,$sec;
 		&DebugLog($dmsg,1) if $dmsg;
 	    }
 	}
-	$dmsg = sprintf "* Total Paused duration: " . &durationrr($p_counter) . " [$p_counter seconds]\n" if $p_counter;
+	my $dmsg = sprintf "* Total Paused duration: " . &durationrr($p_counter) . " [$p_counter seconds]\n" if $p_counter;
 	&DebugLog($dmsg,1) if $dmsg;
 
 	# include IP update if we have it
