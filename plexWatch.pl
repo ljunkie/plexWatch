@@ -662,6 +662,7 @@ if ($options{'notify'}) {
 	$playing->{$db_key} = 1;
     }
 
+    ## make sure we send out notifications -- this can happen when people call --watching and a new video started or stopped before --notify was called
     my $did_unnotify = 0;
     if ($options{'notify'} != 2) {
 	my $un = &GetUnNotified();
@@ -674,10 +675,8 @@ if ($options{'notify'}) {
 	    my $paused = &getSecPaused($k);
 	    my $info = &info_from_xml($un->{$k}->{'xml'},'start',$start_epoch,$stop_epoch,$paused);
 	    $info->{'ip_address'} = $un->{$k}->{ip_address};
-	    print "Notify on $ntype from unotified";
 	    &Notify($info);
 	    &SetNotified($un->{$k}->{id});
-	    print "set notified $un->{$k}->{id}";
 	    $did_unnotify = 1;
 	}
     }
