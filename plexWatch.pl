@@ -1,11 +1,11 @@
 #!/usr/bin/perl
 
-my $version = '0.0.20-dev-5';
+my $version = '0.0.20-dev-6';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-09-20 13:06 PST
+# Modified: 2013-09-26 08:28 PST
 #
 #  Version: $version
 # https://github.com/ljunkie/plexWatch
@@ -343,14 +343,13 @@ sub RAdataAlert() {
     
 
     my $alert = 'unknown type';
-    my ($alert_url,$alert_short);
+    my ($alert_url);
     my $media;
     $media .= $item->{'videoResolution'}.'p ' if $item->{'videoResolution'};
     $media .= $item->{'audioChannels'}.'ch' if $item->{'audioChannels'};
     ##my $twitter; #twitter sucks... has to be short. --- might use this later.
     if ($item->{'type'} eq 'show' || $item->{'type'} eq 'episode') {
 	$alert = $item->{'title'};
-	$alert_short = $item->{'title'};
 	$alert .= " [$item->{'contentRating'}]" if $item->{'contentRating'};
 	$alert .= " [$item->{'year'}]" if $item->{'year'};
 	if ($item->{'duration'} && ($item->{'duration'} =~ /\d+/ && $item->{'duration'} > 1000)) {
@@ -367,7 +366,6 @@ sub RAdataAlert() {
     }
     if ($item->{'type'} eq 'movie') {
 	$alert = $item->{'title'};
-	$alert_short = $item->{'title'};
 	$alert .= " [$item->{'contentRating'}]" if $item->{'contentRating'};
 	$alert .= " [$item->{'year'}]" if $item->{'year'};
 	if ($item->{'duration'} && ($item->{'duration'} =~ /\d+/ && $item->{'duration'} > 1000)) {
@@ -382,9 +380,6 @@ sub RAdataAlert() {
     #$alert =~ s/[^[:ascii:]]+//g;  ## remove non ascii ( now UTF8 )
     
     $result->{'alert'} = $alert;
-    $result->{'alert_short'} = $alert_short;
-    #$result->{'alert'} = 'NEW: '.$alert;
-    #$result->{'alert_short'} = 'NEW: '.$alert_short;
     $result->{'item_id'} = $item_id;
     $result->{'debug_done'} = $debug_done;
     $result->{'alert_url'} = $alert_url;
@@ -1741,7 +1736,7 @@ sub NotifyTwitter() {
 	$regex = qr/$regex/;
 	$prefix =~ s/{($regex)}/$alert_options->{$1}/g;
 	$prefix =~ s/{\w+}//g; ## remove any {word} - templates that failed
-	$prefix = $appname if !$prefix; ## replace appname if empty
+	#$prefix = $appname if !$prefix; ## replace appname if empty, let's conserve space
     }
     $prefix .= ' ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
     $prefix .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};    
@@ -2606,8 +2601,8 @@ sub RunTestNotify() {
 
     if ($ntype =~ /push_recentlyadded/) {
 	my $alerts = ();
-	$alerts->{'test'}->{'alert'} = $push_type_titles->{$ntype} .' test recently added alert';
-	$alerts->{'test'}->{'alert_short'} = $push_type_titles->{$ntype} .'test recently added alert (short version)';
+	$alerts->{'test'}->{'alert'} = "Title [PG-13] [2013] 108min";
+	$alerts->{'test'}->{'item_type'} = "Movie";
 	$alerts->{'test'}->{'item_id'} = 'test_item_id';
 	$alerts->{'test'}->{'debug_done'} = 'testing alert already done';
 	$alerts->{'test'}->{'alert_url'} = 'https://github.com/ljunkie/plexWatch';
@@ -2866,7 +2861,6 @@ sub ProcessRAalerts() {
     # debug_done
     # alert_tag
     # alert_url
-    # alert_short
     my %notseen;
     foreach my $k ( sort keys %{$alerts}) {
 	$count++;
