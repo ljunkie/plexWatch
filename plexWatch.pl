@@ -1217,6 +1217,7 @@ sub ProcessUpdate() {
 	my $p_counter = 0;
 
 	my $state =  $xmlref->{Player}->{'state'} if $xmlref->{Player}->{state};
+	$state = 'playing' if $state =~ /buffering/i;
 	$cmd = "select paused,paused_counter from processed where session_id = ?";
 	$sth = $dbh->prepare($cmd);
 	$sth->execute($db_key) or die("Unable to execute query: $dbh->errstr\n");
@@ -2409,6 +2410,7 @@ sub info_from_xml() {
 	$state = 'stopped';
     } else {
 	$state =  $vid->{Player}->{'state'} if $vid->{Player}->{state};
+	$state =  'playing' if $state =~ /buffering/i;
     }
 
     
