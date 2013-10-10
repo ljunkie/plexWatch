@@ -24,9 +24,7 @@ use POSIX qw(strftime);
 use File::Basename;
 use warnings;
 use Time::Local;
-        
 use open qw/:std :utf8/; ## default encoding of these filehandles all at once (binmode could also be used) 
-                         ## TODO: might want to allow non ascii -- would require stripping " s/[^[:ascii:]]+//g; " from the code below..
 use utf8;
 use Encode;
 ## windows
@@ -594,6 +592,7 @@ if ($options{'watched'} || $options{'stats'}) {
 		    } else {
 			$seen{$skey}->{'duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
 		    }
+
 		} else {
 		    ## if same user/same movie/same day -- append duration -- must of been resumed
 		    $seen{$skey}->{'duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
@@ -621,7 +620,7 @@ if ($options{'watched'} || $options{'stats'}) {
 		print "\n";
 	    }
 	    my $time = localtime ($seen{$k}->{time} );
-
+	    
 	    my $info = &info_from_xml($seen{$k}->{xml},$ntype,$seen{$k}->{'time'},$seen{$k}->{'stopped'},0,$seen{$k}->{'duration'});
 	    $info->{'ip_address'} = $seen{$k}->{ip_address};
 	    my $alert = &Notify($info,1); ## only return formated alert
@@ -899,7 +898,6 @@ sub formatAlert() {
     }
     if ($debug) { print "\nformat: $format\n";}
 
-
     my $regex = join "|", keys %{$info};
     $regex = qr/$regex/;
     $format =~ s/{($regex)}/$info->{$1}/g; ## regex replace variables
@@ -1036,6 +1034,7 @@ sub NotifyFile() {
 
 
 
+
 sub DebugLog() {
     ## still need to add this routine to many other places (TODO)
     my $msg = shift;
@@ -1082,10 +1081,10 @@ sub Notify() {
         
     my $push_type;
     
-    if ($type =~ /start/) {$push_type = 'push_watching';    } 
-    if ($type =~ /stop/)  {$push_type = 'push_watched';     } 
-    if ($type =~ /resume/)  {$push_type = 'push_resumed';     } 
-    if ($type =~ /pause/) {$push_type = 'push_paused';      } 
+    if ($type =~ /start/)  { $push_type = 'push_watching';  }
+    if ($type =~ /stop/)   { $push_type = 'push_watched';   } 
+    if ($type =~ /resume/) { $push_type = 'push_resumed';   } 
+    if ($type =~ /pause/)  { $push_type = 'push_paused';    } 
 
     &DebugLog($dinfo . ': '.'push_type:' . $push_type);
     
@@ -1095,10 +1094,10 @@ sub Notify() {
     $alert_options->{'push_type'} = $push_type;
     foreach my $provider (keys %{$notify}) {
 	if (&ProviderEnabled($provider,$push_type)) {
-	        &DebugLog($dinfo . ': '.$provider . ' ' . $push_type . ' enabled -> sending notify');
-		    $notify_func{$provider}->($info,$alert_options);
-		    #$notify_func{$provider}->($alert,$alert_options);
-		}
+	    &DebugLog($dinfo . ': '.$provider . ' ' . $push_type . ' enabled -> sending notify');
+	    $notify_func{$provider}->($info,$alert_options);
+	    #$notify_func{$provider}->($alert,$alert_options);
+	}
     }
 }
 
@@ -1242,13 +1241,13 @@ sub ProcessUpdate() {
 
     my ($cmd,$sth);
     my $state_change=0;
-
+    
     if ($db_key) {
 	
 	## get paused status -- needed for real time watched
 	my $extra ='';
 	my $p_counter = 0;
-
+	
 	my $state =  $xmlref->{Player}->{'state'} if $xmlref->{Player}->{state};
 	$state = 'playing' if $state =~ /buffering/i;
 	$cmd = "select paused,paused_counter from processed where session_id = ?";
@@ -1260,43 +1259,43 @@ sub ProcessUpdate() {
 	my $p_epoch = $p->{'paused'} if $p->{'paused'};
 	my $prev_state = (defined($p_epoch)) ? "paused" : "playing";
 	## video is paused: verify DB has the pause epoch set
-
+	
 	
 	if ($state && ($prev_state !~ /$state/i)) {
-	        $state_change=1;
-		    my $dmsg = "* Video State: $state [prev: $prev_state]\n" if defined($state);
-		    &DebugLog($dmsg) if $dmsg;
-		}
+	    $state_change=1;
+	    my $dmsg = "* Video State: $state [prev: $prev_state]\n" if defined($state);
+	    &DebugLog($dmsg) if $dmsg;
+	}
 	
 	## bug fix for now -- might want to add buffering as an option to notify later
 	my $state_change=0 if $state =~ /buffering/i;
 	
 	my $now = time();
 	if (defined($state) && $state =~ /paused/i) {
-	        #my $sec = $now-$p_epoch;
-	        #my $total_sec = $p_counter+$sec;
-	        if (!$p_epoch) {
-		    $extra .= sprintf(",paused = %s",$now);
-		    my $dmsg = sprintf "* Marking as as Paused on %s [%s]\n",scalar localtime($now),$now if defined($state);
-		    &DebugLog($dmsg) if $dmsg;
-		        } else {
-			    $p_counter += $now-$p_epoch; ## only for display on debug -- do NOT update db with this.
-			    my $dmsg = sprintf "* Already marked as Paused on %s [%s]\n",scalar localtime($p_epoch),$p_epoch if defined($state);
-			    &DebugLog($dmsg) if $dmsg;
-			    #$extra .= sprintf(",paused_counter = %s",$total_sec); #update counter
-			        }
-		} 
+	    #my $sec = $now-$p_epoch;
+	    #my $total_sec = $p_counter+$sec;
+	    if (!$p_epoch) {
+		$extra .= sprintf(",paused = %s",$now);
+		my $dmsg = sprintf "* Marking as as Paused on %s [%s]\n",scalar localtime($now),$now if defined($state);
+		&DebugLog($dmsg) if $dmsg;
+	    } else {
+		$p_counter += $now-$p_epoch; ## only for display on debug -- do NOT update db with this.
+		my $dmsg = sprintf "* Already marked as Paused on %s [%s]\n",scalar localtime($p_epoch),$p_epoch if defined($state);
+		&DebugLog($dmsg) if $dmsg;
+		#$extra .= sprintf(",paused_counter = %s",$total_sec); #update counter
+	    }
+	} 
 	## Video is not paused -- verify DB not paused and update counter
 	else {
-	        if ($p_epoch) {
-		    my $sec = $now-$p_epoch;
-		    $p_counter += $sec;
-		    $extra .= sprintf(",paused = %s",'NULL'); # set Paused to NULL
-		    $extra .= sprintf(",paused_counter = %s",$p_counter); #update counter
-		    my $dmsg = sprintf "* removing Paused state and setting paused counter to %s seconds [this duration %s sec]\n",$p_counter,$sec;
-		    &DebugLog($dmsg) if $dmsg;
-		        }
-		}
+	    if ($p_epoch) {
+		my $sec = $now-$p_epoch;
+		$p_counter += $sec;
+		$extra .= sprintf(",paused = %s",'NULL'); # set Paused to NULL
+		$extra .= sprintf(",paused_counter = %s",$p_counter); #update counter
+		my $dmsg = sprintf "* removing Paused state and setting paused counter to %s seconds [this duration %s sec]\n",$p_counter,$sec;
+		&DebugLog($dmsg) if $dmsg;
+	    }
+	}
 	my $dmsg = sprintf "* Total Paused duration: " . &durationrr($p_counter) . " [$p_counter seconds]\n" if $p_counter;
 	&DebugLog($dmsg) if $dmsg;
 
@@ -1367,7 +1366,6 @@ sub GetSessions() {
     }
 }
 
-
 sub PMSToken() {
     my $proto = 'http';
     $proto = 'https' if $port == 32443;
@@ -1392,6 +1390,7 @@ sub PMSToken() {
     }
     return 0;
 }
+
 
 sub getSecPaused() {
     my $db_key = shift;
@@ -1598,7 +1597,7 @@ sub initDB() {
     if ($alter_def) {
 	my $dmsg = "New Table definitions.. upgrading DB";
 	&DebugLog($dmsg,1) if $dmsg;
-
+	
 	$dbh->begin_work;
 	
 	eval {
@@ -1661,7 +1660,7 @@ sub DB_ra_table() {
 	{ 'name' => 'growl', 'definition' => 'INTEGER',},
 	{ 'name' => 'prowl', 'definition' => 'INTEGER',},
 	{ 'name' => 'GNTP', 'definition' => 'INTEGER',},
-+	{ 'name' => 'EMAIL', 'definition' => 'INTEGER',},
+	{ 'name' => 'EMAIL', 'definition' => 'INTEGER',},
 	{ 'name' => 'pushover', 'definition' => 'INTEGER',},
 	{ 'name' => 'boxcar', 'definition' => 'INTEGER',},
 	
@@ -1787,8 +1786,8 @@ sub NotifyTwitter() {
     
     ## trim down alert..
     if (length($alert) > 139) {
-$alert = substr($alert,0,140);  ## strip down to 140 chars
-if ($alert =~ /(.*)\[.*/g) { $alert = $1; } ## cut at last brackets to clean up a little
+	$alert = substr($alert,0,140);  ## strip down to 140 chars
+	if ($alert =~ /(.*)\[.*/g) { $alert = $1; } ## cut at last brackets to clean up a little
     }
     
     ## url can be appended - twitter allows it even if the alert is 140 chars -- well it looks like 115 is max if URL is included..
@@ -1959,14 +1958,14 @@ sub NotifyPushOver() {
       });
     $ua->timeout(20);
     $po{'message'} = $alert;
-        
+    
     ## PushOver title is AppName by default. If there is a real title for push type, It's 'AppName: push_type'
-
+    
     ## allow formatting of appname
     $po{'title'} = '{user}' if $po{'title'} eq $appname; ## force {user} if people still use $appname in config -- forcing update with the need to modify config.
     my $format = $po{'title'};
-
-
+    
+    
     if ($format =~ /\{.*\}/) {
 	my $regex = join "|", keys %{$alert_options};
 	$regex = qr/$regex/;
@@ -1985,14 +1984,14 @@ sub NotifyPushOver() {
 				  "message" => $po{'message'},
 			      ]);
     my $content  = $response->decoded_content();
-
-
+    
+    
     if ($content !~ /\"status\":1/) {
 	print STDERR "Failed to post Pushover notification -- $po{'message'} result:$content\n";
 	$provider_452->{$provider} = 1;
 	my $msg452 = uc($provider) . " failed: $alert -  setting $provider to back off additional notifications\n";
 	&ConsoleLog($msg452,,1);
-
+	
 	return 0;
     } 
     
@@ -2021,7 +2020,7 @@ sub NotifyBoxcar() {
     $bc{'message'} = $alert;
     
     ## BoxCars title [from name] is set in config.pl. If there is a real title for push type, It's 'From: push_type_title'
-
+    
     ## allow formatting of appname (boxcar it's the 'from' key)
     $bc{'from'} = '{user}' if $bc{'from'} eq $appname; ## force {user} if people still use $appname in config -- forcing update with the need to modify config.
     my $format = $bc{'from'};
@@ -2046,16 +2045,16 @@ sub NotifyBoxcar() {
 	    print uc($provider) . " Notification successfully posted.\n" if $debug;
 	    return 1;
 	}
-
+	
 	if ($response->{'_rc'} == 401) {
 	    my $ua      = LWP::UserAgent->new();
 	    $ua->timeout(20);
 	    my $msg = "$bc{'email'} is not subscribed to plexWatch service... trying to subscribe now";
 	    &ConsoleLog($msg);
 	    my $url = 'http://boxcar.io/devices/providers/'. $bc{'provider_key'} .'/notifications/subscribe';
-	        my $response = $ua->post( $url, [
-					      "email" => $bc{'email'},#
-					  ]);
+	    my $response = $ua->post( $url, [
+					  "email" => $bc{'email'},#
+				      ]);
 	    if (!$response->is_success) {
 		my $msg = "$bc{'email'} subscription to plexWatch service failed. Is $bc{'email'} email registered to your boxcar account?";
 		&ConsoleLog($msg);
@@ -2071,7 +2070,7 @@ sub NotifyBoxcar() {
 	    }
 	}
     }
-
+    
     $provider_452->{$provider} = 1;
     my $msg452 = uc($provider) . " failed: $alert - setting $provider to back off additional notifications\n";
     &ConsoleLog($msg452,,1);
@@ -2083,11 +2082,11 @@ sub NotifyGNTP() {
     my $provider = 'GNTP';
     ## this will try to notifiy via box car 
     # It will try to subscribe to the plexWatch service on boxcar if we get a 401 and resend the notification
-
+    
     #my $alert = shift;
     my $info = shift;
     my $alert_options = shift;
-
+    
     ## TODO -- make the 452 per multi provider
     if ($provider_452->{$provider}) {
 	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
@@ -2109,7 +2108,7 @@ sub NotifyGNTP() {
 	
 	my %gntp = %{$notify->{GNTP}->{$k}};    
 	$gntp{'message'} = $alert;
-
+	
 	$gntp{'title'} = '{user}' if !$gntp{'title'};
 	
 	## allow formatting of appname
@@ -2124,7 +2123,7 @@ sub NotifyGNTP() {
 	
 	$gntp{'title'} .= ' ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
 	$gntp{'title'} .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};
-
+	
 	if ($gntp{'sticky'} =~ /1/) {
 	    $gntp{'sticky'} = 'true'; 
 	} else {
@@ -2135,74 +2134,74 @@ sub NotifyGNTP() {
 	    my $msg = "FAIL: Please specify a server and port for $provider [$k] in config.pl";
 	    &ConsoleLog($msg,,1);
 	} else {
-	        
-	        my $growl = Growl::GNTP->new(
-		    AppName => $gntp{'application'},
-		    PeerHost => $gntp{'server'},
-		    PeerPort => $gntp{'port'},
-		    Password => $gntp{'password'},
-		    Timeout  =>  $gntp{'timeout'},
-		    AppIcon => $gntp{'icon_url'},
+	    
+	    my $growl = Growl::GNTP->new(
+		AppName => $gntp{'application'},
+		PeerHost => $gntp{'server'},
+		PeerPort => $gntp{'port'},
+		Password => $gntp{'password'},
+		Timeout  =>  $gntp{'timeout'},
+		AppIcon => $gntp{'icon_url'},
+		);
+	    
+	    eval { 
+		$growl->register(
+		    [
+		     { Name => 'push_watching',
+		       DisplayName => 'push_watching',
+		       Enabled     => 'True',
+		       Icon => $gntp{'icon_url'},
+		     },
+		     
+		     { Name => 'push_watched',
+		       DisplayName => 'push_watched',
+		       Enabled     => 'True',
+		       Icon => $gntp{'icon_url'},
+		     },
+		     
+		     { Name => 'push_recentlyadded',
+		       DisplayName => 'push_recentlyadded',
+		       Enabled     => 'True',
+		       Icon => $gntp{'icon_url'},
+		     },
+		     
+		     { Name => 'push_resumed',
+		       DisplayName => 'push_resumed',
+		       Enabled     => 'True',
+		       Icon => $gntp{'icon_url'},
+		     },
+		     
+		     { Name => 'push_paused',
+		       DisplayName => 'push_paused',
+		       Enabled     => 'True',
+		       Icon => $gntp{'icon_url'},
+		     },
+		     
+		    ]);
+	    };
+	    
+	    if (!$@) {
+		$growl->notify(
+		    Priotity => 0,
+		    Sticky => 'false',
+		    Name => $alert_options->{'push_type'},
+		    Title => $gntp{'title'},
+		    Message => $alert,
+		    ID => time(),
+		    Icon => $gntp{'icon_url'},
+		    Sticky => $gntp{'sticky'},
 		    );
-		    
-		eval { 
-		    $growl->register(
-			    [
-			     { Name => 'push_watching',
-			              DisplayName => 'push_watching',
-			              Enabled     => 'True',
-			       Icon => $gntp{'icon_url'},
-			     },
-			          
-			     { Name => 'push_watched',
-			              DisplayName => 'push_watched',
-			              Enabled     => 'True',
-			       Icon => $gntp{'icon_url'},
-			     },
-			          
-			     { Name => 'push_recentlyadded',
-			              DisplayName => 'push_recentlyadded',
-			              Enabled     => 'True',
-			       Icon => $gntp{'icon_url'},
-			     },
-
-			     { Name => 'push_resumed',
-			              DisplayName => 'push_resumed',
-			              Enabled     => 'True',
-			       Icon => $gntp{'icon_url'},
-			     },
-
-			     { Name => 'push_paused',
-			              DisplayName => 'push_paused',
-			              Enabled     => 'True',
-			       Icon => $gntp{'icon_url'},
-			     },
-			          
-			    ]);
-		};
-		    
-		if (!$@) {
-		    $growl->notify(
-			    Priotity => 0,
-			    Sticky => 'false',
-			Name => $alert_options->{'push_type'},
-			Title => $gntp{'title'},
-			    Message => $alert,
-			    ID => time(),
-			Icon => $gntp{'icon_url'},
-			Sticky => $gntp{'sticky'},
-			);
-		    
-		    print uc($provider) . " Notification successfully posted.\n" if $debug;
-		    #return 1;     ## success
-		    $success++; ## increment success -- can't return as we might have multiple destinations
-		}
+		
+		print uc($provider) . " Notification successfully posted.\n" if $debug;
+		#return 1;     ## success
+		$success++; ## increment success -- can't return as we might have multiple destinations
+	    }
 	}
 	
     }
-
+    
     return 1 if $success;
-
+    
     ## this could be moved above scope to 452 specific GNTP dest that failed -- need to look into RecentlyAdded code to see how it affect that.
     $provider_452->{$provider} = 1;
     my $msg452 = uc($provider) . " failed: $alert - setting $provider to back off additional notifications\n";
@@ -2216,11 +2215,11 @@ sub NotifyEMAIL() {
     my $provider = 'EMAIL';
     ## this will try to notifiy via box car 
     # It will try to subscribe to the plexWatch service on boxcar if we get a 401 and resend the notification
-
+    
     #my $alert = shift;
     my $info = shift;
     my $alert_options = shift;
-
+    
     ## TODO -- make the 452 per multi provider
     if ($provider_452->{$provider}) {
 	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
@@ -2242,7 +2241,7 @@ sub NotifyEMAIL() {
 	
 	my %email = %{$notify->{EMAIL}->{$k}};    
 	$email{'message'} = $alert;
-
+	
 	$email{'subject'} = '{user}' if !$email{'subject'};
 	
 	## allow formatting of appname
@@ -2260,16 +2259,16 @@ sub NotifyEMAIL() {
 	
 	
 	#$email{'subject'} .= $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
-
-
+	
+	
 	if (!$email{'server'} || !$email{'port'} || !$email{'from'} || !$email{'to'} ) {
 	    my $msg = "FAIL: Please specify a server, port, to and from address for $provider [$k] in config.pl";
 	    &DebugLog($msg,1);
 	} else {
-	        
-	        
-	        # Configure smtp server - required one time only
-
+	    
+	    
+	    # Configure smtp server - required one time only
+	    
 	    eval {
 		my $mailer;
 		$mailer = new Net::SMTP::TLS(
@@ -2304,7 +2303,7 @@ sub NotifyEMAIL() {
 		my $d_out = uc($provider) . " Notification successfully posted to . " . $email{'to'} . "\n";
 		&DebugLog($d_out);
 	    }
-	        
+	    
 	}
 	
     }
@@ -2330,7 +2329,7 @@ sub NotifyBoxcarPOST() {
     my $response = $ua->post( $url, [
 				  'secret'  => $bc{'provider_secret'},
 				  "email" => $bc{'email'},
-				    'notification[from_remote_service_id]' => time, # Just a unique placeholder
+				  'notification[from_remote_service_id]' => time, # Just a unique placeholder
 				  "notification[from_screen_name]" => $bc{'from'},
 				  "notification[message]" => $bc{'message'},
 				  'notification[icon_url]' => $bc{'icon_url'},
@@ -2340,14 +2339,14 @@ sub NotifyBoxcarPOST() {
 
 sub NotifyGrowl() { 
     my $provider = 'growl';
-
+    
     #my $alert = shift;
     my $info = shift;
     my ($alert) = &formatAlert($info,$provider);
-
+    
     my $alert_options = shift;
     my $extra_cmd = '';
-
+    
     if ($provider_452->{$provider}) {
 	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
 	return 0;
@@ -2439,13 +2438,13 @@ sub info_from_xml() {
     my $paused = shift;
     my $duration = shift; ## special case to group start/stops
     $paused = 0 if !$paused;
-
+    
     ## start time is in xml
-
+    
     
     my $vid = XMLin(encode('utf8',$hash),KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
-
-
+    
+    
     ## paused or playing? stopped is forced and required from ntype
     my $state = 'unknown';
     if ($ntype =~ /watched|stop/) {
@@ -2454,7 +2453,7 @@ sub info_from_xml() {
 	$state =  $vid->{Player}->{'state'} if $vid->{Player}->{state};
 	$state =  'playing' if $state =~ /buffering/i;
     }
-
+    
     
     my $ma_id = '';
     $ma_id = $vid->{Player}->{'machineIdentifier'} if $vid->{Player}->{'machineIdentifier'};
@@ -2480,13 +2479,13 @@ sub info_from_xml() {
 	$transInfo = $vid->{TranscodeSession};
 	$streamType = 'T';
     }
-
+    
     ## Time left Info
     my $time_left = 'unknown';
     if ($vid->{duration} && $vid->{viewOffset}) {
 	$time_left = &durationrr(($vid->{duration}/1000)-($vid->{viewOffset}/1000));
     }
-
+    
     ## Start/Stop Time
     my $start_time = '';
     my $stop_time = '';
@@ -2496,7 +2495,7 @@ sub info_from_xml() {
     
     ## Duration Watched
     my $duration_raw;
-
+    
     if (!$duration) {
 	if ($time && $stop_epoch) {
 	    $duration = $stop_epoch-$time;
@@ -2511,7 +2510,7 @@ sub info_from_xml() {
     $duration = $duration-$paused if !$count_paused;
     
     $duration = &durationrr($duration);
-
+    
     ## Percent complete -- this is correct ongoing in verison 0.0.18
     my $percent_complete;
     if ( ($vid->{viewOffset} && $vid->{duration}) && $vid->{viewOffset} > 0 && $vid->{duration} > 0) {
@@ -2543,7 +2542,7 @@ sub info_from_xml() {
     if ($vid->{Player}->{title}) {$platform =  $vid->{Player}->{title};    }
     elsif ($vid->{Player}->{platform}) {$platform = $vid->{Player}->{platform};    }
     
- ## length of the video
+    ## length of the video
     my $length;
     $length = sprintf("%.0f",$vid->{duration}/1000) if $vid->{duration};
     $length = &durationrr($length);
@@ -2579,7 +2578,7 @@ sub info_from_xml() {
     #   }
     
     my ($user,$tmp) = &FriendlyName($orig_user,$platform);
-
+    
     ## ADD keys here when needed for &Notify hash
     my $info = {
 	'user' => $user,
@@ -2675,7 +2674,7 @@ sub suffer {
 sub ParseDataItem() {
     my $data = shift;
     my $info = $data; ## fallback
-
+    
     if ($data->{'type'} =~ /movie/i || $data->{'type'} =~ /show/ || $data->{'type'} =~ /episode/) {
 	$info = ();    	
 	$info->{'originallyAvailableAt'} = $data->{'originallyAvailableAt'};
@@ -2720,9 +2719,9 @@ sub GetSectionsIDs() {
     my $host = "$proto://$server:$port";
     
     my $ua = LWP::UserAgent->new(  ssl_opts => {
-         verify_hostname => 0,
-         SSL_verify_mode => "SSL_VERIFY_NONE",
-      });
+	verify_hostname => 0,
+	SSL_verify_mode => "SSL_VERIFY_NONE",
+				   });
     $ua->timeout(20);
     
     my $sections = ();
@@ -2754,11 +2753,11 @@ sub GetItemMetadata() {
     my $host = "$proto://$server:$port";
     
     my $ua = LWP::UserAgent->new(  ssl_opts => {
-         verify_hostname => 0,
-         SSL_verify_mode => "SSL_VERIFY_NONE",
-      });
+	verify_hostname => 0,
+	SSL_verify_mode => "SSL_VERIFY_NONE",
+				   });
     $ua->timeout(20);
-
+    
     my $item = shift;
     my $full_uri = shift;
     my $url = $host . '/library/metadata/' . $item;
@@ -2797,13 +2796,13 @@ sub GetRecentlyAdded() {
     my $proto = 'http';
     $proto = 'https' if $port == 32443;
     my $host = "$proto://$server:$port";
-
+    
     my $ua = LWP::UserAgent->new(  ssl_opts => {
-         verify_hostname => 0,
-         SSL_verify_mode => "SSL_VERIFY_NONE",
-      });
+	verify_hostname => 0,
+	SSL_verify_mode => "SSL_VERIFY_NONE",
+				   });
     $ua->timeout(20);
-
+    
     my $info = ();
     my %result;
     # /library/recentlyAdded <-- all sections
@@ -2819,7 +2818,7 @@ sub GetRecentlyAdded() {
 	    exit(2);
 	} else {
 	    my $content  = $response->decoded_content();
-
+	    
 	    if ($debug_xml) {
 		print "URL: $url\n";
 		print "===================================XML CUT=================================================\n";
@@ -2869,7 +2868,7 @@ sub urldecode {
     return $s;
 }
 
-    
+
 sub ProcessRAalerts() {
     my $alerts = shift;
     my $test_notify = shift;
@@ -2913,7 +2912,7 @@ sub ProcessRAalerts() {
 	
 	my $push_type = 'push_recentlyadded';
 	my $provider;
-
+	
 	$alert_options->{'url'} = $alerts->{$k}->{'alert_url'} if $alerts->{$k}->{'alert_url'};
 	$alert_options->{'push_type'} = $push_type;
 	$alert_options->{'item_type'} = $alerts->{$k}->{'item_type'};
@@ -2944,7 +2943,7 @@ sub ProcessRAalerts() {
 	}
 	
     } # end alerts
-
+    
 }
 
 sub GetNotifyfuncs() {
@@ -2987,7 +2986,7 @@ sub GetPushTitles() {
 sub BackupSQlite() {
     ## this will Auto Backup the sql lite db to $data_dir/db_backups/...
     ## --backup will for a daily backup
-
+    
     # Override in config.pl with
     
     #$backup_opts = {
@@ -3031,7 +3030,7 @@ sub BackupSQlite() {
 	    'keep' => 4,
 	},
     };
-
+    
     ## merge options if set in config -- override
     ## also print settings if --debug called with --backup
     foreach my $type (keys %{$backups}) {
@@ -3109,7 +3108,7 @@ sub BackupSQlite() {
 	}
 	
     }
-
+    
     ## exit if --backup was called..
     exit if $options{'backup'};
 }
@@ -3122,9 +3121,9 @@ sub myPlexToken() {
 	exit;
     } 
     my $ua = LWP::UserAgent->new(  ssl_opts => {
-         verify_hostname => 0,
-         SSL_verify_mode => "SSL_VERIFY_NONE",
-      });
+	verify_hostname => 0,
+	SSL_verify_mode => "SSL_VERIFY_NONE",
+				   });
     $ua->timeout(20);
     $ua->agent($appname);
     $ua->env_proxy();
