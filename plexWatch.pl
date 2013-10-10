@@ -27,7 +27,8 @@ use Time::Local;
         
 use open qw/:std :utf8/; ## default encoding of these filehandles all at once (binmode could also be used) 
                          ## TODO: might want to allow non ascii -- would require stripping " s/[^[:ascii:]]+//g; " from the code below..
-
+use utf8;
+use Encode;
 ## windows
 if ($^O eq 'MSWin32') {
 
@@ -45,13 +46,16 @@ if ($^O ne 'MSWin32') {
 ## load config file
 my $dirname = dirname(__FILE__);
 if (!-e $dirname .'/config.pl') {
-    print "\n** missing file $dirname/config.pl. Did you move edit config.pl-dist and copy to config.pl?\n\n";
+    my $msg = "** missing file $dirname/config.pl. Did you move edit config.pl-dist and copy to config.pl?";
+    &DebugLog($msg,1) if $msg;
     exit;
 }
 do $dirname.'/config.pl';
-use vars qw/$data_dir $server $port $appname $user_display $alert_format $notify $push_titles $backup_opts $myPlex_user $myPlex_pass $server_log $log_client_ip $debug_logging $watched_show_completed $watched_grouping_maxhr/; 
+use vars qw/$data_dir $server $port $appname $user_display $alert_format $notify $push_titles $backup_opts $myPlex_user $myPlex_pass $server_log $log_client_ip $debug_logging $watched_show_completed $watched_grouping_maxhr $count_paused/; 
 if (!$data_dir || !$server || !$port || !$appname || !$alert_format || !$notify) {
-    print "config file missing data\n";
+    ## TODO - make this information a little more useful!
+    my $msg = "config file missing data";
+    &DebugLog($msg,1) if $msg;
     exit;
 }
 ## end
@@ -71,7 +75,8 @@ $watched_grouping_maxhr = 3 if !defined($watched_grouping_maxhr);
 
 ## for now, let's warn the user if they have enabled logging of clients IP's and the server log is not found
 if ($server_log && !-f $server_log) {
-    print "warning: \$server_log is specified in config.pl and $server_log does not exist (required for logging of the clients IP address)\n" if $log_client_ip;
+    my $msg = "warning: \$server_log is specified in config.pl and $server_log does not exist (required for logging of the clients IP address)\n" if $log_client_ip;
+    &DebugLog($msg,1) if $msg;
 }
 
 ## ONLY Load modules if used
@@ -89,6 +94,12 @@ if (&ProviderEnabled('GNTP')) {
     Growl::GNTP->import();
 }
 
+if (&ProviderEnabled('EMAIL')) {
+    #require MIME::Lite; mime::lite sucks
+    #MIME::Lite->import();
+    require Net::SMTP::TLS;
+    Net::SMTP::TLS->import();
+}
 
 if ($log_client_ip) {
     require File::ReadBackwards;
@@ -118,7 +129,8 @@ my $format_options = {
 };
 
 if (!-d $data_dir) {
-    print "\n** Sorry. Please create your datadir $data_dir\n\n";
+    my $msg = "** Sorry. Please create your datadir $data_dir";
+    &DebugLog($msg,1) if $msg;
     exit;
 }
 
@@ -158,6 +170,7 @@ if ($options{version}) {
     print "$author_info\n";
     exit;
 }
+
 
 my $debug = $options{'debug'};
 my $debug_xml = $options{'show_xml'};
@@ -210,7 +223,7 @@ my $PMS_token = &PMSToken(); # sets token if required
 ########################################## START MAIN #######################################################
 
 ## show what the notify alerts will look like
-if  ($options{test_notify}) {
+if  (defined($options{test_notify})) {
     &RunTestNotify();
     exit;
 }
@@ -237,7 +250,8 @@ if ($options{'recently_added'}) {
     
     if (!@want) {
 	#print "\n 'recently_added' must be: movie, show or artist\n\n";
-	print "\n 'recently_added' must be: 'movie' or 'show' -- or a comma separated list \n\n";
+	my $msg = "'recently_added' must be: 'movie' or 'show' -- or a comma separated list";
+	&DebugLog($msg,1) if $msg;
 	exit;
     }
     
@@ -255,11 +269,10 @@ if ($options{'recently_added'}) {
 	
 	$seen{$k} = 1; ## alert seen
 	if (!ref($info->{$k})) {
-	    if ($debug) {
-		print "Skipping KEY '$k' (expected key =~ '/library/metadata/###') -- it's not a hash ref?\n";
-		print "\$info->{'$k'} is not a hash ref?\n";
-		print Dumper($info->{$k});
-	    }
+	    my $msg = "Skipping KEY '$k' (expected key =~ '/library/metadata/###') -- it's not a hash ref?\n";
+	    $msg .= "\$info->{'$k'} is not a hash ref?\n";
+	    &DebugLog($msg,1) if $msg;
+	    print Dumper($info->{$k}) if $options{debug};
 	    next;
 	}
 	
@@ -314,7 +327,8 @@ if ($options{'recently_added'}) {
 		    ## redundant code from above hash %seen 
 		    #print "$item->{'title'} is already in current releases... nothing missed\n";
 		} else {
-		    print "$item->{'title'} is NOT in current releases -- we failed to notify previously, so trying again\n" if $options{'debug'};
+		    my $msg = "$item->{'title'} is NOT in current releases -- we failed to notify previously, so trying again";
+		    &DebugLog($msg,1) if $msg;
 		    my $res = &RAdataAlert($key,$item);
 		    $alerts->{$item->{addedAt}.$key} = $res;
 		}
@@ -343,18 +357,17 @@ sub RAdataAlert() {
     
 
     my $alert = 'unknown type';
-    my ($alert_url,$alert_short);
+    my ($alert_url);
     my $media;
     $media .= $item->{'videoResolution'}.'p ' if $item->{'videoResolution'};
     $media .= $item->{'audioChannels'}.'ch' if $item->{'audioChannels'};
     ##my $twitter; #twitter sucks... has to be short. --- might use this later.
     if ($item->{'type'} eq 'show' || $item->{'type'} eq 'episode') {
 	$alert = $item->{'title'};
-	$alert_short = $item->{'title'};
 	$alert .= " [$item->{'contentRating'}]" if $item->{'contentRating'};
 	$alert .= " [$item->{'year'}]" if $item->{'year'};
 	if ($item->{'duration'} && ($item->{'duration'} =~ /\d+/ && $item->{'duration'} > 1000)) {
-	    $alert .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
+	    $alert .=  ' '. sprintf("%.0f",$item->{'duration'}/1000/60) . 'min';
 	}
 	$alert .= " [$media]" if $media;
 	$alert .= " [$add_date]";
@@ -367,11 +380,10 @@ sub RAdataAlert() {
     }
     if ($item->{'type'} eq 'movie') {
 	$alert = $item->{'title'};
-	$alert_short = $item->{'title'};
 	$alert .= " [$item->{'contentRating'}]" if $item->{'contentRating'};
 	$alert .= " [$item->{'year'}]" if $item->{'year'};
 	if ($item->{'duration'} && ($item->{'duration'} =~ /\d+/ && $item->{'duration'} > 1000)) {
-	    $alert .=  ' '. sprintf("%.02d",$item->{'duration'}/1000/60) . 'min';
+	    $alert .=  ' '. sprintf("%.0f",$item->{'duration'}/1000/60) . 'min';
 	}
 	$alert .= " [$media]" if $media;
 	$alert .= " [$add_date]";
@@ -379,15 +391,13 @@ sub RAdataAlert() {
 	$alert_url .= ' http://www.imdb.com/find?s=tt&q=' . urlencode($item->{'imdb_title'});
     }
     
-    $alert =~ s/[^[:ascii:]]+//g;  ## remove non ascii
+    #$alert =~ s/[^[:ascii:]]+//g;  ## remove non ascii ( now UTF8 )
     
     $result->{'alert'} = $alert;
-    $result->{'alert_short'} = $alert_short;
-    #$result->{'alert'} = 'NEW: '.$alert;
-    #$result->{'alert_short'} = 'NEW: '.$alert_short;
     $result->{'item_id'} = $item_id;
     $result->{'debug_done'} = $debug_done;
     $result->{'alert_url'} = $alert_url;
+    $result->{'item_type'} = $item->{'type'};
 
     return $result;
 }
@@ -487,14 +497,14 @@ if ($options{'watched'} || $options{'stats'}) {
 	    ## to cleanup - maybe subroutine
 	    my ($sec, $min, $hour, $day,$month,$year) = (localtime($is_watched->{$k}->{time}))[0,1,2,3,4,5]; 
 	    my $serial = timelocal(0, 0, 0, $day, $month, $year);
-		$year += 1900;
+	    $year += 1900;
 	    $month += 1;
-		## TODO - implememnt parsedate for windows
-       	#my $serial = "$year$month$day";
-		# I can probably get rid of this since the serial above works for both
-		if ($^O ne 'MSWin32') {
-		    $serial = parsedate("$year-$month-$day 00:00:00");
-		}
+	    ## TODO - implememnt parsedate for windows
+	    #my $serial = "$year$month$day";
+	    # I can probably get rid of this since the serial above works for both
+	    if ($^O ne 'MSWin32') {
+		$serial = parsedate("$year-$month-$day 00:00:00");
+	    }
 	    #my $skey = $is_watched->{$k}->{user}.$year.$month.$day.$is_watched->{$k}->{title};
 	    my $skey = $user.$year.$month.$day.$is_watched->{$k}->{title};
 	    
@@ -521,7 +531,8 @@ if ($options{'watched'} || $options{'stats'}) {
 	    
 	    my $is_completed = 0;
 	    if ($watched_show_completed) {
-		my $info = &info_from_xml($is_watched->{$k}->{'xml'},$ntype,$is_watched->{$k}->{'time'},$is_watched->{$k}->{'stopped'});
+		my $paused = &getSecPaused($k);
+		my $info = &info_from_xml($is_watched->{$k}->{'xml'},$ntype,$is_watched->{$k}->{'time'},$is_watched->{$k}->{'stopped'},$paused);
 		$skey = $skey . $completed{$orig_skey} if $completed{$orig_skey};
 		if ($info->{'percent_complete'} > 99) {
 		    my $d_out = "$is_watched->{$k}->{title} watched 100\% by $user on $year-$month-$day - starting a new line (more than once)\n";
@@ -557,6 +568,7 @@ if ($options{'watched'} || $options{'stats'}) {
 	    
 	    next if !$options{'watched'};
 	    next if $is_watched->{$k}->{xml} =~ /<opt><\/opt>/i; ## bug -- fixed in 0.0.19
+	    my $paused = &getSecPaused($k);
 	    if ($options{'nogrouping'}) {
 		if (!$seen_user{$user}) {
 		    $seen_user{$user} = 1;
@@ -565,7 +577,7 @@ if ($options{'watched'} || $options{'stats'}) {
 		    print "\n";
 		}
 		my $time = localtime ($is_watched->{$k}->{time} );
-		my $info = &info_from_xml($is_watched->{$k}->{'xml'},$ntype,$is_watched->{$k}->{'time'},$is_watched->{$k}->{'stopped'});
+		my $info = &info_from_xml($is_watched->{$k}->{'xml'},$ntype,$is_watched->{$k}->{'time'},$is_watched->{$k}->{'stopped'},$paused);
 		$info->{'ip_address'} = $is_watched->{$k}->{ip_address};
 		my $alert = &Notify($info,1); ## only return formated alert
 		printf(" %s: %s\n",$time, $alert);
@@ -577,7 +589,11 @@ if ($options{'watched'} || $options{'stats'}) {
 		    $seen{$skey}->{'user'} = $user;
 		    $seen{$skey}->{'orig_user'} = $orig_user;
 		    $seen{$skey}->{'stopped'} = $is_watched->{$k}->{stopped};
-		    $seen{$skey}->{'duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
+		    if (!$count_paused) {
+			$seen{$skey}->{'duration'} += ($is_watched->{$k}->{stopped}-$is_watched->{$k}->{time})-$paused;
+		    } else {
+			$seen{$skey}->{'duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
+		    }
 		} else {
 		    ## if same user/same movie/same day -- append duration -- must of been resumed
 		    $seen{$skey}->{'duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
@@ -605,7 +621,8 @@ if ($options{'watched'} || $options{'stats'}) {
 		print "\n";
 	    }
 	    my $time = localtime ($seen{$k}->{time} );
-	    my $info = &info_from_xml($seen{$k}->{xml},$ntype,$seen{$k}->{'time'},$seen{$k}->{'stopped'},$seen{$k}->{'duration'});
+
+	    my $info = &info_from_xml($seen{$k}->{xml},$ntype,$seen{$k}->{'time'},$seen{$k}->{'stopped'},0,$seen{$k}->{'duration'});
 	    $info->{'ip_address'} = $seen{$k}->{ip_address};
 	    my $alert = &Notify($info,1); ## only return formated alert
 	    printf(" %s: %s\n",$time, $alert);
@@ -635,52 +652,64 @@ if ($options{'watched'} || $options{'stats'}) {
 
 ## no options -- we can continue.. otherwise --stats, --watched, --watching or --notify MUST be specified
 if (%options && !$options{'notify'} && !$options{'stats'} && !$options{'watched'} && !$options{'watching'} && !$options{'recently_added'} ) {
-    print "\n* Skipping any Notifications -- command line options set, use '--notify' or supply no options to enable notifications\n";
+    my $msg =  "* Skipping any Notifications -- command line options set, use '--notify' or supply no options to enable notifications";
+    print "\n$msg\n\n";
+    &DebugLog($msg) if $msg;
     exit;
 }
 
 ## set notify to 1 if we call --watching ( we need to either log start/update/stop current progress)
-$options{'notify'} = 1 if $options{'watching'};
+if ($options{'watching'} && !$options{'notify'}) {
+    $options{'notify'} = 2; #set notify to 2 -- meaning will will run through notify process to update current info, but we wiill not set as notified
+} 
+elsif (!%options) {
+    $options{'notify'} = 1;
+}
 			   
 
 #################################################################
 ## Notify -notify || no options = notify on watch/stopped streams
 ##--notify
-if (!%options || $options{'notify'}) {
-    my $vid = &GetSessions();    ## query API for current streams
-    my $started= &GetStarted(); ## query streams already started/not stopped
-    my $playing = ();            ## container of now playing id's - used for stopped status/notification
+if ($options{'notify'}) {
+    my $live = &GetSessions();    ## query API for current streams
+    my $started= &GetStarted();   ## query streams already started/not stopped
+    my $playing = ();             ## container of now playing id's - used for stopped status/notification
+
     
     ###########################################################################
     ## nothing being watched.. verify all notification went out
     ## this shouldn't happen ( only happened during development when I was testing -- but just in case )
     #### to fix
-    if (!ref($vid)) {
+
+    ## Quick hack to notify stopped content before start -- get a list of playing content
+    foreach my $k (keys %{$live}) {
+	my $user = (split('\@',$live->{$k}->{User}->{title}))[0];
+ 	if (!$user) {	$user = 'Local';    }
+	my $db_key = $k . '_' . $live->{$k}->{key} . '_' . $user;
+ 	$playing->{$db_key} = 1;
+    }    
+
+    ## make sure we send out notifications -- this can happen when people call --watching and a new video started or stopped before --notify was called
+    my $did_unnotify = 0;
+    if ($options{'notify'} != 2) {
 	my $un = &GetUnNotified();
 	foreach my $k (keys %{$un}) {
-	    if (!$playing->{$k}) {
-		my $ntype = 'start';
-		my $start_epoch = $un->{$k}->{time} if $un->{$k}->{time};
-		my $stop_epoch = '';
-		my $info = &info_from_xml($un->{$k}->{'xml'},'start',$start_epoch,$stop_epoch);
-		$info->{'ip_address'} = $un->{$k}->{ip_address};
-		&Notify($info);
-		&SetNotified($un->{$k}->{id});
-		## another notification will go out about being stopped..
-		## next run it will be marked as watched and notified
-	    }
+	    my $start_epoch = $un->{$k}->{time} if $un->{$k}->{time};
+	    my $stop_epoch = $un->{$k}->{stopped} if $un->{$k}->{stopped};
+	    $stop_epoch = time() if !$stop_epoch; # we may not have a stop time yet.. lets set it.
+	    my $ntype = 'stop';
+	    $ntype = 'start' if ($playing->{$k});
+	    my $paused = &getSecPaused($k);
+	    my $info = &info_from_xml($un->{$k}->{'xml'},$ntype,$start_epoch,$stop_epoch,$paused);
+	    $info->{'ip_address'} = $un->{$k}->{ip_address};
+	    &DebugLog("sending unnotify for alert for ".$un->{$k}->{user}.':'.$un->{$k}->{title});
+	    &Notify($info);
+	    &SetNotified($un->{$k}->{id});
+	    $did_unnotify = 1;
 	}
     }
-    ## end unnotified
-    
-    ## Quick hack to notify stopped content before start -- get a list of playing content
-    foreach my $k (keys %{$vid}) {
-	my $user = (split('\@',$vid->{$k}->{User}->{title}))[0];
-	if (!$user) {	$user = 'Local';    }
-	my $db_key = $k . '_' . $vid->{$k}->{key} . '_' . $user;
-	$playing->{$db_key} = 1;
-    }
-    
+    $started= &GetStarted() if $did_unnotify; ## refresh started if we notified
+
     ## Notify on any Stop
     ## Iterate through all non-stopped content and notify if not playing
     if (ref($started)) {
@@ -688,34 +717,43 @@ if (!%options || $options{'notify'}) {
 	    if (!$playing->{$k}) {
 		my $start_epoch = $started->{$k}->{time} if $started->{$k}->{time};
 		my $stop_epoch = time();
-		my $info = &info_from_xml($started->{$k}->{'xml'},'stop',$start_epoch,$stop_epoch);
+
+		## process the update - need to supply the original XML (as an xml_ref) and session_id
+		my $xml_ref = XMLin(encode('utf8',$started->{$k}->{'xml'}),KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
+		$xml_ref->{Player}->{'state'} = 'stopped'; # force state as 'stopped' (since this XML is from the DB)
+		&ProcessUpdate($xml_ref, $started->{$k}->{'session_id'} ); ## go through normal update -- will set paused counter etc..
+		
+		my $paused = &getSecPaused($k);
+		my $info = &info_from_xml($started->{$k}->{'xml'},'stop',$start_epoch,$stop_epoch,$paused);
 		$info->{'ip_address'} = $started->{$k}->{ip_address};
-		&Notify($info);
-		&SetStopped($started->{$k}->{id},$stop_epoch);
+		&SetStopped($started->{$k}->{id},$stop_epoch);  # will mark as unnotified
+		
+		&Notify($info) if $options{'notify'} != 2;
+		&SetNotified($started->{$k}->{id}) if $options{'notify'} != 2;
 	    }
 	}
     }
     
     ## Notify on start/now playing
-    foreach my $k (keys %{$vid}) {
+    foreach my $k (keys %{$live}) {
 	my $start_epoch = time();
 	my $stop_epoch = ''; ## not stopped yet
-	my $info = &info_from_xml(XMLout($vid->{$k}),'start',$start_epoch,$stop_epoch);
+	my $info = &info_from_xml(XMLout($live->{$k}),'start',$start_epoch,$stop_epoch,0);
 
 	## for insert 
-	my $db_key = $k . '_' . $vid->{$k}->{key} . '_' . $info->{orig_user};
+	my $db_key = $k . '_' . $live->{$k}->{key} . '_' . $info->{orig_user};
 	
 	## these shouldn't be neede any more - to clean up as we now use XML data from DB
-	$info->{'orig_title'} = $vid->{$k}->{title};
+	$info->{'orig_title'} = $live->{$k}->{title};
 	$info->{'orig_title_ep'} = '';
 	$info->{'episode'} = '';
 	$info->{'season'} = '';
 	$info->{'genre'} = '';
-	if ($vid->{$k}->{grandparentTitle}) {
-	    $info->{'orig_title'} = $vid->{$k}->{grandparentTitle};
-	    $info->{'orig_title_ep'} = $vid->{$k}->{title};
-	    $info->{'episode'} = $vid->{$k}->{index};
-	    $info->{'season'} = $vid->{$k}->{parentIndex};
+	if ($live->{$k}->{grandparentTitle}) {
+	    $info->{'orig_title'} = $live->{$k}->{grandparentTitle};
+	    $info->{'orig_title_ep'} = $live->{$k}->{title};
+	    $info->{'episode'} = $live->{$k}->{index};
+	    $info->{'season'} = $live->{$k}->{parentIndex};
 	    if ($info->{'episode'} < 10) { $info->{'episode'} = 0 . $info->{'episode'};}
 	    if ($info->{'season'} < 10) { $info->{'season'} = 0 . $info->{'season'}; }
 	}
@@ -723,19 +761,26 @@ if (!%options || $options{'notify'}) {
 	
 	## ignore content that has already been notified
 	## However, UPDATE the XML in the DB
-
-
+	
+	
 	if ($started->{$db_key}) {
 	    $info->{'ip_address'} = $started->{$db_key}->{ip_address};
 	    ## try and locate IP address on each run ( if empty )
 	    if (!$info->{'ip_address'}) {
 		$info->{'ip_address'} = &LocateIP($info) if ref $info;
 	    }
-	    &ProcessUpdate($vid->{$k},$db_key,$info->{'ip_address'}); ## update XML
+	    my $state_change = &ProcessUpdate($live->{$k},$db_key,$info->{'ip_address'}); ## update XML
+	    
+	    ## notify on pause/resume -- only providers with push_resume or push_pause will be notified
+	    if ($state_change) {
+		&DebugLog($info->{'user'} . ':' . $info->{'title'} . ': state change [' . $info->{'state'} . '] notify called');
+		&Notify($info,'',1)  if $options{'notify'} != 2;
+	    }
 	    
 	    if ($debug) { 
-		&Notify($info);
-		print &consoletxt("Already Notified -- Sent again due to --debug") . "\n"; 
+		&Notify($info) if $options{'notify'} != 2;
+		my $msg = "Already Notified -- Sent again due to --debug";
+		&DebugLog($msg,1) if $msg && $options{'notify'} != 2;
 	    };
 	} 
 	## unnotified - insert into DB and notify
@@ -744,9 +789,10 @@ if (!%options || $options{'notify'}) {
 	    $info->{'ip_address'} = &LocateIP($info) if ref $info;
 	    ## end the dirty feeling
 	    
-	    my $insert_id = &ProcessStart($vid->{$k},$db_key,$info->{'title'},$info->{'platform'},$info->{'orig_user'},$info->{'orig_title'},$info->{'orig_title_ep'},$info->{'genre'},$info->{'episode'},$info->{'season'},$info->{'summary'},$info->{'rating'},$info->{'year'},$info->{'ip_address'});
-	    &Notify($info);
-	    &SetNotified($insert_id);
+	    my $insert_id = &ProcessStart($live->{$k},$db_key,$info->{'title'},$info->{'platform'},$info->{'orig_user'},$info->{'orig_title'},$info->{'orig_title_ep'},$info->{'genre'},$info->{'episode'},$info->{'season'},$info->{'summary'},$info->{'rating'},$info->{'year'},$info->{'ip_address'});
+	    &Notify($info) if $options{'notify'} != 2;
+	    ## should probably have some checks to make sure we were notified.. TODO
+	    &SetNotified($insert_id)  if $options{'notify'} != 2;
 	}
     }
 }
@@ -758,13 +804,20 @@ if (!%options || $options{'notify'}) {
 if ($options{'watching'}) {
     my $in_progress = &GetInProgress();
     my $live = &GetSessions();    ## query API for current streams
-    
+    my $found_live = 0;    
+
     printf ("\n======================================= %s ========================================",'Watching');
     
     my %seen = ();
     if (keys %{$in_progress}) {
 	print "\n";
 	foreach my $k (sort { $in_progress->{$a}->{user} cmp $in_progress->{$b}->{'user'} || $in_progress->{$a}->{time} cmp $in_progress->{$b}->{'time'} } (keys %{$in_progress}) ) {
+	    my $live_key = (split("_",$k))[0];
+	    if (!$live->{$live_key}) {
+		print "must of been stopped-- but unnotified";
+		next;
+	    }
+	    $found_live = 1;
 	    ## use display name 
 	    my ($user,$orig_user) = &FriendlyName($in_progress->{$k}->{user},$in_progress->{$k}->{platform});
 
@@ -781,8 +834,6 @@ if ($options{'watching'}) {
 	    
 	    next if $skip;
 	    
-	    my $live_key = (split("_",$k))[0];
-	    
 	    
 	    if (!$seen{$user}) {
 		$seen{$user} = 1;
@@ -795,10 +846,15 @@ if ($options{'watching'}) {
 
 	    ## switched to LIVE info
 	    #my $info = &info_from_xml($in_progress->{$k}->{'xml'},'watching',$in_progress->{$k}->{time});
-	    my $info = &info_from_xml(XMLout($live->{$live_key}),'watching',$in_progress->{$k}->{time});
+
+
+	    my $paused = &getSecPaused($k);
+	    my $info = &info_from_xml(XMLout($live->{$live_key}),'watching',$in_progress->{$k}->{time},time(),$paused);
+
 	    $info->{'ip_address'} = $in_progress->{$k}->{ip_address};
 
-	    &ProcessUpdate($live->{$live_key},$k); ## update XML  ## probably redundant as --watching calls --notify now -- (TODO)
+	    ## disabled - --watching calls --notify ( so this is redundant)
+	    #&ProcessUpdate($live->{$live_key},$k); ## update XML  ## probably redundant as --watching calls --notify now -- (TODO)
 
 	    ## overwrite progress and time_left from live -- should be pulling live xml above at some point
 	    #$info->{'progress'} = &durationrr($live->{$live_key}->{viewOffset}/1000);
@@ -808,7 +864,8 @@ if ($options{'watching'}) {
 	    printf(" %s: %s\n",$time, $alert);
 	}
 	
-    } else {	    print "\n * nothing in progress\n";	}
+    }
+    print "\n * nothing in progress\n"	if !$found_live;
     print " \n";
 }
 
@@ -816,50 +873,87 @@ if ($options{'watching'}) {
 
 sub formatAlert() {
     my $info = shift;
+
+    return ($info) if !ref($info);
+
+    my $provider = shift;
+    my $provider_multi = shift;
+    
+    ## n_prov_format: alert_format override in the config.pl per provider
+    my $n_prov_format = {};
+    if ($provider) {
+	$n_prov_format = $notify->{$provider};
+	$n_prov_format = $notify->{$provider}->{$provider_multi} if $provider_multi;
+    }
+    
     $info->{'ip_address'} = '' if !$info->{'ip_address'};
-    my %alert = %{$info};
-    my $type = $alert{'ntype'};
-    my $format = $alert_format->{'start'};
-    ## to fix at some point -- allow users to custome event/collapse/etc... just more logic to work on later.
-    my $orig_start = '{user} watching {title} on {platform}'; # used for prowl 'EVENT' (if collapse is enabled)
-    my $orig_stop = '{user} watched {title} on {platform} for {duration}'; # used for prowl 'EVENT' (if collapse is enabled)
-    my $orig_watched = $orig_stop; # not really needed.. just keeping standards
-    my $orig_watching = $orig_start; # not really needed.. just keeping standards
-    my $orig = $orig_start;
-    if ($type =~ /stop/i) {
-	$format = $alert_format->{'stop'};
-	$orig = $orig_stop;
-    } elsif ($type =~ /watched/i) {
-	$format = $alert_format->{'watched'};
-	$orig = $orig_watched;
-    } elsif ($type =~ /watching/i) {
-	$format = $alert_format->{'watching'};
-	$orig = $orig_watching;
+    
+    my $type = $info->{'ntype'};
+    my @types = qw(start watched watching stop paused resumed);
+    my $format;
+    foreach my $tkey (@types) {
+	if ($type =~ /$tkey/i) {
+	    $format = $alert_format->{$tkey}; # default alert formats per notify type
+	    $format = $n_prov_format->{'alert_format'}->{$tkey} if $n_prov_format->{'alert_format'}->{$tkey}; # provider override
+	}
     }
     if ($debug) { print "\nformat: $format\n";}
-    my $s = $format;
-    ## replacemnt templates with variables
-    my $regex = join "|", keys %alert;
+
+
+    my $regex = join "|", keys %{$info};
     $regex = qr/$regex/;
+    $format =~ s/{($regex)}/$info->{$1}/g; ## regex replace variables
+    $format =~ s/\[\]//g;                 ## trim any empty variable encapsulated in []
+    $format =~ s/\s+/ /g;                 ## remove double spaces
+    #$format =~ s/[^[:ascii:]]+//g;        ## remove non ascii ( now UTF8 )
+    $format =~ s/\\n/\n/g;                ## allow \n to be an actual new line
+    $format =~ s/{newline}/\n/g;                ## allow \n to be an actual new line
 
-    $s =~ s/{($regex)}/$alert{$1}/g;
-    $orig =~ s/{($regex)}/$alert{$1}/g;
-
-    ## done
     
-    $s =~ s/\[\]//g; ## trim any empty variable encapsulated in []
-    $s =~ s/\s+/ /g; ## remove double spaces
-    
-    $s =~ s/[^[:ascii:]]+//g;  ## remove non ascii
-    
-    ## $orig is pretty much deprecated..
-    return ($s,$orig);
+    ## special for now.. might make ths more useful -- just thrown together since email can include a ton of info
+    if ($format =~ /{all_details}/i) {
+	$format =~ s/\s*{all_details}\s*//i;
+	$format .= sprintf("\n\n%10s %s\n","","-----All Details-----");
+	my $f_extra;
+	foreach my $key (keys %{$info} ) {
+	    if (!ref($info->{$key})) {
+		$format .= sprintf("%20s: %s\n",$key,$info->{$key}) if $info->{$key};
+	    } else {
+		$f_extra .= sprintf("\n\n%10s %s\n","","-----$key-----");
+		foreach my $k2 (keys %{$info->{$key}} ) {
+		    if (!ref($info->{$key}->{$k2})) {
+			$f_extra .= sprintf("%20s: %s\n",$k2,$info->{$key}->{$k2});
+		    }
+		}
+	    }
+	}
+	$format .= $f_extra if $f_extra;
+    }
+    return ($format);
 }
 
 sub ConsoleLog() {
     my $msg = shift;
     my $alert_options = shift;
     my $print = shift;
+
+    my $prefix = '';
+    
+    if (ref($alert_options)) {
+	if ($alert_options->{'user'}) {
+	    if ($msg !~ /\b$alert_options->{'user'}\b/i) {
+		$prefix .= $alert_options->{'user'} . ' ' if $alert_options->{'user'};
+	    }
+	    if ($msg !~ /\b$push_type_titles->{$alert_options->{'push_type'}}\b/i) {
+		$prefix .= $push_type_titles->{$alert_options->{'push_type'}} . ' ' if $alert_options->{'push_type'};
+	    }
+	}
+	## append type (movie, episode) if supplied
+	$prefix .= ucfirst($alert_options->{'item_type'}) . ' ' if $alert_options->{'item_type'};
+	$prefix =~ s/\s+$//g;
+    }
+
+    $msg = $prefix . ': ' . $msg if $prefix;
     
     my $console;
     my $date = localtime;
@@ -885,6 +979,62 @@ sub ConsoleLog() {
     return 1;
 }
 
+sub NotifyFile() {
+    my $provider = 'file';
+
+    #my $msg = shift;
+    my $info = shift;
+    my ($alert) = &formatAlert($info,$provider);
+
+    my $msg = $alert;
+
+    my $alert_options = shift;
+    my $print = shift;
+    
+    my $prefix = '';
+    
+    if (ref($alert_options) && $alert_options->{'user'}) {
+	if ($msg !~ /\b$alert_options->{'user'}\b/i) {
+	    $prefix .= $alert_options->{'user'} . ' ' if $alert_options->{'user'};
+	}
+	if ($msg !~ /\b$push_type_titles->{$alert_options->{'push_type'}}\b/i) {
+	    $prefix .= $push_type_titles->{$alert_options->{'push_type'}} . ' ' if $alert_options->{'push_type'};
+	}
+    } else {
+	$prefix .= $push_type_titles->{$alert_options->{'push_type'}} . ' ' if $alert_options->{'push_type'};
+    }
+
+    ## append type (movie, episode) if supplied
+    $prefix .= ucfirst($alert_options->{'item_type'}) . ' ' if $alert_options->{'item_type'};
+    $prefix =~ s/\s+$//g if $prefix;
+    $msg = $prefix . ': ' . $msg if $prefix;
+    
+    
+    my $console;
+    my $date = localtime;
+    
+    if ($debug || $print) {
+	$console = &consoletxt("$date: DEBUG: $msg"); 
+	print   $console ."\n";   
+    } elsif ($options{test_notify}) {
+	$console = &consoletxt("$date: DEBUG test_notify: $msg"); 
+	print   $console ."\n";   
+    } else {
+	$console = &consoletxt("$date: $msg"); 
+    }
+    
+    ## file logging
+    if (&ProviderEnabled('file')) {
+	open FILE, ">>", $notify->{'file'}->{'filename'}  or die $!;
+	print FILE "$console\n";
+	close(FILE);
+	print "FILE Notification successfully logged.\n" if $debug;
+	
+    }
+    return 1;
+}
+
+
 
 sub DebugLog() {
     ## still need to add this routine to many other places (TODO)
@@ -904,11 +1054,24 @@ sub DebugLog() {
 
 sub Notify() {
     my $info = shift;
-
-
     my $ret_alert = shift;
+    my $state_change = shift; ## we will check what the state is and notify accordingly
+    
+    my $dinfo = $info->{'user'}.':'.$info->{'title'};
+    #&DebugLog($dinfo . ': '."ret_alert:$ret_alert, state_change:$state_change");
+    
     my $type = $info->{'ntype'};
-    my ($alert,$orig) = &formatAlert($info);
+
+
+    ## to fix
+    if ($state_change) {
+	$type = "resumed" if $info->{'state'} =~ /playing/i;
+	$type = "paused" if $info->{'state'} =~ /pause/i;
+	$info->{'ntype'} = $type;
+	&DebugLog($dinfo . ': '."state:$info->{'state'}, ntype:$type ");
+    }
+    
+    my ($alert) = &formatAlert($info);
     
     ## --exclude_user array ref -- do not notify if user is excluded.. however continue processing -- logging to DB - logging to file still happens.
     return 1 if ( grep { $_ =~ /$info->{'orig_user'}/i } @{$options{'exclude_user'}});
@@ -918,17 +1081,24 @@ sub Notify() {
     return &consoletxt($alert) if $ret_alert;
         
     my $push_type;
-    if ($type =~ /start/) {	$push_type = 'push_watching';    } 
-    if ($type =~ /stop/) {	$push_type = 'push_watched';    } 
+    
+    if ($type =~ /start/) {$push_type = 'push_watching';    } 
+    if ($type =~ /stop/)  {$push_type = 'push_watched';     } 
+    if ($type =~ /resume/)  {$push_type = 'push_resumed';     } 
+    if ($type =~ /pause/) {$push_type = 'push_paused';      } 
 
+    &DebugLog($dinfo . ': '.'push_type:' . $push_type);
+    
     #my $alert_options = ();
     my $alert_options = $info; ## include $info href
     
     $alert_options->{'push_type'} = $push_type;
     foreach my $provider (keys %{$notify}) {
 	if (&ProviderEnabled($provider,$push_type)) {
-	    $notify_func{$provider}->($alert,$alert_options);
-	}
+	        &DebugLog($dinfo . ': '.$provider . ' ' . $push_type . ' enabled -> sending notify');
+		    $notify_func{$provider}->($info,$alert_options);
+		    #$notify_func{$provider}->($alert,$alert_options);
+		}
     }
 }
 
@@ -1062,24 +1232,83 @@ sub LocateIP() {
 sub ProcessUpdate() {
     my ($xmlref,$db_key,$ip_address) = @_;
     my ($sess,$key) = split("_",$db_key);
+    
     my $xml =  XMLout($xmlref);
     
     ## multiple checks to verify the xml we update is valid
     return if !$xmlref->{'title'}; ## xml must have title
     return if !$xmlref->{'key'}; ## xml ref must have key
     return if $xml !~ /$key/i; ## xml must contain key
-    
+
+    my ($cmd,$sth);
+    my $state_change=0;
+
     if ($db_key) {
-	if ($ip_address) {
-	    my $sth = $dbh->prepare("update processed set xml = ?, ip_address = ? where session_id = ?");
-	    $sth->execute($xml,$ip_address,$db_key) or die("Unable to execute query: $dbh->errstr\n");
-	} else {
-	    my $sth = $dbh->prepare("update processed set xml = ? where session_id = ?");
-	    $sth->execute($xml,$db_key) or die("Unable to execute query: $dbh->errstr\n");
-	}
 	
+	## get paused status -- needed for real time watched
+	my $extra ='';
+	my $p_counter = 0;
+
+	my $state =  $xmlref->{Player}->{'state'} if $xmlref->{Player}->{state};
+	$state = 'playing' if $state =~ /buffering/i;
+	$cmd = "select paused,paused_counter from processed where session_id = ?";
+	$sth = $dbh->prepare($cmd);
+	$sth->execute($db_key) or die("Unable to execute query: $dbh->errstr\n");
+	my $p = $sth->fetchrow_hashref;
+	
+	$p_counter = $p->{'paused_counter'} if $p->{'paused_counter'};
+	my $p_epoch = $p->{'paused'} if $p->{'paused'};
+	my $prev_state = (defined($p_epoch)) ? "paused" : "playing";
+	## video is paused: verify DB has the pause epoch set
+
+	
+	if ($state && ($prev_state !~ /$state/i)) {
+	        $state_change=1;
+		    my $dmsg = "* Video State: $state [prev: $prev_state]\n" if defined($state);
+		    &DebugLog($dmsg) if $dmsg;
+		}
+	
+	## bug fix for now -- might want to add buffering as an option to notify later
+	my $state_change=0 if $state =~ /buffering/i;
+	
+	my $now = time();
+	if (defined($state) && $state =~ /paused/i) {
+	        #my $sec = $now-$p_epoch;
+	        #my $total_sec = $p_counter+$sec;
+	        if (!$p_epoch) {
+		    $extra .= sprintf(",paused = %s",$now);
+		    my $dmsg = sprintf "* Marking as as Paused on %s [%s]\n",scalar localtime($now),$now if defined($state);
+		    &DebugLog($dmsg) if $dmsg;
+		        } else {
+			    $p_counter += $now-$p_epoch; ## only for display on debug -- do NOT update db with this.
+			    my $dmsg = sprintf "* Already marked as Paused on %s [%s]\n",scalar localtime($p_epoch),$p_epoch if defined($state);
+			    &DebugLog($dmsg) if $dmsg;
+			    #$extra .= sprintf(",paused_counter = %s",$total_sec); #update counter
+			        }
+		} 
+	## Video is not paused -- verify DB not paused and update counter
+	else {
+	        if ($p_epoch) {
+		    my $sec = $now-$p_epoch;
+		    $p_counter += $sec;
+		    $extra .= sprintf(",paused = %s",'NULL'); # set Paused to NULL
+		    $extra .= sprintf(",paused_counter = %s",$p_counter); #update counter
+		    my $dmsg = sprintf "* removing Paused state and setting paused counter to %s seconds [this duration %s sec]\n",$p_counter,$sec;
+		    &DebugLog($dmsg) if $dmsg;
+		        }
+		}
+	my $dmsg = sprintf "* Total Paused duration: " . &durationrr($p_counter) . " [$p_counter seconds]\n" if $p_counter;
+	&DebugLog($dmsg) if $dmsg;
+
+	# include IP update if we have it
+	$extra .= sprintf(",ip_address = '%s'",$ip_address) if $ip_address;
+	
+	$cmd = sprintf("update processed set xml = ?%s where session_id = ?",$extra);
+	$sth = $dbh->prepare($cmd);
+	$sth->execute($xml,$db_key) or die("Unable to execute query: $dbh->errstr\n");
     }
-    return  $dbh->sqlite_last_insert_rowid();
+    #return  $dbh->sqlite_last_insert_rowid();
+    return $state_change;
 }
 sub ProcessRecentlyAdded() {
     my ($db_key) = @_;
@@ -1121,19 +1350,23 @@ sub GetSessions() {
 	    print $XML;
 	    print "===================================XML END=================================================\n";
 	}
-	my $data = XMLin($XML,KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
+
+	my $data = XMLin(encode('utf8',$XML),KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
 	return $data->{'Video'};
     } else {
-	print "\nFailed to get request $url - The result: \n\n";
-	print $response->decoded_content() . "\n\n";
-	if ($options{debug}) {	 	
+	my $dmsg = "Failed to get request $url - The result:";
+	$dmsg .= $response->decoded_content();
+	&DebugLog($dmsg,1) if $dmsg;
+	
+	if ($options{debug}) { 
 	    print "\n-----------------------------------DEBUG output----------------------------------\n\n";
 	    print Dumper($response);
 	    print "\n---------------------------------END DEBUG output---------------------------------\n\n";
 	}
-    	exit(2);	
+	exit(2);
     }
 }
+
 
 sub PMSToken() {
     my $proto = 'http';
@@ -1158,6 +1391,24 @@ sub PMSToken() {
 	return $token;
     }
     return 0;
+}
+
+sub getSecPaused() {
+    my $db_key = shift;
+    if ($db_key) {
+	my $cmd = "select paused,paused_counter,stopped from processed where session_id = '$db_key'";
+	my $sth = $dbh->prepare($cmd);
+	$sth->execute or die("Unable to execute query: $dbh->errstr\n");
+	my $row = $sth->fetchrow_hashref;
+	my $total=0;
+	$total=$row->{'paused_counter'} if $row->{'paused_counter'};
+	## subtract current time from paused epoch as it's not yet stopped ( currently paused )
+	if (defined($row->{'paused'}) && !$row->{'stopped'}) {
+	    $total += time()-$row->{'paused'};
+	}
+	$total = 0 if !$total || $total !~ /\d+/;
+	return $total;
+    }
 }
 
 sub CheckNotified() {
@@ -1199,7 +1450,8 @@ sub GetTestNotify() {
 
 sub GetStarted() {
     my $info = ();
-    my $cmd = "select * from processed where notified = 1 and stopped is null";
+#    my $cmd = "select * from processed where notified = 1 and stopped is null";
+    my $cmd = "select * from processed where time is not null and stopped is null";
     my $sth = $dbh->prepare($cmd);
     $sth->execute or die("Unable to execute query: $dbh->errstr\n");
     while (my $row_hash = $sth->fetchrow_hashref) {
@@ -1238,7 +1490,7 @@ sub GetWatched() {
 
 sub GetInProgress() {
     my $info = ();
-    my $cmd = "select * from processed where notified = 1 and stopped is null";
+    my $cmd = "select * from processed where time is not null and stopped is null";
     my $sth = $dbh->prepare($cmd);
     $sth->execute or die("Unable to execute query: $dbh->errstr\n");
     while (my $row_hash = $sth->fetchrow_hashref) {
@@ -1263,7 +1515,7 @@ sub SetNotified_RA() {
     $status = 1 if !$status; ## status = 1 by default (success), 2 = failed - day old.. do not process anymore
     if ($id) {
 	my $cmd = "update recently_added set $provider = $status where item_id = '$id'";
-	print $cmd . "\n" if ($debug);
+	&DebugLog($cmd);
 	my $sth = $dbh->prepare($cmd);
 	$sth->execute or die("Unable to execute query: $dbh->errstr\n");
     }
@@ -1274,9 +1526,13 @@ sub SetStopped() {
     my $time = shift;
     if ($db_key) {
 	$time = time() if !$time;
-	my $sth = $dbh->prepare("update processed set stopped = ? where id = ?");
+	my $sth = $dbh->prepare("update processed set stopped = ?,paused = NULL,notified = NULL where id = ?");
 	$sth->execute($time,$db_key) or die("Unable to execute query: $dbh->errstr\n");
     }
+    ## BUG FIX - remove paused state for any stopped item - this can be removed at a later date (TODO)
+    ## fixes in place to account for this anyways. It's just DB cleanup
+    my $sth = $dbh->prepare("update processed set paused = NULL where stopped is not NULL");
+    $sth->execute() or die("Unable to execute query: $dbh->errstr\n");
 }
 
 sub initDB() {
@@ -1310,6 +1566,8 @@ sub initDB() {
 	{ 'name' => 'summary', 'definition' => 'text', },
 	{ 'name' => 'notified', 'definition' => 'INTEGER', },
 	{ 'name' => 'stopped', 'definition' => 'timestamp',},
+	{ 'name' => 'paused', 'definition' => 'timestamp',},
+	{ 'name' => 'paused_counter', 'definition' => 'INTEGER',},
 	{ 'name' => 'xml', 'definition' => 'text',},
 	{ 'name' => 'ip_address', 'definition' => 'text',},
 	);
@@ -1338,7 +1596,9 @@ sub initDB() {
     }
 
     if ($alter_def) {
-	print "New Table definitions.. upgrading DB\n";
+	my $dmsg = "New Table definitions.. upgrading DB";
+	&DebugLog($dmsg,1) if $dmsg;
+
 	$dbh->begin_work;
 	
 	eval {
@@ -1351,10 +1611,12 @@ sub initDB() {
 	    $dbh->commit; 
 	};
 	if ($@) {
-	    print "Could not upgrade table definitions - Transaction aborted because $@\n";
+	    $dmsg = "Could not upgrade table definitions - Transaction aborted because $@";
+	    &DebugLog($dmsg,1) if $dmsg;
 	    eval { $dbh->rollback };
 	}
-	print "DB update DONE\n";
+	$dmsg = "DB update DONE\n";
+	&DebugLog($dmsg,1) if $dmsg;
     }
     
     
@@ -1399,6 +1661,7 @@ sub DB_ra_table() {
 	{ 'name' => 'growl', 'definition' => 'INTEGER',},
 	{ 'name' => 'prowl', 'definition' => 'INTEGER',},
 	{ 'name' => 'GNTP', 'definition' => 'INTEGER',},
++	{ 'name' => 'EMAIL', 'definition' => 'INTEGER',},
 	{ 'name' => 'pushover', 'definition' => 'INTEGER',},
 	{ 'name' => 'boxcar', 'definition' => 'INTEGER',},
 	
@@ -1425,7 +1688,9 @@ sub DB_ra_table() {
     }
     
     if ($alter_def) {
-	print "New Table definitions.. upgrading DB\n";
+	my $dmsg = "New Table definitions.. upgrading DB";
+	&DebugLog($dmsg,1) if $dmsg;
+
 	$dbh->begin_work;
 	
 	eval {
@@ -1438,10 +1703,12 @@ sub DB_ra_table() {
 	    $dbh->commit; 
 	};
 	if ($@) {
-	    print "Could not upgrade table definitions - Transaction aborted because $@\n";
+	    $dmsg = "Could not upgrade table definitions - Transaction aborted because $@";
+	    &DebugLog($dmsg,1) if $dmsg;
 	    eval { $dbh->rollback };
 	}
-	print "DB update DONE\n";
+	$dmsg = "DB update DONE";
+	&DebugLog($dmsg,1) if $dmsg;
     }
     
     ## now verify indexes
@@ -1484,24 +1751,44 @@ sub initDBtable() {
 }
 
 sub NotifyTwitter() {
-    #use Net::Twitter::Lite::WithAPIv1_1;
-    #use Scalar::Util 'blessed';
     my $provider = 'twitter';
+    
     if ($provider_452->{$provider}) {
-	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
+	my $dmsg = uc($provider) . " 452: backing off"; 
+	&DebugLog($dmsg,1) if $dmsg;
 	return 0;
     }
+    my %tw = %{$notify->{'twitter'}};        
     
-    my $alert = shift;
+    #my $alert = shift;
+    my $info = shift;
+    my ($alert) = &formatAlert($info,$provider);
+    
     my $alert_options = shift;
-
+    
     my $url = $alert_options->{'url'} if $alert_options->{'url'};
-    $alert = $push_type_titles->{$alert_options->{'push_type'}} . ': ' . $alert if $alert_options->{'push_type'};        
+    
+    my $prefix = '{user}';
+    $prefix = $tw{'title'} if $tw{'title'};
+    $prefix = '{user}' if $prefix eq $appname; ## force {user} if people still use $appname in config -- forcing update with the need to modify config.
+    
+    if ($prefix =~ /\{.*\}/) {
+	my $regex = join "|", keys %{$alert_options};
+	$regex = qr/$regex/;
+	$prefix =~ s/{($regex)}/$alert_options->{$1}/g;
+	$prefix =~ s/{\w+}//g; ## remove any {word} - templates that failed
+	#$prefix = $appname if !$prefix; ## replace appname if empty, let's conserve space
+    }
+    $prefix .= ' ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
+    $prefix .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};    
+    
+    $prefix =~ s/\s+$//g if $prefix;
+    $alert = $prefix . ': ' . $alert if $prefix;
     
     ## trim down alert..
-    if (length($alert) > 139) {	
-	$alert = substr($alert,0,140);  ## strip down to 140 chars
-	if ($alert =~ /(.*)\[.*/g) { $alert = $1; } ## cut at last brackets to clean up a little
+    if (length($alert) > 139) {
+$alert = substr($alert,0,140);  ## strip down to 140 chars
+if ($alert =~ /(.*)\[.*/g) { $alert = $1; } ## cut at last brackets to clean up a little
     }
     
     ## url can be appended - twitter allows it even if the alert is 140 chars -- well it looks like 115 is max if URL is included..
@@ -1523,7 +1810,6 @@ sub NotifyTwitter() {
 	print "Twitter Alert: $alert\n";
     }
     
-    my %tw = %{$notify->{'twitter'}};        
     my $nt = Net::Twitter::Lite::WithAPIv1_1->new(
 	consumer_key        => $tw{'consumer_key'},
 	consumer_secret     => $tw{'consumer_secret'},
@@ -1557,46 +1843,52 @@ sub NotifyTwitter() {
 	}
 	return 0;
     }
-
-    print uc($provider) . " Notification successfully posted.\n" if $debug;
+    
+    my $dmsg = uc($provider) . " Notification successfully posted.\n" if $debug;
+    &DebugLog($dmsg) if $dmsg && $debug;
     return 1;     ## success
 }
 
 sub NotifyProwl() {
     ## modified from: https://www.prowlapp.com/static/prowl.pl
-    my $alert = shift;
+    my $provider = 'prowl';
+
+    #my $alert = shift;
+    my $info = shift;
+    my ($alert) = &formatAlert($info,$provider);
+
     my $alert_options = shift;
 
-    my $provider = 'prowl';
     if ($provider_452->{$provider}) {
 	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
 	return 0;
     }
     
     my %prowl = %{$notify->{prowl}};
+
+    
     
     $prowl{'event'} = '';
     $prowl{'event'} = $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};
-    
+    $prowl{'event'} .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};
+
     $prowl{'notification'} = $alert;
-    
-    #if ($prowl{'collapse'}) {
-    #	my $orig = shift;
-    #	#my @p = split(':',shift);
-    #	#$prowl{'application'} .= ' - ' . shift(@p);
-    #	$prowl{'event'} = $orig;
-    #   }
     
     $prowl{'priority'} ||= 0;
     $prowl{'application'} ||= $appname;
     $prowl{'url'} ||= "";
     
     ## allow formatting of appname
+    $prowl{'application'} = '{user}' if $prowl{'application'} eq $appname; ## force {user} if people still use $appname in config -- forcing update with the need to modify config.
     my $format = $prowl{'application'};
+
+
     if ($format =~ /\{.*\}/) {
 	my $regex = join "|", keys %{$alert_options};
 	$regex = qr/$regex/;
 	$prowl{'application'} =~ s/{($regex)}/$alert_options->{$1}/g;
+	$prowl{'application'} =~ s/{\w+}//g; ## remove any {word} - templates that failed
+	$prowl{'application'} = $appname if !$prowl{'application'}; ## replace appname if empty
     }
 
     # URL encode our arguments
@@ -1647,34 +1939,43 @@ sub NotifyProwl() {
 }
 
 sub NotifyPushOver() {
-    my $alert = shift;
+    my $provider = 'pushover';
+
+    #my $alert = shift;
+    my $info = shift;
+    my ($alert) = &formatAlert($info,$provider);
+
     my $alert_options = shift;
 
-    my $provider = 'pushover';
     if ($provider_452->{$provider}) {
 	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
 	return 0;
     }
     
     my %po = %{$notify->{pushover}};    
-    my $ua      = LWP::UserAgent->new(  ssl_opts => {
+    my $ua = LWP::UserAgent->new(  ssl_opts => {
          verify_hostname => 0,
          SSL_verify_mode => "SSL_VERIFY_NONE",
       });
     $ua->timeout(20);
     $po{'message'} = $alert;
-    	    
+        
     ## PushOver title is AppName by default. If there is a real title for push type, It's 'AppName: push_type'
 
     ## allow formatting of appname
+    $po{'title'} = '{user}' if $po{'title'} eq $appname; ## force {user} if people still use $appname in config -- forcing update with the need to modify config.
     my $format = $po{'title'};
+
+
     if ($format =~ /\{.*\}/) {
 	my $regex = join "|", keys %{$alert_options};
 	$regex = qr/$regex/;
 	$po{'title'} =~ s/{($regex)}/$alert_options->{$1}/g;
+	$po{'title'} =~ s/{\w+}//g; ## remove any {word} - templates that failed
+	$po{'title'} = $appname if !$po{'title'}; ## replace appname if empty
     }
     $po{'title'} .= ': ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
-    
+    $po{'title'} .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};    
     
     my $response = $ua->post( "https://api.pushover.net/1/messages.json", [
 				  "token" => $po{'token'},
@@ -1695,17 +1996,22 @@ sub NotifyPushOver() {
 	return 0;
     } 
     
-    print uc($provider) . " Notification successfully posted.\n" if $debug;
+    my $dmsg = uc($provider) . " Notification successfully posted.\n" if $debug;
+    &DebugLog($dmsg) if $dmsg && $debug;
     return 1;     ## success
 }
 
 sub NotifyBoxcar() {
+    my $provider = 'boxcar';
     ## this will try to notifiy via box car 
     # It will try to subscribe to the plexWatch service on boxcar if we get a 401 and resend the notification
-    my $alert = shift;
+
+    #my $alert = shift;
+    my $info = shift;
+    my ($alert) = &formatAlert($info,$provider);
+
     my $alert_options = shift;
 
-    my $provider = 'boxcar';
     if ($provider_452->{$provider}) {
 	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
 	return 0;
@@ -1715,20 +2021,24 @@ sub NotifyBoxcar() {
     $bc{'message'} = $alert;
     
     ## BoxCars title [from name] is set in config.pl. If there is a real title for push type, It's 'From: push_type_title'
-    ## allow formatting of appname (boxcar it's the 'from' key)
 
+    ## allow formatting of appname (boxcar it's the 'from' key)
+    $bc{'from'} = '{user}' if $bc{'from'} eq $appname; ## force {user} if people still use $appname in config -- forcing update with the need to modify config.
     my $format = $bc{'from'};
     if ($format =~ /\{.*\}/) {
 	### replacemnt templates with variables
 	my $regex = join "|", keys %{$alert_options};
 	$regex = qr/$regex/;
 	$bc{'from'} =~ s/{($regex)}/$alert_options->{$1}/g;
+	$bc{'from'} =~ s/{\w+}//g; ## remove any {word} - templates that failed
+	$bc{'from'} = $appname if !$bc{'from'}; ## replace appname if empty
     }
     
     $bc{'from'} .= ': ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
+    $bc{'from'} .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};
     
     if (!$bc{'email'}) {
-	my $msg = "Please specify and email address for boxcar in config.pl";
+	my $msg = "FAIL: Please specify and email address for boxcar in config.pl";
 	&ConsoleLog($msg);
     } else {
         my $response = &NotifyBoxcarPOST(\%bc);
@@ -1738,17 +2048,14 @@ sub NotifyBoxcar() {
 	}
 
 	if ($response->{'_rc'} == 401) {
-	    my $ua      = LWP::UserAgent->new(  ssl_opts => {
-         verify_hostname => 0,
-         SSL_verify_mode => "SSL_VERIFY_NONE",
-      });
+	    my $ua      = LWP::UserAgent->new();
 	    $ua->timeout(20);
 	    my $msg = "$bc{'email'} is not subscribed to plexWatch service... trying to subscribe now";
 	    &ConsoleLog($msg);
 	    my $url = 'http://boxcar.io/devices/providers/'. $bc{'provider_key'} .'/notifications/subscribe';
-	    my $response = $ua->post( $url, [
-					  "email" => $bc{'email'},#
-				      ]);
+	        my $response = $ua->post( $url, [
+					      "email" => $bc{'email'},#
+					  ]);
 	    if (!$response->is_success) {
 		my $msg = "$bc{'email'} subscription to plexWatch service failed. Is $bc{'email'} email registered to your boxcar account?";
 		&ConsoleLog($msg);
@@ -1772,16 +2079,14 @@ sub NotifyBoxcar() {
 }
 
 
-
-
 sub NotifyGNTP() {
+    my $provider = 'GNTP';
     ## this will try to notifiy via box car 
     # It will try to subscribe to the plexWatch service on boxcar if we get a 401 and resend the notification
-    my $alert = shift;
-    my $alert_options = shift;
-    my $provider = 'GNTP';
 
-    
+    #my $alert = shift;
+    my $info = shift;
+    my $alert_options = shift;
 
     ## TODO -- make the 452 per multi provider
     if ($provider_452->{$provider}) {
@@ -1789,22 +2094,36 @@ sub NotifyGNTP() {
 	return 0;
     }
     
-    my $success;
+    my ($success,$alert);
     foreach my $k (keys %{$notify->{$provider}}) {
+	($alert) = &formatAlert($info,$provider,$k);
 	
 	## the ProviderEnabled check before doesn't work for multi (i.e. GNTP for now) we will have to verify this provider is actually enabled in the foreach..
 	my $push_type = $alert_options->{'push_type'};
 	if (ref $notify->{$provider}->{$k} && $notify->{$provider}->{$k}->{'enabled'}  &&  $notify->{$provider}->{$k}->{$push_type}) {
-	    print "GNTP key:$k enabled for this $alert_options->{'push_type'}\n" if $debug;
+	    print "$provider key:$k enabled for this $alert_options->{'push_type'}\n" if $debug;
 	} else {
-	    print "GNTP key:$k NOT enabled for this $alert_options->{'push_type'} - skipping\n" if $debug;
+	    print "$provider key:$k NOT enabled for this $alert_options->{'push_type'} - skipping\n" if $debug;
 	    next;
 	}
 	
 	my %gntp = %{$notify->{GNTP}->{$k}};    
 	$gntp{'message'} = $alert;
+
+	$gntp{'title'} = '{user}' if !$gntp{'title'};
 	
-	$gntp{'title'} =  $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
+	## allow formatting of appname
+	
+	if ($gntp{'title'} =~ /\{.*\}/) {
+	    my $regex = join "|", keys %{$alert_options};
+	    $regex = qr/$regex/;
+	    $gntp{'title'} =~ s/{($regex)}/$alert_options->{$1}/g;
+	    $gntp{'title'} =~ s/{\w+}//g; ## remove any {word} - templates that failed
+	    $gntp{'title'} = $appname if !$gntp{'title'}; ## replace appname if empty
+	}
+	
+	$gntp{'title'} .= ' ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
+	$gntp{'title'} .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};
 
 	if ($gntp{'sticky'} =~ /1/) {
 	    $gntp{'sticky'} = 'true'; 
@@ -1813,59 +2132,71 @@ sub NotifyGNTP() {
 	}
 	
 	if (!$gntp{'server'} || !$gntp{'port'} ) {
-	    my $msg = "Please specify a server and port for GNTP (growl) in config.pl";
+	    my $msg = "FAIL: Please specify a server and port for $provider [$k] in config.pl";
 	    &ConsoleLog($msg,,1);
 	} else {
-	    
-	    my $growl = Growl::GNTP->new(
-		AppName => $gntp{'application'},
-		PeerHost => $gntp{'server'},
-		PeerPort => $gntp{'port'},
-		Password => $gntp{'password'},
-		Timeout  =>  $gntp{'timeout'},
-		AppIcon => $gntp{'icon_url'},
-		);
-	    
-	    eval { 
-		$growl->register(
-		    [
-		     { Name => 'push_watching',
-		       DisplayName => 'push_watching',
-		       Enabled     => 'True',
-		       Icon => $gntp{'icon_url'},
-		     },
-		     
-		     { Name => 'push_watched',
-		       DisplayName => 'push_watched',
-		       Enabled     => 'True',
-		       Icon => $gntp{'icon_url'},
-		     },
-		     
-		     { Name => 'push_recentlyadded',
-		       DisplayName => 'push_recentlyadded',
-		       Enabled     => 'True',
-		       Icon => $gntp{'icon_url'},
-		     },
-		     
-		    ]);
-	    };
-	    
-	    if (!$@) {
-		$growl->notify(
-		    Priotity => 0,
-		    Sticky => 'false',
-		    Name => $alert_options->{'push_type'},
-		    Title => $gntp{'title'},
-		    Message => $alert,
-		    ID => time(),
-		    Icon => $gntp{'icon_url'},
-		    Sticky => $gntp{'sticky'},
+	        
+	        my $growl = Growl::GNTP->new(
+		    AppName => $gntp{'application'},
+		    PeerHost => $gntp{'server'},
+		    PeerPort => $gntp{'port'},
+		    Password => $gntp{'password'},
+		    Timeout  =>  $gntp{'timeout'},
+		    AppIcon => $gntp{'icon_url'},
 		    );
-		
-		print uc($provider) . " Notification successfully posted.\n" if $debug;
-		#return 1;     ## success
-		$success++; ## increment success -- can't return as we might have multiple destinations
-	    }
+		    
+		eval { 
+		    $growl->register(
+			    [
+			     { Name => 'push_watching',
+			              DisplayName => 'push_watching',
+			              Enabled     => 'True',
+			       Icon => $gntp{'icon_url'},
+			     },
+			          
+			     { Name => 'push_watched',
+			              DisplayName => 'push_watched',
+			              Enabled     => 'True',
+			       Icon => $gntp{'icon_url'},
+			     },
+			          
+			     { Name => 'push_recentlyadded',
+			              DisplayName => 'push_recentlyadded',
+			              Enabled     => 'True',
+			       Icon => $gntp{'icon_url'},
+			     },
+
+			     { Name => 'push_resumed',
+			              DisplayName => 'push_resumed',
+			              Enabled     => 'True',
+			       Icon => $gntp{'icon_url'},
+			     },
+
+			     { Name => 'push_paused',
+			              DisplayName => 'push_paused',
+			              Enabled     => 'True',
+			       Icon => $gntp{'icon_url'},
+			     },
+			          
+			    ]);
+		};
+		    
+		if (!$@) {
+		    $growl->notify(
+			    Priotity => 0,
+			    Sticky => 'false',
+			Name => $alert_options->{'push_type'},
+			Title => $gntp{'title'},
+			    Message => $alert,
+			    ID => time(),
+			Icon => $gntp{'icon_url'},
+			Sticky => $gntp{'sticky'},
+			);
+		    
+		    print uc($provider) . " Notification successfully posted.\n" if $debug;
+		    #return 1;     ## success
+		    $success++; ## increment success -- can't return as we might have multiple destinations
+		}
 	}
 	
     }
@@ -1881,20 +2212,125 @@ sub NotifyGNTP() {
 }
 
 
+sub NotifyEMAIL() {
+    my $provider = 'EMAIL';
+    ## this will try to notifiy via box car 
+    # It will try to subscribe to the plexWatch service on boxcar if we get a 401 and resend the notification
+
+    #my $alert = shift;
+    my $info = shift;
+    my $alert_options = shift;
+
+    ## TODO -- make the 452 per multi provider
+    if ($provider_452->{$provider}) {
+	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
+	return 0;
+    }
+    
+    my ($success,$alert,$error);
+    foreach my $k (keys %{$notify->{$provider}}) {
+	($alert) = &formatAlert($info,$provider,$k);
+	## the ProviderEnabled check before doesn't work for multi 
+	# (i.e. GNTP & EMAIL for now) we will have to verify this provider is actually enabled in the foreach..
+	my $push_type = $alert_options->{'push_type'};
+	if (ref $notify->{$provider}->{$k} && $notify->{$provider}->{$k}->{'enabled'}  &&  $notify->{$provider}->{$k}->{$push_type}) {
+	    print "$provider key:$k enabled for this $alert_options->{'push_type'}\n" if $debug;
+	} else {
+	    print "$provider key:$k NOT enabled for this $alert_options->{'push_type'} - skipping\n" if $debug;
+	    next;
+	}
+	
+	my %email = %{$notify->{EMAIL}->{$k}};    
+	$email{'message'} = $alert;
+
+	$email{'subject'} = '{user}' if !$email{'subject'};
+	
+	## allow formatting of appname
+	
+	$email{'subject'} =~ s/{push_title}/$push_type_titles->{$alert_options->{'push_type'}}/g if $alert_options->{'push_type'};  
+	$email{'subject'} .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};
+	if ($email{'subject'} =~ /\{.*\}/) {
+	    my $regex = join "|", keys %{$alert_options};
+	    $regex = qr/$regex/;
+	    $email{'subject'} =~ s/{($regex)}/$alert_options->{$1}/g;
+	    $email{'subject'} =~ s/{\w+}//g; ## remove any {word} - templates that failed
+	    $email{'subject'} = $appname if !$email{'subject'}; ## replace appname if empty
+	    $email{'subject'} = $email{'subject'} . ' ';
+	}
+	
+	
+	#$email{'subject'} .= $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
+
+
+	if (!$email{'server'} || !$email{'port'} || !$email{'from'} || !$email{'to'} ) {
+	    my $msg = "FAIL: Please specify a server, port, to and from address for $provider [$k] in config.pl";
+	    &DebugLog($msg,1);
+	} else {
+	        
+	        
+	        # Configure smtp server - required one time only
+
+	    eval {
+		my $mailer;
+		$mailer = new Net::SMTP::TLS(
+		    $email{'server'},
+		    ( $email{'server'} ? (Hello => $email{'server'}) : () ),
+		    ( $email{'port'} ? (Port => $email{'port'}) : () ),
+		    ( $email{'username'} ? (User => $email{'username'}) : () ),
+		    ( $email{'password'} ? (Password => $email{'password'}) : () ),
+		    ( $email{enable_tls}  ? () : (NoTLS => 1) ) ,
+		    );
+		
+		
+		$mailer->mail($email{'from'});
+		$mailer->to($email{'to'});
+		$mailer->data;
+		$mailer->datasend("To: $email{'to'}\r\n");
+		$mailer->datasend("From: $email{'from'}\r\n");
+		$mailer->datasend("Subject: $email{'subject'}\r\n");
+		$mailer->datasend("X-Mailer: plexWatch\r\n");
+		$mailer->datasend($alert);
+		$mailer->dataend;
+		$mailer->quit;
+	    };
+	    if ($@) {
+		$error .= $@;
+		my $d_out =  uc($provider) . " failed " . substr($alert,0,100);
+		&DebugLog($d_out,1);
+		$d_out = uc($provider) . " error: $error";
+		&DebugLog($d_out,1);
+	    } else {
+		$success++; ## increment success -- can't return as we might have multiple destinations (however it one works, they all work--TODO tofix)
+		my $d_out = uc($provider) . " Notification successfully posted to . " . $email{'to'} . "\n";
+		&DebugLog($d_out);
+	    }
+	        
+	}
+	
+    }
+    
+    return 1 if $success;
+    
+    ## this could be moved above scope to 452 specific GNTP dest that failed -- need to look into RecentlyAdded code to see how it affect that.
+    $provider_452->{$provider} = 1;
+    my $msg452 = uc($provider) . " failed: - setting $provider to back off additional notifications";
+    &DebugLog($msg452,1);
+    #&ConsoleLog($msg452,,1);
+    return 0;
+    
+}
+
 sub NotifyBoxcarPOST() {
     ## the actual post to boxcar
     my %bc = %{$_[0]};
     
-    my $ua      = LWP::UserAgent->new(  ssl_opts => {
-         verify_hostname => 0,
-         SSL_verify_mode => "SSL_VERIFY_NONE",
-      });
+    my $ua      = LWP::UserAgent->new();
     $ua->timeout(20);
     my $url = 'http://boxcar.io/devices/providers/'. $bc{'provider_key'} .'/notifications';
     my $response = $ua->post( $url, [
 				  'secret'  => $bc{'provider_secret'},
 				  "email" => $bc{'email'},
-				  'notification[from_remote_service_id]' => time, # Just a unique placeholder
+				    'notification[from_remote_service_id]' => time, # Just a unique placeholder
 				  "notification[from_screen_name]" => $bc{'from'},
 				  "notification[message]" => $bc{'message'},
 				  'notification[icon_url]' => $bc{'icon_url'},
@@ -1903,11 +2339,15 @@ sub NotifyBoxcarPOST() {
 }
 
 sub NotifyGrowl() { 
-    my $alert = shift;
+    my $provider = 'growl';
+
+    #my $alert = shift;
+    my $info = shift;
+    my ($alert) = &formatAlert($info,$provider);
+
     my $alert_options = shift;
     my $extra_cmd = '';
 
-    my $provider = 'growl';
     if ($provider_452->{$provider}) {
 	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
 	return 0;
@@ -1916,6 +2356,7 @@ sub NotifyGrowl() {
     my %growl = %{$notify->{growl}};    
     
     $growl{'title'} = $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};    
+    $growl{'title'} .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};
     $extra_cmd = "$growl{'title'}" if $growl{'title'};
     
     if (!-f  $growl{'script'} ) {
@@ -1936,7 +2377,7 @@ sub consoletxt() {
     $console =~ s/\n\n/\n/g;
     $console =~ s/\n/,/g;
     $console =~ s/,$//; # get rid of last comma
-    $console =~ s/[^[:ascii:]]+//g; 
+#    $console =~ s/[^[:ascii:]]+//g; 
     return $console;
 }
 
@@ -1995,10 +2436,15 @@ sub info_from_xml() {
     my $ntype = shift;
     my $start_epoch = shift;
     my $stop_epoch = shift;
+    my $paused = shift;
     my $duration = shift; ## special case to group start/stops
+    $paused = 0 if !$paused;
+
     ## start time is in xml
+
     
-    my $vid = XMLin($hash,KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
+    my $vid = XMLin(encode('utf8',$hash),KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
+
 
     ## paused or playing? stopped is forced and required from ntype
     my $state = 'unknown';
@@ -2006,7 +2452,9 @@ sub info_from_xml() {
 	$state = 'stopped';
     } else {
 	$state =  $vid->{Player}->{'state'} if $vid->{Player}->{state};
+	$state =  'playing' if $state =~ /buffering/i;
     }
+
     
     my $ma_id = '';
     $ma_id = $vid->{Player}->{'machineIdentifier'} if $vid->{Player}->{'machineIdentifier'};
@@ -2029,7 +2477,7 @@ sub info_from_xml() {
     my $streamType = 'D';
     if (ref $vid->{TranscodeSession}) {
 	$isTranscoded = 1;
-	$transInfo = $vid->{TranscodeSession};	
+	$transInfo = $vid->{TranscodeSession};
 	$streamType = 'T';
     }
 
@@ -2048,35 +2496,42 @@ sub info_from_xml() {
     
     ## Duration Watched
     my $duration_raw;
+
     if (!$duration) {
 	if ($time && $stop_epoch) {
 	    $duration = $stop_epoch-$time;
-	    $duration_raw = $duration;
-	    $duration = &durationrr($duration);
-	}    
-    } else {
-	$duration_raw = $duration;
-	$duration = &durationrr($duration);
-	
+	} else {
+	    $duration = time()-$time;
+	}
     }
+    # set original duration
+    $duration_raw = $duration;
     
+    #exclude paused time
+    $duration = $duration-$paused if !$count_paused;
+    
+    $duration = &durationrr($duration);
+
     ## Percent complete -- this is correct ongoing in verison 0.0.18
     my $percent_complete;
     if ( ($vid->{viewOffset} && $vid->{duration}) && $vid->{viewOffset} > 0 && $vid->{duration} > 0) {
-	$percent_complete = sprintf("%2d",($vid->{viewOffset}/$vid->{duration})*100);
-	if ($percent_complete >= 90) {	$percent_complete = 100;    } 
+	$percent_complete = sprintf("%.0f",($vid->{viewOffset}/$vid->{duration})*100);
+	if ($percent_complete >= 90) {$percent_complete = 100;    } 
     }
     ## version prior to 0.0.18 -- we will have to use duration watched to figure out percent
     ## not the best, but if percent complete is < 10 -- let's go with duration watched (including paused) vs duration of the video
-    if (!$percent_complete || $percent_complete < 10) {
-	#$percent_complete = 0;
+    
+    #if (!$percent_complete || $percent_complete < 10) { # no clue why I had < 10%.. lame
+    if (!$percent_complete || $percent_complete == 0) {
+	$percent_complete = 0;
+	# $duration_raw is correct as we didn't have paused seconds yet. 
+	# When we had pasued seconds, the percent_complete would have already applied above
 	if ( ($vid->{duration} && $vid->{duration} > 0) && ($duration_raw && $duration_raw > 0) )  {
-	    $percent_complete = sprintf("%2d",($duration_raw/($vid->{duration}/1000))*100);
-	    if ($percent_complete >= 90) {	$percent_complete = 100;    } 
+	    $percent_complete = sprintf("%.0f",($duration_raw/($vid->{duration}/1000))*100);
+	    if ($percent_complete >= 90) {$percent_complete = 100;    } 
 	}
     }
     $percent_complete = 0 if !$percent_complete;
-    
     
     my ($rating,$year,$summary,$extra_title,$genre,$platform,$title,$episode,$season);    
     $rating = $year = $summary = $extra_title = $genre = $platform = $title = $episode = $season = '';
@@ -2085,16 +2540,16 @@ sub info_from_xml() {
     
     ## Platform title (client device)
     ## prefer title over platform if exists ( seem to have the exact same info of platform with useful extras )
-    if ($vid->{Player}->{title}) {	$platform =  $vid->{Player}->{title};    }
-    elsif ($vid->{Player}->{platform}) {	$platform = $vid->{Player}->{platform};    }
+    if ($vid->{Player}->{title}) {$platform =  $vid->{Player}->{title};    }
+    elsif ($vid->{Player}->{platform}) {$platform = $vid->{Player}->{platform};    }
     
-    ## length of the video
+ ## length of the video
     my $length;
-    $length = sprintf("%02d",$vid->{duration}/1000) if $vid->{duration};
+    $length = sprintf("%.0f",$vid->{duration}/1000) if $vid->{duration};
     $length = &durationrr($length);
     
     my $orig_user = (split('\@',$vid->{User}->{title}))[0]     if $vid->{User}->{title};
-    if (!$orig_user) {	$orig_user = 'Local';        }
+    if (!$orig_user) {$orig_user = 'Local';        }
     
     $year = $vid->{year} if $vid->{year};
     $rating .= $vid->{contentRating} if ($vid->{contentRating});
@@ -2117,10 +2572,10 @@ sub info_from_xml() {
     
     ## formatting now allows user to include year, rating, etc...
     #if ($vid->{'type'} =~ /movie/) {
-    #	## to fix.. multiple genres
-    #	#if (defined($vid->{Genre})) {	    $title .= ' ['.$vid->{Genre}->{tag}.']';	}
-    #	$title .= ' ['.$year.']';
-    #	$title .= ' ['.$rating.']';
+    ### to fix.. multiple genres
+    ##if (defined($vid->{Genre})) {    $title .= ' ['.$vid->{Genre}->{tag}.']';}
+    #$title .= ' ['.$year.']';
+    #$title .= ' ['.$rating.']';
     #   }
     
     my ($user,$tmp) = &FriendlyName($orig_user,$platform);
@@ -2149,7 +2604,7 @@ sub info_from_xml() {
 	'state' => $state,
 	'transcoded' => $isTranscoded,
 	'streamtype' => $streamType,
-	'transInfo' => $transInfo,	
+	'transInfo' => $transInfo,
 	'machineIdentifier' => $ma_id,
 	'ratingKey' => $ratingKey,
     };
@@ -2166,7 +2621,6 @@ sub RunTestNotify() {
     if ($ntype =~ /push_recentlyadded/) {
 	my $alerts = ();
 	$alerts->{'test'}->{'alert'} = $push_type_titles->{$ntype} .' test recently added alert';
-	$alerts->{'test'}->{'alert_short'} = $push_type_titles->{$ntype} .'test recently added alert (short version)';
 	$alerts->{'test'}->{'item_id'} = 'test_item_id';
 	$alerts->{'test'}->{'debug_done'} = 'testing alert already done';
 	$alerts->{'test'}->{'alert_url'} = 'https://github.com/ljunkie/plexWatch';
@@ -2179,7 +2633,7 @@ sub RunTestNotify() {
 	    foreach my $k (keys %{$test_info}) {
 		my $start_epoch = $test_info->{$k}->{time} if $test_info->{$k}->{time}; ## DB only
 		my $stop_epoch = $test_info->{$k}->{stopped} if $test_info->{$k}->{stopped}; ## DB only
-		my $info = &info_from_xml($test_info->{$k}->{'xml'},$ntype,$start_epoch,$stop_epoch);
+		my $info = &info_from_xml($test_info->{$k}->{'xml'},$ntype,$start_epoch,$stop_epoch,0);
 		$info->{'ip_address'} = $test_info->{$k}->{ip_address};
 		&Notify($info);
 		## nothing to set as notified - this is a test
@@ -2206,7 +2660,6 @@ sub twittime() {
 
 sub rrtime() {
     ## my way of showing the date/time
-    # %e is not compatiable on non unix -- ok since this sub is not used anymore
     my $epoch = shift;
     my $date = (strftime "%I:%M%p - %a %b ", localtime($epoch)) . suffer(strftime "%e", localtime($epoch)) . (strftime " %Y", localtime($epoch));
     $date =~ s/^0//;
@@ -2280,7 +2733,13 @@ sub GetSectionsIDs() {
 	exit(2);
     } else {
 	my $content  = $response->decoded_content();
-	my $data = XMLin($content);
+	if ($debug_xml) {
+	    print "URL: $url\n";
+	    print "===================================XML CUT=================================================\n";
+	    print $content;
+	    print "===================================XML END=================================================\n";
+	}
+	my $data = XMLin(encode('utf8',$content));
 	foreach  my $k (keys %{$data->{'Directory'}}) {
 	    $sections->{'raw'}->{$k} = $data->{'Directory'}->{$k};
 	    push @{$sections->{'types'}->{$data->{'Directory'}->{$k}->{'type'}}}, $k;
@@ -2317,9 +2776,16 @@ sub GetItemMetadata() {
 	exit(2);
     } else {
 	my $content  = $response->decoded_content();
+	if ($debug_xml) {
+	    print "URL: $url\n";
+	    print "===================================XML CUT=================================================\n";
+	    print $content;
+	    print "===================================XML END=================================================\n";
+	}	
+	
 	#my $vid = XMLin($hash,KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
 	#my $data = XMLin($content, KeyAttr => { Role => ''} );
-	my $data = XMLin($content);
+	my $data = XMLin(encode('utf8',$content));
 	return $data->{'Video'} if $data->{'Video'};
     }
 }
@@ -2353,7 +2819,15 @@ sub GetRecentlyAdded() {
 	    exit(2);
 	} else {
 	    my $content  = $response->decoded_content();
-	    my $data = XMLin($content, ForceArray => ['Video']);
+
+	    if ($debug_xml) {
+		print "URL: $url\n";
+		print "===================================XML CUT=================================================\n";
+		print $content;
+		print "===================================XML END=================================================\n";
+	    }
+	    
+	    my $data = XMLin(encode('utf8',$content), ForceArray => ['Video']);
 	    ## verify we are recieving what we expect. -- extra output for debugging
 	    if (!ref $data && $debug) {
 		print " result from $url is not in an expected format\n";
@@ -2415,7 +2889,6 @@ sub ProcessRAalerts() {
     # debug_done
     # alert_tag
     # alert_url
-    # alert_short
     my %notseen;
     foreach my $k ( sort keys %{$alerts}) {
 	$count++;
@@ -2443,7 +2916,7 @@ sub ProcessRAalerts() {
 
 	$alert_options->{'url'} = $alerts->{$k}->{'alert_url'} if $alerts->{$k}->{'alert_url'};
 	$alert_options->{'push_type'} = $push_type;
-
+	$alert_options->{'item_type'} = $alerts->{$k}->{'item_type'};
 	
 	## 'recently_added' table has columns for each provider -- we will notify and verify each provider has success. 
 	## TODO - extend this logic into the normal notifications
@@ -2453,7 +2926,7 @@ sub ProcessRAalerts() {
 	foreach my $provider (keys %{$notify}) {
 	    # provider is globaly enable and provider push type is enable or is file
 	    if (&ProviderEnabled($provider,$push_type)) {
-	    #if ( ( $notify->{$provider}->{'enabled'} ) && ( $notify->{$provider}->{$push_type} || $provider =~ /file/)) { 
+		#if ( ( $notify->{$provider}->{'enabled'} ) && ( $notify->{$provider}->{$push_type} || $provider =~ /file/)) { 
 		if ($ra_done->{$item_id}->{$provider}) {
 		    printf("%s: %-8s %s [%s]\n", scalar localtime($ra_done->{$item_id}->{'time'}) , uc($provider) , $debug_done, $done_keys->{$ra_done->{$item_id}->{$provider}}) if $debug;
 		} elsif ($is_old) {
@@ -2481,9 +2954,9 @@ sub GetNotifyfuncs() {
 	pushover => \&NotifyPushOver,
 	twitter => \&NotifyTwitter,
 	boxcar => \&NotifyBoxcar,
-	file => \&ConsoleLog,
+	file => \&NotifyFile,
 	GNTP => \&NotifyGNTP,
-	
+	EMAIL => \&NotifyEMAIL,
 	);
     my $error;
     ## this SHOULD never happen if the code is released -- this is just a reminder for whomever is adding a new provider in config.pl
@@ -2501,6 +2974,8 @@ sub GetPushTitles() {
     my  $push_type_display = ();
     $push_type_display->{'push_watched'} = 'Watched';
     $push_type_display->{'push_watching'} = 'Watching';
+    $push_type_display->{'push_paused'} = 'Paused';
+    $push_type_display->{'push_resumed'} = 'Resumed';
     $push_type_display->{'push_recentlyadded'} = 'New';
     
     foreach my $type (keys %{$push_type_display}) {
@@ -2604,9 +3079,9 @@ sub BackupSQlite() {
 		$do_backup=1;
 		$extra = "Do backup - older than allowed ($hum_diff > $hum_max)";
 	    } else {
-		$extra = "Backup is current ($hum_diff < $hum_max)" if $debug;
+		$extra = "Backup is current ($hum_diff < $hum_max)" if $debug && $options{'backup'};
 	    }
-	    printf("\n\t%-10s %-15s %s [%s]\n", uc($type), &durationrr($diff), $file, $extra) if $debug;
+	    printf("\n\t%-10s %-15s %s [%s]\n", uc($type), &durationrr($diff), $file, $extra) if $debug && $options{'backup'};
 	    
 	} else {
 	    print '* ' . uc($type) ." backup not found -- trying now\n";
@@ -2616,13 +3091,13 @@ sub BackupSQlite() {
 	    $keep = $backups->{$type}->{'keep'} if $backups->{$type}->{'keep'};
 	    
 	    if ($keep > 1) {
-		print "\t* Rotating files: keep $keep total\n" if $debug;
+		print "\t* Rotating files: keep $keep total\n"  if $debug && $options{'backup'};
 		for (my $count = $keep-1; $count >= 0; $count--) {
 		    my $to = $file .'.'. ($count+1);
 		    my $from = $file .'.'. ($count);
 		    $from = $file if $count == 0;
 		    if (-f $from) { 
-			print "\trotating $from -> $to \n" if $debug;
+			print "\trotating $from -> $to \n"  if $debug && $options{'backup'};
 			rename $from, $to; 
 		    }
 		}
@@ -2665,9 +3140,16 @@ sub myPlexToken() {
     
     
     #print $response->as_string;
-
+    
     if ($response->is_success) {
-	my $data = XMLin($response->decoded_content());
+	my $content = $response->decoded_content();
+	if ($debug_xml) {
+	    print "URL: $url\n";
+	    print "===================================XML CUT=================================================\n";
+	    print $content;
+	    print "===================================XML END=================================================\n";
+	}
+	my $data = XMLin(encode('utf8',$content));
 	return $data->{'authenticationToken'} if $data->{'authenticationToken'};
 	return $data->{'authentication-token'} if $data->{'authentication-token'};
     } else {
