@@ -2613,13 +2613,39 @@ sub info_from_xml() {
 
 sub RunTestNotify() {
     my $ntype = 'start'; ## default
-    $ntype = 'stop' if $options{test_notify} =~ /stop/;
-    $ntype = 'stop' if $options{test_notify} =~ /watched/;
     
-    $ntype = 'push_recentlyadded' if $options{test_notify} =~ /recent/;
+    my $map ={
+	'start' =>  'start',
+	'watching' =>  'start-watching',
+	'watched' =>  'stop-watched',
+	'stop' =>  'stop',
+	'pause' =>  'push_paused',
+	'resumed' =>  'push_resumed',
+	#'new' =>  'push_recentlyadded',
+	'recent' =>  'push_recentlyadded',
+    };
+    
+    if (!$options{test_notify} || !$map->{lc($options{test_notify})}) {
+	print "Usage: $0 --test_notify=[option]\n\n";
+	print "\t[option]\n";
+	print "\t" . join("\n\t", sort keys %{$map});
+	print "\n\n";
+	exit;
+    }
+    
+    $ntype = 'start' if $options{test_notify} =~ /start/i;
+    $ntype = 'start-watching' if $options{test_notify} =~ /watching/i;
+    $ntype = 'stop-watched' if $options{test_notify} =~ /watched/i;
+    $ntype = 'stop' if $options{test_notify} =~ /stop/i;
+    $ntype = 'push_paused' if $options{test_notify} =~ /pause/i;
+    $ntype = 'push_resumed' if $options{test_notify} =~ /resumed/i;
+    $ntype = 'push_recentlyadded' if $options{test_notify} =~ /recent|new/i;
+    
+    
     if ($ntype =~ /push_recentlyadded/) {
 	my $alerts = ();
-	$alerts->{'test'}->{'alert'} = $push_type_titles->{$ntype} .' test recently added alert';
+	$alerts->{'test'}->{'alert'} = "Title [PG-13] [2013] 108min";
+	$alerts->{'test'}->{'item_type'} = "Movie";
 	$alerts->{'test'}->{'item_id'} = 'test_item_id';
 	$alerts->{'test'}->{'debug_done'} = 'testing alert already done';
 	$alerts->{'test'}->{'alert_url'} = 'https://github.com/ljunkie/plexWatch';
