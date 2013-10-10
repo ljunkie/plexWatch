@@ -146,8 +146,8 @@ $debug_logging = 1; ## logs to $data_dir/debug.log ( only really helps debug IP 
     * RHEL/Centos - yum
     
     ```bash
-    yum -y install perl\(LWP::UserAgent\) perl\(XML::Simple\) \
-               perl\(DBI\) perl\(Time::Duration\)  perl\(Time::ParseDate\)
+    yum -y install perl\(LWP::UserAgent\) perl\(XML::Simple\) perl\(Pod::Usage\) \
+               perl\(DBI\) perl\(Time::Duration\)  perl\(Time::ParseDate\) perl\(DBD::SQLite\)
     ```
 
 5. **run** the script manually to verify it works: /opt/plexWatch/plexWatch.pl
