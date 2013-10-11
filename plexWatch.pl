@@ -1,17 +1,17 @@
 #!/usr/bin/perl
 
-my $version = '0.1.0-dev';
+my $version = '0.1.1';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-10-10 11:00 PST
+# Modified: 2013-10-11 10:10 PST
 #
 #  Version: $version
 # https://github.com/ljunkie/plexWatch
 ##########################################
 EOF
-
+	
 use strict;
 use LWP::UserAgent;
 use XML::Simple;
@@ -79,9 +79,11 @@ if ($server_log && !-f $server_log) {
 
 ## ONLY Load modules if used
 if (&ProviderEnabled('twitter')) {
+    require Net::Twitter::Lite;
     require Net::Twitter::Lite::WithAPIv1_1;
     require Net::OAuth;
     require Scalar::Util;
+    Net::Twitter::Lite->import();
     Net::Twitter::Lite::WithAPIv1_1->import(); 
     Net::OAuth->import();
     Scalar::Util->import('blessed');
@@ -95,8 +97,13 @@ if (&ProviderEnabled('GNTP')) {
 if (&ProviderEnabled('EMAIL')) {
     #require MIME::Lite; mime::lite sucks
     #MIME::Lite->import();
-    require Net::SMTP::TLS;
-    Net::SMTP::TLS->import();
+    if ($^O ne 'MSWin32') {
+	    require Net::SMTP::TLS;
+        Net::SMTP::TLS->import();
+    } else {
+ 	    require Net::SMTP;
+        Net::SMTP->import();
+ 	}
 }
 
 if ($log_client_ip) {
@@ -2271,6 +2278,16 @@ sub NotifyEMAIL() {
 	    
 	    eval {
 		my $mailer;
+		if ($^O eq 'MSWin32') {
+  		$mailer = new Net::SMTP(
+		    $email{'server'},
+		    ( $email{'server'} ? (Hello => $email{'server'}) : () ),
+		    ( $email{'port'} ? (Port => $email{'port'}) : () ),
+		    ( $email{'username'} ? (User => $email{'username'}) : () ),
+		    ( $email{'password'} ? (Password => $email{'password'}) : () ),
+		    ( $email{enable_tls}  ? () : (NoTLS => 1) ) ,
+		    );
+		} else {
 		$mailer = new Net::SMTP::TLS(
 		    $email{'server'},
 		    ( $email{'server'} ? (Hello => $email{'server'}) : () ),
@@ -2279,8 +2296,7 @@ sub NotifyEMAIL() {
 		    ( $email{'password'} ? (Password => $email{'password'}) : () ),
 		    ( $email{enable_tls}  ? () : (NoTLS => 1) ) ,
 		    );
-		
-		
+		}
 		$mailer->mail($email{'from'});
 		$mailer->to($email{'to'});
 		$mailer->data;
