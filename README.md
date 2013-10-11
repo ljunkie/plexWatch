@@ -1,7 +1,7 @@
-plexWatch - 0.1.1-DEV (2013-10-10)
+plexWatch - 0.1.1-DEV (2013-10-11)
 =========
 
-### Please use the Master branch - This is in an uknown state right now while I try and merge to branches for Linux/Windows 
+### This is a merger of linux/windows codebase. It *should* work
 
 
 
