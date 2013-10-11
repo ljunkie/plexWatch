@@ -1,17 +1,29 @@
 plexWatch - 0.1.1-DEV (2013-10-11)
 =========
-
-### This is a merger of linux/windows codebase. It *should* work
-
-
-
 ***Notify*** and Log ***'Now Playing'*** and ***'Watched'*** content from a Plex Media Server + ***'Recently Added'*** (...and more)
-
 
 [![Donate](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=CHRZ55VCAJSYG)
 
-http://forums.plexapp.com/index.php/topic/72552-plexwatch-plex-notify-script-send-push-alerts-on-new-sessions-and-stopped/
 
+**This is a merger of linux/windows codebase. It 'should' work**
+
+----------------
+
+### Need Help?
+* Linux Forum: http://forums.plexapp.com/index.php/topic/72552-plexwatch-plex-notify-script-send-push-alerts-on-new-sessions-and-stopped/
+* Windows Forum: http://forums.plexapp.com/index.php/topic/79616-plexwatch-windows-branch/
+
+### Want a frontend? ***plexWatch/Web***
+*  Download: https://github.com/e...se/plexWatchWeb
+*    Forums: http://forums.plexapp.com/index.php/topic/82819-plexwatchweb-a-web-front-end-for-plexwatch/
+*    ReadMe: https://github.com/e...aster/README.md
+*   ChangeLog: https://raw.github.c...ster/change.log
+*   Wiki: https://github.com/e...exWatchWeb/wiki
+*   Issues & Enhancements: https://github.com/e...sues?state=open
+ 
+----------------
+
+### Read More about plexWatch
 
 **Supported Push Notifications** 
 * https://pushover.net
