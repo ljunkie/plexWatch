@@ -14,12 +14,8 @@ plexWatch - 0.1.1-DEV (2013-10-11)
 * Windows Forum: http://forums.plexapp.com/index.php/topic/79616-plexwatch-windows-branch/
 
 ### Want a frontend? ***plexWatch/Web***
-*  Download: https://github.com/e...se/plexWatchWeb
+*  Download: https://github.com/ecleese/plexWatchWeb
 *    Forums: http://forums.plexapp.com/index.php/topic/82819-plexwatchweb-a-web-front-end-for-plexwatch/
-*    ReadMe: https://github.com/e...aster/README.md
-*   ChangeLog: https://raw.github.c...ster/change.log
-*   Wiki: https://github.com/e...exWatchWeb/wiki
-*   Issues & Enhancements: https://github.com/e...sues?state=open
  
 ----------------
 
