@@ -98,12 +98,12 @@ if (&ProviderEnabled('EMAIL')) {
     #require MIME::Lite; mime::lite sucks
     #MIME::Lite->import();
     if ($^O ne 'MSWin32') {
-	    require Net::SMTP::TLS;
+	require Net::SMTP::TLS;
         Net::SMTP::TLS->import();
     } else {
- 	    require Net::SMTP;
+	require Net::SMTP;
         Net::SMTP->import();
- 	}
+    }
 }
 
 if ($log_client_ip) {
@@ -2278,24 +2278,25 @@ sub NotifyEMAIL() {
 	    
 	    eval {
 		my $mailer;
-		if ($^O eq 'MSWin32') {
-  		$mailer = new Net::SMTP(
-		    $email{'server'},
-		    ( $email{'server'} ? (Hello => $email{'server'}) : () ),
-		    ( $email{'port'} ? (Port => $email{'port'}) : () ),
-		    ( $email{'username'} ? (User => $email{'username'}) : () ),
-		    ( $email{'password'} ? (Password => $email{'password'}) : () ),
-		    ( $email{enable_tls}  ? () : (NoTLS => 1) ) ,
-		    );
+		## windows Email TLS is built in to Net::SMTP
+		if ($^O eq 'MSWin32') { 
+		    $mailer = new Net::SMTP(
+			$email{'server'},
+			( $email{'server'} ? (Hello => $email{'server'}) : () ),
+			( $email{'port'} ? (Port => $email{'port'}) : () ),
+			( $email{'username'} ? (User => $email{'username'}) : () ),
+			( $email{'password'} ? (Password => $email{'password'}) : () ),
+			( $email{enable_tls}  ? () : (NoTLS => 1) ) ,
+			);
 		} else {
-		$mailer = new Net::SMTP::TLS(
-		    $email{'server'},
-		    ( $email{'server'} ? (Hello => $email{'server'}) : () ),
-		    ( $email{'port'} ? (Port => $email{'port'}) : () ),
-		    ( $email{'username'} ? (User => $email{'username'}) : () ),
-		    ( $email{'password'} ? (Password => $email{'password'}) : () ),
-		    ( $email{enable_tls}  ? () : (NoTLS => 1) ) ,
-		    );
+		    $mailer = new Net::SMTP::TLS(
+			$email{'server'},
+			( $email{'server'} ? (Hello => $email{'server'}) : () ),
+			( $email{'port'} ? (Port => $email{'port'}) : () ),
+			( $email{'username'} ? (User => $email{'username'}) : () ),
+			( $email{'password'} ? (Password => $email{'password'}) : () ),
+			( $email{enable_tls}  ? () : (NoTLS => 1) ) ,
+			);
 		}
 		$mailer->mail($email{'from'});
 		$mailer->to($email{'to'});
