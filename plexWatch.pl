@@ -221,6 +221,9 @@ my $script_fh;
 ## END
 
 my $dbh = &initDB(); ## Initialize sqlite db - last
+
+if (&getLastGroupedTime() == 0) {    &UpdateGroupedTable;} ## update DB table if first run.
+
 &BackupSQlite; ## check if the SQLdb needs to be backed up
 
 my $PMS_token = &PMSToken(); # sets token if required
@@ -918,7 +921,7 @@ sub ProcessStart() {
 sub ProcessGrouped() {
     my $hash_ref = shift;
     my %seen = %$hash_ref;
-    
+
     my $insert = $dbh->prepare("insert into grouped (session_id,time,stopped,paused,ip_address,title,platform,user,orig_title,orig_title_ep,genre,episode,season,summary,rating,year,xml) ".
 			       "values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
     my $update = $dbh->prepare("update grouped set stopped = ?, paused = ?, ip_address = ?, platform = ?, xml = ? where id = ?");
@@ -928,7 +931,6 @@ sub ProcessGrouped() {
     
     foreach my $k (sort {  $seen{$a}->{time} cmp $seen{$b}->{'time'}  } (keys %seen) ) {
 	my $info = $seen{$k};
-	
 	## check if record exists
 	my $check = $dbh->prepare('select id,stopped,paused from grouped where session_id = ? and time = ?');
 	$check->execute($info->{'db_key'},$info->{'time'}) or die("Unable to execute query: $dbh->errstr\n");
@@ -1418,18 +1420,6 @@ sub initDB() {
     
     &initDBtable($dbh,$dbtable,\@dbcol);
     
-    
-    ## grouped tabled -- needs session_id, time -- then whatever else the @dbcol has. This way it will get changes to the @dbcols easier
-    my @grouped = (
-	{ 'name' => 'session_id', 'definition' => 'text', }, 
-	{ 'name' => 'time', 'definition' => 'timestamp', }, 
-	);
-    foreach my $o (@dbcol) {
-	push (@grouped, $o);
-    }
-    &initDBtable($dbh,"grouped",\@grouped); ## grouping table should "always" be indentical to processed. Will makt it easier for eleese and plexWatch/web
-    
-    
     ## check definitions
     my %dbcol_exists = ();
     
@@ -1482,6 +1472,7 @@ sub initDB() {
     ## future tables..
     
     &DB_ra_table($dbh);  ## verify/create RecentlyAdded table
+    &DB_grouped_table($dbh);  ## verify/create grouped
     
     return $dbh;
 }
@@ -1571,12 +1562,112 @@ sub DB_ra_table() {
     return $dbh;
 }
 
+sub DB_grouped_table() {
+    ## verify Recnetly Added table
+    my $dbh = shift;
+    my $dbtable = 'grouped';
+    my $sth = $dbh->prepare("SELECT name FROM SQLITE_MASTER");
+    $sth->execute or die("Unable to execute query: $dbh->errstr\n");
+    my $created = 0;
+    #ALTER TABLE Name ADD COLUMN new_column INTEGER DEFAULT 0
+    my %tables;
+    while (my @tmp = $sth->fetchrow_array) {    foreach (@tmp) {        $tables{$_} = $_;    }}
+    if ($tables{$dbtable}) { }
+    else {
+	my $cmd = "CREATE TABLE $dbtable (id INTEGER PRIMARY KEY );";
+        my $result_code = $dbh->do($cmd) or die("Unable to prepare execute $cmd: $dbh->errstr\n");
+	$created = 1;
+    }
+
+    ## Add new columns/indexes on the fly  -- and change definitions
+    my @dbcol = (
+	{ 'name' => 'session_id', 'definition' => 'text', }, 
+	{ 'name' => 'time', 'definition' => 'timestamp', }, 
+	{ 'name' => 'user', 'definition' => 'text', }, 
+	{ 'name' => 'platform', 'definition' => 'text', }, 
+	{ 'name' => 'title', 'definition' => 'text', }, 
+	{ 'name' => 'orig_title', 'definition' => 'text', },
+	{ 'name' => 'orig_title_ep', 'definition' => 'text', },
+	{ 'name' => 'episode', 'definition' => 'integer', },
+	{ 'name' => 'season', 'definition' => 'integer', },
+	{ 'name' => 'year', 'definition' => 'text', },
+	{ 'name' => 'rating', 'definition' => 'text', },
+	{ 'name' => 'genre', 'definition' => 'text', },
+	{ 'name' => 'summary', 'definition' => 'text', },
+	{ 'name' => 'notified', 'definition' => 'INTEGER', },
+	{ 'name' => 'stopped', 'definition' => 'timestamp',},
+	{ 'name' => 'paused', 'definition' => 'timestamp',},
+	{ 'name' => 'paused_counter', 'definition' => 'INTEGER',},
+	{ 'name' => 'xml', 'definition' => 'text',},
+	{ 'name' => 'ip_address', 'definition' => 'text',},
+	);
+    
+    my @dbidx = (
+	{ 'name' => 'GuserIdx', 'table' => 'user', },
+	{ 'name' => 'GtimeIdx', 'table' => 'time', },
+	{ 'name' => 'GstoppedIdx', 'table' => 'stopped', },
+	{ 'name' => 'GnotifiedIdx', 'table' => 'notified', },
+	); 
+    
+    &initDBtable($dbh,$dbtable,\@dbcol); ## this will just add the columns if needed ( already created the dbtable)
+    
+    ## check definitions
+    my %dbcol_exists = ();
+    
+    for ( @{ $dbh->selectall_arrayref( "PRAGMA TABLE_INFO($dbtable)") } ) { 
+	$dbcol_exists{$_->[1]} = $_->[2]; 
+    };
+    
+    ## alter table defintions if needed
+    my $alter_def = 0;
+    for my $col ( @dbcol ) {
+	if ($dbcol_exists{$col->{'name'}} && $dbcol_exists{$col->{'name'}} ne $col->{'definition'}) {	    $alter_def =1;	}
+    }
+    
+    if ($alter_def) {
+	my $dmsg = "New Table definitions.. upgrading DB";
+	&DebugLog($dmsg,1) if $dmsg;
+	
+	$dbh->begin_work;
+	
+	eval {
+	    local $dbh->{RaiseError} = 1;
+	    my $tmp_table = 'tmp_update_table';
+	    &initDBtable($dbh,$tmp_table,\@dbcol); ## create DB table with new sturction
+	    $dbh->do("INSERT INTO $tmp_table SELECT * FROM $dbtable");
+	    $dbh->do("DROP TABLE $dbtable");
+	    $dbh->do("ALTER TABLE $tmp_table RENAME TO $dbtable");
+	    $dbh->commit; 
+	};
+	if ($@) {
+	    $dmsg = "Could not upgrade table definitions - Transaction aborted because $@";
+	    &DebugLog($dmsg,1) if $dmsg;
+	    eval { $dbh->rollback };
+	}
+	$dmsg = "DB update DONE";
+	&DebugLog($dmsg,1) if $dmsg;
+    }
+    
+    ## now verify indexes
+    my %dbidx_exists = ();
+    for ( @{ $dbh->selectall_arrayref( "PRAGMA INDEX_LIST($dbtable)") } ) { 
+	$dbidx_exists{$_->[1]} = 1; };
+    for my $idx ( @dbidx ) {
+	if ($debug) { print "CREATE INDEX $idx->{'name'} ON $dbtable ($idx->{'table'})\n" unless ( $dbidx_exists{$idx->{'name'}} ); }
+	$dbh->do("CREATE INDEX $idx->{'name'} ON $dbtable ($idx->{'table'})")
+	    unless ( $dbidx_exists{$idx->{'name'}} );
+    }
+        
+    return $dbh;
+}
+
+
 sub initDBtable() {
     my $dbh = shift;
     my $dbtable = shift;
     my $col = shift;
     my @dbcol = @$col;
-    
+    my $created = 0;
     my $sth = $dbh->prepare("SELECT name FROM SQLITE_MASTER");
     $sth->execute or die("Unable to execute query: $dbh->errstr\n");
     my %tables;
@@ -1584,12 +1675,8 @@ sub initDBtable() {
     if ($tables{$dbtable}) {    }
     else {
 	my $cmd ='';
-	if ($dbtable eq 'processed') {
-	    $cmd = "CREATE TABLE $dbtable (id INTEGER PRIMARY KEY, session_id text, time timestamp default (strftime('%s', 'now')) );";
-	} else {
-	    ## other tables will just get a default ID for primary ID.. must defined all other fields
-	    $cmd = "CREATE TABLE $dbtable (id INTEGER PRIMARY KEY );";
-	}
+	$cmd = "CREATE TABLE $dbtable (id INTEGER PRIMARY KEY, session_id text, time timestamp default (strftime('%s', 'now')) );";
+	$created = 1;
         my $result_code = $dbh->do($cmd) or die("Unable to prepare execute $cmd: $dbh->errstr\n");
     }
     
@@ -1602,6 +1689,7 @@ sub initDBtable() {
 	    $dbh->do("ALTER TABLE $dbtable ADD COLUMN $col->{'name'} $col->{'definition'}");
 	}
     }
+    return $created;
 }
 
 sub NotifyTwitter() {
@@ -3102,7 +3190,7 @@ sub Watched() {
 	    $limit_start = localtime($start);  
 	    $limit_end = localtime($stop);
 	} else {
-	    &UpdateGroupedTable();
+	    &UpdateGroupedTable;
 	}
 	
 	
@@ -3128,7 +3216,7 @@ sub Watched() {
 	$print_stmt .= "\n"; ## clear any print_stmt now
 	
 	
-	print $print_stmt if !$update_grouped_table || $debug; #print output if we are not updating the table ( job )
+	print $print_stmt if !$update_grouped_table; #print output if we are not updating the table ( job )
 	
 	my %seen = ();
 	my %seen_epoch = ();
@@ -3205,7 +3293,7 @@ sub Watched() {
 			my $d_out = "$is_watched->{$k}->{title} watched 100\% by $user on $year-$month-$day - starting a new line (more than once)\n";
 			$completed{$orig_skey}++;
 			$is_completed = 1; ## skey-incremented -- we can skip other skey checks
-			&DebugLog($d_out) if $completed{$orig_skey} > 1;
+			&DebugLog($d_out) if $completed{$orig_skey} > 1 && !$update_grouped_table;
 		    }
 		}
 		# end 100% grouping
@@ -3220,7 +3308,7 @@ sub Watched() {
 		    if ($diff > (60*60)*($watched_grouping_maxhr)) {
 			my $d_out = &durationrr($diff) . 
 			    " between start,restart of '$is_watched->{$k}->{title}' for $user on $year-$month-$day: starting a new line\n";
-			&DebugLog($d_out);
+			&DebugLog($d_out) if !$update_grouped_table;
 			$skey = $orig_skey . $is_watched->{$k}->{time}; ## increment the skey
 			$seen_cur{$orig_skey} = $skey;                  ## set what the skey will be for future
 		    } 
@@ -3233,7 +3321,7 @@ sub Watched() {
 		$stats{$user}->{'duration'}->{$serial} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
 		## end
 		
-		next if !$options{'watched'};
+		next if !$options{'watched'} && !$update_grouped_table;
 		next if $is_watched->{$k}->{xml} =~ /<opt><\/opt>/i; ## bug -- fixed in 0.0.19
 		my $paused = &getSecPaused($k);
 
@@ -3314,7 +3402,9 @@ sub Watched() {
 	else {	    $print_stmt .= "\n* nothing watched\n";	}
 	
 	## Grouping Watched TITLE by day - default
-	if ($update_grouped_table) {	    &ProcessGrouped(\%seen);	}
+	if ($update_grouped_table) {	 
+	    &ProcessGrouped(\%seen);	
+	}
 	
 	## show stats if --stats
 	if ($options{stats}) {
@@ -3333,7 +3423,7 @@ sub Watched() {
 		$print_stmt .= "\n";
 	    }
 	}
-	
+	$print_stmt .= "\n";
 	print $print_stmt if !$update_grouped_table; #print output if we are not updating the table ( job )
 	
     }
