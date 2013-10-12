@@ -1595,6 +1595,7 @@ sub initDB() {
 	); 
     
     &initDBtable($dbh,$dbtable,\@dbcol);
+    &initDBtable($dbh,"grouped",\@dbcol); ## grouping table should "always" be indentical to processed. Will makt it easier for eleese and plexWatch/web
     
     
     ## check definitions
