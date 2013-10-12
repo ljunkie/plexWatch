@@ -1,11 +1,11 @@
 #!/usr/bin/perl
 
-my $version = '0.1.1';
+my $version = '0.1.2';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-10-11 10:10 PST
+# Modified: 2013-10-12 15:02 PST
 #
 #  Version: $version
 # https://github.com/ljunkie/plexWatch
@@ -424,246 +424,12 @@ if ( ($options{'watched'} || $options{'watching'} || $options{'stats'}) && $opti
 }
 
 ## debug for now -- force updating the watched table
-my $update_grouped_table = 0;
 
 ####################################################################
 ## print all watched content 
 ##--watched
-if ($options{'watched'} || $options{'stats'} || $update_grouped_table) {
-    my $print_stmt;    
-    my $stop = time();
-    my ($start,$limit_start,$limit_end);
-    
-    if ($options{start}) {
-	my $v = $options{start};
-	my $now = time();
-    
-	## TODO - implememnt parsedate for windows
-	if ($^O ne 'MSWin32') {
-		$now = parsedate('today at midnight', FUZZY=>1) 	if ($v !~ /now/i);
-		if ($start = parsedate($v, FUZZY=>1, NOW => $now)) {	    $limit_start = localtime($start);	}
-		}
-	}
-    
-    if ($options{stop}) {
-	my $v = $options{stop};
-	my $now = time();
-	
-	## TODO - implememnt parsedate for windows
-		if ($^O ne 'MSWin32') {
-		$now = parsedate('today at midnight', FUZZY=>1) if ($v !~ /now/i);
-		if ($stop = parsedate($v, FUZZY=>1, NOW => $now)) {	    $limit_end = localtime($stop);	}
-		}
-	}
-    
-    my $is_watched = &GetWatched($start,$stop);
-    
-    ## already watched.
 
-    if ($options{'watched'}) {
-	$print_stmt .= sprintf ("\n======================================== %s ========================================\n",'Watched');
-    }
-    $print_stmt .= "\nDate Range: ";
-    if ($limit_start) {	$print_stmt .= $limit_start;    } 
-    else {	$print_stmt .= "Anytime";    }
-    $print_stmt .= ' through ';
-    
-    if ($limit_end) {	$print_stmt .= $limit_end;    } 
-    else {	$print_stmt .= "Now";    }
-    $print_stmt .= "\n"; ## clear any print_stmt now
-
-    print $print_stmt if !$update_grouped_table; #print output if we are not updating the table ( job )
-
-    my %seen = ();
-    my %seen_epoch = ();
-    my %seen_cur = ();
-    my %seen_user = ();
-    my %stats = ();
-    my $ntype = 'watched';
-    my %completed = ();
-    my %seenc = (); ## testing
-    if (keys %{$is_watched}) {
-        $print_stmt = ""; #clear the print
-	foreach my $k (sort {$is_watched->{$a}->{user} cmp $is_watched->{$b}->{'user'} || 
-				 $is_watched->{$a}->{time} cmp $is_watched->{$b}->{'time'} } (keys %{$is_watched}) ) {
-	    ## use display name 
-	    my ($user,$orig_user) = &FriendlyName($is_watched->{$k}->{user},$is_watched->{$k}->{platform});
-	    
-	    ## skip/exclude users --user/--exclude_user
-	    my $skip = 1;
-	    ## --exclude_user array ref
-	    next if ( grep { $_ =~ /$is_watched->{$k}->{'user'}/i } @{$options{'exclude_user'}});
-	    next if ( $user  && grep { $_ =~ /^$user$/i } @{$options{'exclude_user'}});
-	    
-	    if ($options{'user'}) {
-		$skip = 0 if $user =~ /^$options{'user'}$/i; ## user display (friendly) matches specified 
-		$skip = 0 if $orig_user =~ /^$options{'user'}$/i; ## user (non friendly) matches specified
-	    }  else {	$skip = 0;    }
-
-	    next if $skip;
-
-	    ## only show one watched status on movie/show per day (default) -- duration will be calculated from start/stop on each watch/resume
-	    ## --nogrouping will display movie as many times as it has been started on the same day.
-	    
-	    ## to cleanup - maybe subroutine
-	    my ($sec, $min, $hour, $day,$month,$year) = (localtime($is_watched->{$k}->{time}))[0,1,2,3,4,5]; 
-	    my $serial = timelocal(0, 0, 0, $day, $month, $year);
-	    $year += 1900;
-	    $month += 1;
-	    ## TODO - implememnt parsedate for windows
-	    #my $serial = "$year$month$day";
-	    # I can probably get rid of this since the serial above works for both
-	    if ($^O ne 'MSWin32') {
-		$serial = parsedate("$year-$month-$day 00:00:00");
-	    }
-	    #my $skey = $is_watched->{$k}->{user}.$year.$month.$day.$is_watched->{$k}->{title};
-	    my $skey = $user.$year.$month.$day.$is_watched->{$k}->{title};
-	    
-	    ## get previous day -- see if video same title was watched then -- if so -- group them together for display purposes. stats and --nogrouping will still show the break
-	    my ($sec2, $min2, $hour2, $day2,$month2,$year2) = (localtime($is_watched->{$k}->{time}-86400))[0,1,2,3,4,5]; 
-	    $year2 += 1900;
-	    $month2 += 1;
-	    
-
-	    #my $skey2 = $is_watched->{$k}->{user}.$year2.$month2.$day2.$is_watched->{$k}->{title};
-	    my $skey2 = $user.$year2.$month2.$day2.$is_watched->{$k}->{title};
-	    if ($seen{$skey2}) {		$skey = $skey2;	    }
-	    
-	    my $orig_skey = $skey; ## DO NOT MODIFY THIS
-
-	    
-	    ## Do NOT group content if the percent watched is 100% -- this will group everything up to 100% and start a new line...
-	    #    * will now show that the viewer had watched the video completely (line1) and restarted it (line2)
-	    
-	    #just testing out grouping if percent_complete == 100
-	    # if ($seenc{$orig_skey} && $seenc{$orig_skey} == 2) {$info->{'percent_complete'}  = 100;  }
-	    # if ($seenc{$orig_skey} && $seenc{$orig_skey} == 5) {$info->{'percent_complete'}  = 100;  }
-	    # $seenc{$orig_skey}++;
-	    
-	    my $is_completed = 0;
-	    if ($watched_show_completed) {
-		my $paused = &getSecPaused($k);
-		my $info = &info_from_xml($is_watched->{$k}->{'xml'},$ntype,$is_watched->{$k}->{'time'},$is_watched->{$k}->{'stopped'},$paused);
-		$skey = $skey . $completed{$orig_skey} if $completed{$orig_skey};
-		if ($info->{'percent_complete'} > 99) {
-		    my $d_out = "$is_watched->{$k}->{title} watched 100\% by $user on $year-$month-$day - starting a new line (more than once)\n";
-		    $completed{$orig_skey}++;
-		    $is_completed = 1; ## skey-incremented -- we can skip other skey checks
-		    &DebugLog($d_out) if $completed{$orig_skey} > 1;
-		}
-	    }
-	    # end 100% grouping
-	    
-	    ## split lines if start/restart > $watched_grouping_maxhr
-	    #    * do not just blindly group by day.. the start/restart should be NO MORE than a few hours apart ($watched_grouping_maxhr)
-	    if (!$is_completed) {
-		$skey = $seen_cur{$orig_skey}  if $seen_cur{$orig_skey};                 ## if we have set $seen_cur - reset skey to that
-		$seen_epoch{$skey} = $is_watched->{$k}->{time}  if !$seen_epoch{$skey};  ## set epoch for skey (if not set)
-		my $diff = $is_watched->{$k}->{time}-$seen_epoch{$skey};                 ## diff between last start and this start
-		
-		if ($diff > (60*60)*($watched_grouping_maxhr)) {
-		    my $d_out = &durationrr($diff) . 
-			" between start,restart of '$is_watched->{$k}->{title}' for $user on $year-$month-$day: starting a new line\n";
-		    &DebugLog($d_out);
-		    $skey = $orig_skey . $is_watched->{$k}->{time}; ## increment the skey
-		    $seen_cur{$orig_skey} = $skey;                  ## set what the skey will be for future
-		} 
-		$seen_epoch{$skey} = $is_watched->{$k}->{time};  ## set the last epoch seen for this skey
-	    }
-	    ## END split if > $watched_grouping_maxhr
-	    
-	    ## stat -- quick and dirty -- to clean up later
-	    $stats{$user}->{'total_duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
-	    $stats{$user}->{'duration'}->{$serial} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
-	    ## end
-	    
-	    next if !$options{'watched'};
-	    next if $is_watched->{$k}->{xml} =~ /<opt><\/opt>/i; ## bug -- fixed in 0.0.19
-	    my $paused = &getSecPaused($k);
-	    if ($options{'nogrouping'}) {
-		if (!$seen_user{$user}) {
-		    $seen_user{$user} = 1;
-		    $print_stmt .= "\nUser: " . $user;
-		    $print_stmt .= ' ['. $orig_user .']' if $user ne $orig_user;
-		    $print_stmt .= "\n";
-		}
-		my $time = localtime ($is_watched->{$k}->{time} );
-		my $info = &info_from_xml($is_watched->{$k}->{'xml'},$ntype,$is_watched->{$k}->{'time'},$is_watched->{$k}->{'stopped'},$paused);
-		$info->{'ip_address'} = $is_watched->{$k}->{ip_address};
-		my $alert = &Notify($info,1); ## only return formated alert
-		$print_stmt .= sprintf(" %s: %s\n",$time, $alert);
-	    } else {
-		if (!$seen{$skey}) {
-		    $seen{$skey}->{'ip_address'} = $is_watched->{$k}->{ip_address};
-		    $seen{$skey}->{'time'} = $is_watched->{$k}->{time};
-		    $seen{$skey}->{'xml'} = $is_watched->{$k}->{xml};
-		    $seen{$skey}->{'user'} = $user;
-		    $seen{$skey}->{'orig_user'} = $orig_user;
-		    $seen{$skey}->{'stopped'} = $is_watched->{$k}->{stopped};
-		    if (!$count_paused) {
-			$seen{$skey}->{'duration'} += ($is_watched->{$k}->{stopped}-$is_watched->{$k}->{time})-$paused;
-		    } else {
-			$seen{$skey}->{'duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
-		    }
-
-		} else {
-		    ## if same user/same movie/same day -- append duration -- must of been resumed
-		    $seen{$skey}->{'duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
-		    ## update the group with the most recent XML
-		    $seen{$skey}->{'xml'} = $is_watched->{$k}->{xml};
-		    
-		    if ($is_watched->{$k}->{stopped} > $seen{$skey}->{'stopped'}) {
-			$seen{$skey}->{'stopped'} = $is_watched->{$k}->{stopped}; ## include max stopped in case someone wants to display it
-		    }
-		}
-	    }
-	}
-    } else {	    $print_stmt .= "\n* nothing watched\n";	}
-    
-    ## Grouping Watched TITLE by day - default
-    if (!$options{'nogrouping'}) {
-	foreach my $k (sort { 
-	    $seen{$a}->{user} cmp $seen{$b}->{'user'} ||
-		$seen{$a}->{time} cmp $seen{$b}->{'time'} 
-		       } (keys %seen) ) {
-	    if (!$seen_user{$seen{$k}->{user}}) {
-		$seen_user{$seen{$k}->{user}} = 1;
-		$print_stmt .= "\nUser: " . $seen{$k}->{user};
-		$print_stmt .= ' ['. $seen{$k}->{orig_user} .']' if $seen{$k}->{user} ne $seen{$k}->{orig_user};
-		$print_stmt .= "\n";
-	    }
-	    my $time = localtime ($seen{$k}->{time} );
-	    
-	    my $info = &info_from_xml($seen{$k}->{xml},$ntype,$seen{$k}->{'time'},$seen{$k}->{'stopped'},0,$seen{$k}->{'duration'});
-	    $info->{'ip_address'} = $seen{$k}->{ip_address};
-	    my $alert = &Notify($info,1); ## only return formated alert
-	    $print_stmt .= sprintf(" %s: %s\n",$time, $alert);
-	}
-    }
-    $print_stmt .= "\n";
-    
-    ## show stats if --stats
-    if ($options{stats}) {
-	$print_stmt .=f ("\n======================================== %s ========================================\n",'Stats');
-	foreach my $user (keys %stats) {
-	    $print_stmt .=f ("user: %s's total duration %s \n", $user, duration_exact($stats{$user}->{total_duration}));
-	    foreach my $epoch (sort keys %{$stats{$user}->{duration}}) {
-			my $h_date;
-			if ($^O eq 'MSWin32') {
-				$h_date = strftime( "%a %b %d %Y", localtime($epoch) );
-			} else {
-				$h_date = strftime "%a %b %e %Y", localtime($epoch);
-			}
-			$print_stmt .=f (" %s: %s %s\n", $h_date, $user, duration_exact($stats{$user}->{duration}->{$epoch}));
-	    }
-	    $print_stmt .= "\n";
-	}
-    }
-
-    print $print_stmt if !$update_grouped_table; #print output if we are not updating the table ( job )
-
-}
-
+&ShowWatched;
 
 ## no options -- we can continue.. otherwise --stats, --watched, --watching or --notify MUST be specified
 if (%options && !$options{'notify'} && !$options{'stats'} && !$options{'watched'} && !$options{'watching'} && !$options{'recently_added'} ) {
@@ -679,8 +445,7 @@ if ($options{'watching'} && !$options{'notify'}) {
 } 
 elsif (!%options) {
     $options{'notify'} = 1;
-}
-			   
+}    
 
 #################################################################
 ## Notify -notify || no options = notify on watch/stopped streams
@@ -689,21 +454,21 @@ if ($options{'notify'}) {
     my $live = &GetSessions();    ## query API for current streams
     my $started= &GetStarted();   ## query streams already started/not stopped
     my $playing = ();             ## container of now playing id's - used for stopped status/notification
-
+    
     
     ###########################################################################
     ## nothing being watched.. verify all notification went out
     ## this shouldn't happen ( only happened during development when I was testing -- but just in case )
     #### to fix
-
+    
     ## Quick hack to notify stopped content before start -- get a list of playing content
     foreach my $k (keys %{$live}) {
 	my $user = (split('\@',$live->{$k}->{User}->{title}))[0];
- 	if (!$user) {	$user = 'Local';    }
+	if (!$user) {	$user = 'Local';    }
 	my $db_key = $k . '_' . $live->{$k}->{key} . '_' . $user;
- 	$playing->{$db_key} = 1;
+	$playing->{$db_key} = 1;
     }    
-
+    
     ## make sure we send out notifications -- this can happen when people call --watching and a new video started or stopped before --notify was called
     my $did_unnotify = 0;
     if ($options{'notify'} != 2) {
@@ -724,7 +489,7 @@ if ($options{'notify'}) {
 	}
     }
     $started= &GetStarted() if $did_unnotify; ## refresh started if we notified
-
+    
     ## Notify on any Stop
     ## Iterate through all non-stopped content and notify if not playing
     if (ref($started)) {
@@ -732,7 +497,7 @@ if ($options{'notify'}) {
 	    if (!$playing->{$k}) {
 		my $start_epoch = $started->{$k}->{time} if $started->{$k}->{time};
 		my $stop_epoch = time();
-
+		
 		## process the update - need to supply the original XML (as an xml_ref) and session_id
 		my $xml_ref = XMLin(encode('utf8',$started->{$k}->{'xml'}),KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
 		$xml_ref->{Player}->{'state'} = 'stopped'; # force state as 'stopped' (since this XML is from the DB)
@@ -754,7 +519,7 @@ if ($options{'notify'}) {
 	my $start_epoch = time();
 	my $stop_epoch = ''; ## not stopped yet
 	my $info = &info_from_xml(XMLout($live->{$k}),'start',$start_epoch,$stop_epoch,0);
-
+	
 	## for insert 
 	my $db_key = $k . '_' . $live->{$k}->{key} . '_' . $info->{orig_user};
 	
@@ -820,7 +585,7 @@ if ($options{'watching'}) {
     my $in_progress = &GetInProgress();
     my $live = &GetSessions();    ## query API for current streams
     my $found_live = 0;    
-
+    
     printf ("\n======================================= %s ========================================",'Watching');
     
     my %seen = ();
@@ -835,7 +600,7 @@ if ($options{'watching'}) {
 	    $found_live = 1;
 	    ## use display name 
 	    my ($user,$orig_user) = &FriendlyName($in_progress->{$k}->{user},$in_progress->{$k}->{platform});
-
+	    
 	    ## skip/exclude users --user/--exclude_user
 	    my $skip = 1;
 	    ## --exclude_user array ref
@@ -858,19 +623,19 @@ if ($options{'watching'}) {
 	    }
 	    
 	    my $time = localtime ($in_progress->{$k}->{time} );
-
+	    
 	    ## switched to LIVE info
 	    #my $info = &info_from_xml($in_progress->{$k}->{'xml'},'watching',$in_progress->{$k}->{time});
-
-
+	    
+	    
 	    my $paused = &getSecPaused($k);
 	    my $info = &info_from_xml(XMLout($live->{$live_key}),'watching',$in_progress->{$k}->{time},time(),$paused);
-
+	    
 	    $info->{'ip_address'} = $in_progress->{$k}->{ip_address};
-
+	    
 	    ## disabled - --watching calls --notify ( so this is redundant)
 	    #&ProcessUpdate($live->{$live_key},$k); ## update XML  ## probably redundant as --watching calls --notify now -- (TODO)
-
+	    
 	    ## overwrite progress and time_left from live -- should be pulling live xml above at some point
 	    #$info->{'progress'} = &durationrr($live->{$live_key}->{viewOffset}/1000);
 	    #$info->{'time_left'} = &durationrr(($info->{raw_length}/1000)-($live->{$live_key}->{viewOffset}/1000));
@@ -888,9 +653,9 @@ if ($options{'watching'}) {
 
 sub formatAlert() {
     my $info = shift;
-
+    
     return ($info) if !ref($info);
-
+    
     my $provider = shift;
     my $provider_multi = shift;
     
@@ -913,7 +678,7 @@ sub formatAlert() {
 	}
     }
     if ($debug) { print "\nformat: $format\n";}
-
+    
     my $regex = join "|", keys %{$info};
     $regex = qr/$regex/;
     $format =~ s/{($regex)}/$info->{$1}/g; ## regex replace variables
@@ -922,7 +687,7 @@ sub formatAlert() {
     #$format =~ s/[^[:ascii:]]+//g;        ## remove non ascii ( now UTF8 )
     $format =~ s/\\n/\n/g;                ## allow \n to be an actual new line
     $format =~ s/{newline}/\n/g;                ## allow \n to be an actual new line
-
+    
     
     ## special for now.. might make ths more useful -- just thrown together since email can include a ton of info
     if ($format =~ /{all_details}/i) {
@@ -950,7 +715,7 @@ sub ConsoleLog() {
     my $msg = shift;
     my $alert_options = shift;
     my $print = shift;
-
+    
     my $prefix = '';
     
     if (ref($alert_options)) {
@@ -966,12 +731,12 @@ sub ConsoleLog() {
 	$prefix .= ucfirst($alert_options->{'item_type'}) . ' ' if $alert_options->{'item_type'};
 	$prefix =~ s/\s+$//g;
     }
-
+    
     $msg = $prefix . ': ' . $msg if $prefix;
     
     my $console;
     my $date = localtime;
-
+    
     if ($debug || $print) {
 	$console = &consoletxt("$date: DEBUG: $msg"); 
 	print   $console ."\n";   
@@ -995,13 +760,13 @@ sub ConsoleLog() {
 
 sub NotifyFile() {
     my $provider = 'file';
-
+    
     #my $msg = shift;
     my $info = shift;
     my ($alert) = &formatAlert($info,$provider);
-
+    
     my $msg = $alert;
-
+    
     my $alert_options = shift;
     my $print = shift;
     
@@ -1017,7 +782,7 @@ sub NotifyFile() {
     } else {
 	$prefix .= $push_type_titles->{$alert_options->{'push_type'}} . ' ' if $alert_options->{'push_type'};
     }
-
+    
     ## append type (movie, episode) if supplied
     $prefix .= ucfirst($alert_options->{'item_type'}) . ' ' if $alert_options->{'item_type'};
     $prefix =~ s/\s+$//g if $prefix;
@@ -1076,8 +841,8 @@ sub Notify() {
     #&DebugLog($dinfo . ': '."ret_alert:$ret_alert, state_change:$state_change");
     
     my $type = $info->{'ntype'};
-
-
+    
+    
     ## to fix
     if ($state_change) {
 	$type = "resumed" if $info->{'state'} =~ /playing/i;
@@ -1094,14 +859,14 @@ sub Notify() {
     
     ## only return the alert - do not notify -- used for CLI to keep formatting the same
     return &consoletxt($alert) if $ret_alert;
-        
+    
     my $push_type;
     
     if ($type =~ /start/)  { $push_type = 'push_watching';  }
     if ($type =~ /stop/)   { $push_type = 'push_watched';   } 
     if ($type =~ /resume/) { $push_type = 'push_resumed';   } 
     if ($type =~ /pause/)  { $push_type = 'push_paused';    } 
-
+    
     &DebugLog($dinfo . ': '.'push_type:' . $push_type);
     
     #my $alert_options = ();
@@ -1131,7 +896,7 @@ sub ProviderEnabled() {
     ## check provider and push type if supplied
     else {
 	## provider is multi ( GNTP )
-        foreach my $k (keys %{$notify->{$provider}}) {
+	foreach my $k (keys %{$notify->{$provider}}) {
 	    ## for now - we will just return 1 if any of them are enabled --- the NotifySUB of the provider will handle the multiple values
 	    return 1 if (ref $notify->{$provider}->{$k} && $notify->{$provider}->{$k}->{'enabled'}  &&  $notify->{$provider}->{$k}->{$push_type});
 	}
@@ -1150,12 +915,48 @@ sub ProcessStart() {
     return  $dbh->sqlite_last_insert_rowid();
 }
 
+sub ProcessGrouped() {
+    my $hash_ref = shift;
+    my %seen = %$hash_ref;
+    
+    my $insert = $dbh->prepare("insert into grouped (session_id,time,stopped,paused,ip_address,title,platform,user,orig_title,orig_title_ep,genre,episode,season,summary,rating,year,xml) ".
+			       "values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+    my $update = $dbh->prepare("update grouped set stopped = ?, paused = ?, ip_address = ?, platform = ?, xml = ? where id = ?");
+    
+    # lock for changes - this is a HUGE speed increase ( takes < second to insert/update 1500 records )
+    $dbh->begin_work; 
+    
+    foreach my $k (sort {  $seen{$a}->{time} cmp $seen{$b}->{'time'}  } (keys %seen) ) {
+	my $info = $seen{$k};
+	
+	## check if record exists
+	my $check = $dbh->prepare('select id,stopped,paused from grouped where session_id = ? and time = ?');
+	$check->execute($info->{'db_key'},$info->{'time'}) or die("Unable to execute query: $dbh->errstr\n");
+	my @row = $check->fetchrow_array;
+	
+	## New record - Insert
+	if (!$row[0]) {
+	    $insert->execute($info->{'db_key'},$info->{'time'},$info->{'stopped'},$info->{'paused'},$info->{'ip_address'},$info->{'title'},$info->{'platform'},$info->{'orig_user'},$info->{'orig_title'},$info->{'orig_title_ep'},$info->{'genre'},$info->{'episode'},$info->{'season'},$info->{'summary'},$info->{'rating'},$info->{'year'},$info->{'xml'}) or die("Unable to execute query: $dbh->errstr\n");
+	} 
+	## Existing record -- check if new info
+	else {
+	    # we can key off of stopped, paused -- stopped will probably be the only key since we are only looking for watched content now
+	    if ($row[1] != $info->{'stopped'} || $row[2] != $info->{'paused'}) {
+		$update->execute($info->{'stopped'},$info->{'paused'},$info->{'ip_address'},$info->{'platform'},$info->{'xml'},$row[0]) or die("Unable to execute query: $dbh->errstr\n");
+	    }
+	}
+    }
+    
+    # commit changes
+    $dbh->commit;
+}
+
 sub LocateIP() {
     ## locate IP by machineIdentifier in log file -- hoping this will be part of the API at some point
     ##  * added ratingKey -- sometimes the DirectPlay on LAN is missing the standated GET I am expecting..
     ##  ** I think it's due when the IP is in the allowedNetworks
     ## * modified to read file backwards -- if people use custom logs - they can be way to large..
-
+    
     my $href = shift;
     
     if ($log_client_ip && ref $href) {
@@ -1180,7 +981,7 @@ sub LocateIP() {
 		while( defined( my $log_line = $bw->readline ) && !$ip) {
 		    last if ($count > $max_lines);
 		    $count++;
-
+		    
 		    if ($log_line =~ /(GET|HEAD]).*[^\d]$item.*(X-Plex-Client-Identifier|session)=$find.*\s+\[(.*)\:\d+\]/i) {
 			$ip = $3;
 			$match = $log_line . " [ by $2:$find + item:$item]";
@@ -1231,7 +1032,7 @@ sub LocateIP() {
 			
 			# worst of all three -- this is just a view
 			# Request: GET /photo/:/transcode?url=http%3A%2F%2F127.0.0.1%3A32400%2Flibrary%2Fmetadata%2F87959%2Fthumb%2F1377723508&width=214&height=306&format=jpeg&background=363636 [10.0.0.5:61215] (469 live)
-
+			
 		    }
 		    $d_out .= $ip if $ip;
 		    $d_out .= "NO IP found ($count lines searched)" if !$ip;
@@ -1254,7 +1055,7 @@ sub ProcessUpdate() {
     return if !$xmlref->{'title'}; ## xml must have title
     return if !$xmlref->{'key'}; ## xml ref must have key
     return if $xml !~ /$key/i; ## xml must contain key
-
+    
     my ($cmd,$sth);
     my $state_change=0;
     
@@ -1314,7 +1115,7 @@ sub ProcessUpdate() {
 	}
 	my $dmsg = sprintf "* Total Paused duration: " . &durationrr($p_counter) . " [$p_counter seconds]\n" if $p_counter;
 	&DebugLog($dmsg) if $dmsg;
-
+	
 	# include IP update if we have it
 	$extra .= sprintf(",ip_address = '%s'",$ip_address) if $ip_address;
 	
@@ -1346,16 +1147,16 @@ sub GetSessions() {
     # Generate our HTTP request.
     my ($userAgent, $request, $response);
     $userAgent = LWP::UserAgent->new(  ssl_opts => {
-         verify_hostname => 0,
-         SSL_verify_mode => "SSL_VERIFY_NONE",
-      });
+	verify_hostname => 0,
+	SSL_verify_mode => "SSL_VERIFY_NONE",
+				       });
     
     $userAgent->timeout(20);
     $userAgent->agent($appname);
     $userAgent->env_proxy();
     $request = HTTP::Request->new(GET => &PMSurl($url));
     $response = $userAgent->request($request);
-
+    
     if ($response->is_success) {
 	my $XML  = $response->decoded_content();
 	
@@ -1365,7 +1166,7 @@ sub GetSessions() {
 	    print $XML;
 	    print "===================================XML END=================================================\n";
 	}
-
+	
 	my $data = XMLin(encode('utf8',$XML),KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
 	return $data->{'Video'};
     } else {
@@ -1390,9 +1191,9 @@ sub PMSToken() {
     # Generate our HTTP request.
     my ($userAgent, $request, $response);
     $userAgent = LWP::UserAgent->new(  ssl_opts => {
-         verify_hostname => 0,
-         SSL_verify_mode => "SSL_VERIFY_NONE",
-      });
+	verify_hostname => 0,
+	SSL_verify_mode => "SSL_VERIFY_NONE",
+				       });
     $userAgent->timeout(10);
     $userAgent->agent($appname);
     $userAgent->env_proxy();
@@ -1426,6 +1227,21 @@ sub getSecPaused() {
     }
 }
 
+sub getLastGroupedTime() {
+    my $less = shift;
+    $less = 0 if !$less;
+    my $cmd = "select max(stopped) from grouped";
+    my $sth = $dbh->prepare($cmd);
+    $sth->execute or die("Unable to execute query: $dbh->errstr\n");
+    my @row = $sth->fetchrow_array;
+    if ($row[0]) {
+	my $result = $row[0];
+	return $result-$less if $result-$less > 0;
+	return $result;
+    }
+    return 0;
+}
+
 sub CheckNotified() {
     my $db_key = shift;
     if ($db_key) {
@@ -1453,7 +1269,7 @@ sub GetTestNotify() {
     my $info = ();
     my $cmd = "select * from processed order by time desc limit 1";
     if ($option !~ /start/i) {
-        $cmd = "select * from processed where stopped is not null order by time desc limit 1";
+	$cmd = "select * from processed where stopped is not null order by time desc limit 1";
     }
     my $sth = $dbh->prepare($cmd);
     $sth->execute or die("Unable to execute query: $dbh->errstr\n");
@@ -1488,12 +1304,17 @@ sub GetRecentlyAddedDB() {
 
 sub GetWatched() {
     my $info = ();
-    my ($start,$stop) = @_;
+    my ($start,$stop,$group_table) = @_;
     my $where;
     $where .= " and time >= $start "     if $start;
     $where .= " and time <= $stop " if $stop;
     ## going forward only include rows with xml -- mainly for my purposes as I didn't relase this to public before I included xml
-    my $cmd = "select * from processed where notified = 1 and stopped is not null and xml is not null";
+    ## we don't need notified = 1 here.
+    #my $cmd = "select * from processed where notified = 1 and stopped is not null and xml is not null";
+    my $cmd = "select * from processed where stopped is not null and xml is not null";
+    if ($group_table) {
+	$cmd = "select * from grouped where stopped is not null and xml is not null";
+    }
     $cmd .= $where if $where;
     my $sth = $dbh->prepare($cmd);
     $sth->execute or die("Unable to execute query: $dbh->errstr\n");
@@ -1548,6 +1369,7 @@ sub SetStopped() {
     ## fixes in place to account for this anyways. It's just DB cleanup
     my $sth = $dbh->prepare("update processed set paused = NULL where stopped is not NULL");
     $sth->execute() or die("Unable to execute query: $dbh->errstr\n");
+    &UpdateGroupedTable; ## update the grouped table
 }
 
 sub initDB() {
@@ -1562,8 +1384,8 @@ sub initDB() {
     while (my @tmp = $sth->fetchrow_array) {    foreach (@tmp) {        $tables{$_} = $_;    }}
     if ($tables{$dbtable}) { }
     else {
-        my $cmd = "CREATE TABLE $dbtable (id INTEGER PRIMARY KEY, session_id text, time timestamp default (strftime('%s', 'now')) );";
-        my $result_code = $dbh->do($cmd) or die("Unable to prepare execute $cmd: $dbh->errstr\n");
+	my $cmd = "CREATE TABLE $dbtable (id INTEGER PRIMARY KEY, session_id text, time timestamp default (strftime('%s', 'now')) );";
+	my $result_code = $dbh->do($cmd) or die("Unable to prepare execute $cmd: $dbh->errstr\n");
     }
     
     ## Add new columns/indexes on the fly  -- and change definitions
@@ -1595,7 +1417,17 @@ sub initDB() {
 	); 
     
     &initDBtable($dbh,$dbtable,\@dbcol);
-    &initDBtable($dbh,"grouped",\@dbcol); ## grouping table should "always" be indentical to processed. Will makt it easier for eleese and plexWatch/web
+    
+    
+    ## grouped tabled -- needs session_id, time -- then whatever else the @dbcol has. This way it will get changes to the @dbcols easier
+    my @grouped = (
+	{ 'name' => 'session_id', 'definition' => 'text', }, 
+	{ 'name' => 'time', 'definition' => 'timestamp', }, 
+	);
+    foreach my $o (@dbcol) {
+	push (@grouped, $o);
+    }
+    &initDBtable($dbh,"grouped",\@grouped); ## grouping table should "always" be indentical to processed. Will makt it easier for eleese and plexWatch/web
     
     
     ## check definitions
@@ -1610,7 +1442,7 @@ sub initDB() {
     for my $col ( @dbcol ) {
 	if ($dbcol_exists{$col->{'name'}} && $dbcol_exists{$col->{'name'}} ne $col->{'definition'}) {	    $alter_def =1;	}
     }
-
+    
     if ($alter_def) {
 	my $dmsg = "New Table definitions.. upgrading DB";
 	&DebugLog($dmsg,1) if $dmsg;
@@ -1706,7 +1538,7 @@ sub DB_ra_table() {
     if ($alter_def) {
 	my $dmsg = "New Table definitions.. upgrading DB";
 	&DebugLog($dmsg,1) if $dmsg;
-
+	
 	$dbh->begin_work;
 	
 	eval {
@@ -1751,7 +1583,13 @@ sub initDBtable() {
     while (my @tmp = $sth->fetchrow_array) {    foreach (@tmp) {        $tables{$_} = $_;    }}
     if ($tables{$dbtable}) {    }
     else {
-        my $cmd = "CREATE TABLE $dbtable (id INTEGER PRIMARY KEY, session_id text, time timestamp default (strftime('%s', 'now')) );";
+	my $cmd ='';
+	if ($dbtable eq 'processed') {
+	    $cmd = "CREATE TABLE $dbtable (id INTEGER PRIMARY KEY, session_id text, time timestamp default (strftime('%s', 'now')) );";
+	} else {
+	    ## other tables will just get a default ID for primary ID.. must defined all other fields
+	    $cmd = "CREATE TABLE $dbtable (id INTEGER PRIMARY KEY );";
+	}
         my $result_code = $dbh->do($cmd) or die("Unable to prepare execute $cmd: $dbh->errstr\n");
     }
     
@@ -1868,26 +1706,26 @@ sub NotifyTwitter() {
 sub NotifyProwl() {
     ## modified from: https://www.prowlapp.com/static/prowl.pl
     my $provider = 'prowl';
-
+    
     #my $alert = shift;
     my $info = shift;
     my ($alert) = &formatAlert($info,$provider);
-
+    
     my $alert_options = shift;
-
+    
     if ($provider_452->{$provider}) {
 	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
 	return 0;
     }
     
     my %prowl = %{$notify->{prowl}};
-
+    
     
     
     $prowl{'event'} = '';
     $prowl{'event'} = $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};
     $prowl{'event'} .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};
-
+    
     $prowl{'notification'} = $alert;
     
     $prowl{'priority'} ||= 0;
@@ -1897,8 +1735,8 @@ sub NotifyProwl() {
     ## allow formatting of appname
     $prowl{'application'} = '{user}' if $prowl{'application'} eq $appname; ## force {user} if people still use $appname in config -- forcing update with the need to modify config.
     my $format = $prowl{'application'};
-
-
+    
+    
     if ($format =~ /\{.*\}/) {
 	my $regex = join "|", keys %{$alert_options};
 	$regex = qr/$regex/;
@@ -1906,7 +1744,7 @@ sub NotifyProwl() {
 	$prowl{'application'} =~ s/{\w+}//g; ## remove any {word} - templates that failed
 	$prowl{'application'} = $appname if !$prowl{'application'}; ## replace appname if empty
     }
-
+    
     # URL encode our arguments
     $prowl{'application'} =~ s/([^A-Za-z0-9])/sprintf("%%%02X", ord($1))/seg;
     $prowl{'event'} =~ s/([^A-Za-z0-9])/sprintf("%%%02X", ord($1))/seg;
@@ -1920,9 +1758,9 @@ sub NotifyProwl() {
     # Generate our HTTP request.
     my ($userAgent, $request, $response, $requestURL);
     $userAgent = LWP::UserAgent->new(  ssl_opts => {
-         verify_hostname => 0,
-         SSL_verify_mode => "SSL_VERIFY_NONE",
-      });
+	verify_hostname => 0,
+	SSL_verify_mode => "SSL_VERIFY_NONE",
+				       });
     $userAgent->timeout(20);
     $userAgent->agent($appname);
     $userAgent->env_proxy();
@@ -1956,13 +1794,13 @@ sub NotifyProwl() {
 
 sub NotifyPushOver() {
     my $provider = 'pushover';
-
+    
     #my $alert = shift;
     my $info = shift;
     my ($alert) = &formatAlert($info,$provider);
-
+    
     my $alert_options = shift;
-
+    
     if ($provider_452->{$provider}) {
 	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
 	return 0;
@@ -1970,9 +1808,9 @@ sub NotifyPushOver() {
     
     my %po = %{$notify->{pushover}};    
     my $ua = LWP::UserAgent->new(  ssl_opts => {
-         verify_hostname => 0,
-         SSL_verify_mode => "SSL_VERIFY_NONE",
-      });
+	verify_hostname => 0,
+	SSL_verify_mode => "SSL_VERIFY_NONE",
+				   });
     $ua->timeout(20);
     $po{'message'} = $alert;
     
@@ -2021,18 +1859,18 @@ sub NotifyBoxcar() {
     my $provider = 'boxcar';
     ## this will try to notifiy via box car 
     # It will try to subscribe to the plexWatch service on boxcar if we get a 401 and resend the notification
-
+    
     #my $alert = shift;
     my $info = shift;
     my ($alert) = &formatAlert($info,$provider);
-
+    
     my $alert_options = shift;
-
+    
     if ($provider_452->{$provider}) {
 	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
 	return 0;
     }
-
+    
     my %bc = %{$notify->{boxcar}};    
     $bc{'message'} = $alert;
     
@@ -3219,6 +3057,288 @@ sub PMSurl() {
     return $url;
 }
 
+sub UpdateGroupedTable() {
+    &Watched(1);
+}
+
+sub ShowWatched() {
+    &Watched();
+}
+
+sub Watched() {
+    ## TODO -- if this is NOT a update_grouped_table, then we should select from the grouped table for printing -- it will be much faster
+    my $update_grouped_table = shift;
+    
+    if ($options{'watched'} || $options{'stats'} || $update_grouped_table) {
+	my $print_stmt;    
+	my $stop = time();
+	my ($start,$limit_start,$limit_end);
+	
+	if ($options{start}) {
+	    my $v = $options{start};
+	    my $now = time();
+	    
+	    ## TODO - implememnt parsedate for windows
+	    if ($^O ne 'MSWin32') {
+		$now = parsedate('today at midnight', FUZZY=>1) 	if ($v !~ /now/i);
+		if ($start = parsedate($v, FUZZY=>1, NOW => $now)) {	    $limit_start = localtime($start);	}
+	    }
+	}
+	
+	if ($options{stop}) {
+	    my $v = $options{stop};
+	    my $now = time();
+	    
+	    ## TODO - implememnt parsedate for windows
+	    if ($^O ne 'MSWin32') {
+		$now = parsedate('today at midnight', FUZZY=>1) if ($v !~ /now/i);
+		if ($stop = parsedate($v, FUZZY=>1, NOW => $now)) {	    $limit_end = localtime($stop);	}
+	    }
+	}
+	
+	if ($update_grouped_table) {
+	    $start = &getLastGroupedTime(86400*2); ## just to be safe, we will process the last two days. It's still very quick
+	    $stop = time();
+	    $limit_start = localtime($start);  
+	    $limit_end = localtime($stop);
+	} else {
+	    &UpdateGroupedTable();
+	}
+	
+	
+	my $is_watched;
+	if ($update_grouped_table || $options{'nogrouping'}) {
+	    $is_watched = &GetWatched($start,$stop,0);
+	} else {
+	    $is_watched = &GetWatched($start,$stop,1);	
+	}
+
+	## already watched.
+	
+	if ($options{'watched'}) {
+	    $print_stmt .= sprintf ("\n======================================== %s ========================================\n",'Watched');
+	}
+	$print_stmt .= "\nDate Range: ";
+	if ($limit_start) {	$print_stmt .= $limit_start;    } 
+	else {	$print_stmt .= "Anytime";    }
+	$print_stmt .= ' through ';
+	
+	if ($limit_end) {	$print_stmt .= $limit_end;    } 
+	else {	$print_stmt .= "Now";    }
+	$print_stmt .= "\n"; ## clear any print_stmt now
+	
+	
+	print $print_stmt if !$update_grouped_table || $debug; #print output if we are not updating the table ( job )
+	
+	my %seen = ();
+	my %seen_epoch = ();
+	my %seen_cur = ();
+	my %seen_user = ();
+	my %stats = ();
+	my $ntype = 'watched';
+	my %completed = ();
+	my %seenc = (); ## testing
+	if (keys %{$is_watched}) {
+	    $print_stmt = ""; #clear the print
+	    foreach my $k (sort {$is_watched->{$a}->{user} cmp $is_watched->{$b}->{'user'} || 
+				     $is_watched->{$a}->{time} cmp $is_watched->{$b}->{'time'} } (keys %{$is_watched}) ) {
+		## use display name 
+		my ($user,$orig_user) = &FriendlyName($is_watched->{$k}->{user},$is_watched->{$k}->{platform});
+		
+		## skip/exclude users --user/--exclude_user
+		my $skip = 1;
+		## --exclude_user array ref
+		next if ( grep { $_ =~ /$is_watched->{$k}->{'user'}/i } @{$options{'exclude_user'}});
+		next if ( $user  && grep { $_ =~ /^$user$/i } @{$options{'exclude_user'}});
+		
+		if ($options{'user'}) {
+		    $skip = 0 if $user =~ /^$options{'user'}$/i; ## user display (friendly) matches specified 
+		    $skip = 0 if $orig_user =~ /^$options{'user'}$/i; ## user (non friendly) matches specified
+		}  else {	$skip = 0;    }
+		
+		next if $skip;
+		
+		## only show one watched status on movie/show per day (default) -- duration will be calculated from start/stop on each watch/resume
+		## --nogrouping will display movie as many times as it has been started on the same day.
+		
+		## to cleanup - maybe subroutine
+		my ($sec, $min, $hour, $day,$month,$year) = (localtime($is_watched->{$k}->{time}))[0,1,2,3,4,5]; 
+		my $serial = timelocal(0, 0, 0, $day, $month, $year);
+		$year += 1900;
+		$month += 1;
+		## TODO - implememnt parsedate for windows
+		#my $serial = "$year$month$day";
+		# I can probably get rid of this since the serial above works for both
+		if ($^O ne 'MSWin32') {
+		    $serial = parsedate("$year-$month-$day 00:00:00");
+		}
+		#my $skey = $is_watched->{$k}->{user}.$year.$month.$day.$is_watched->{$k}->{title};
+		my $skey = $user.$year.$month.$day.$is_watched->{$k}->{title};
+		
+		## get previous day -- see if video same title was watched then -- if so -- group them together for display purposes. stats and --nogrouping will still show the break
+		my ($sec2, $min2, $hour2, $day2,$month2,$year2) = (localtime($is_watched->{$k}->{time}-86400))[0,1,2,3,4,5]; 
+		$year2 += 1900;
+		$month2 += 1;
+		
+		
+		#my $skey2 = $is_watched->{$k}->{user}.$year2.$month2.$day2.$is_watched->{$k}->{title};
+		my $skey2 = $user.$year2.$month2.$day2.$is_watched->{$k}->{title};
+		if ($seen{$skey2}) {		$skey = $skey2;	    }
+		
+		my $orig_skey = $skey; ## DO NOT MODIFY THIS
+		
+		
+		## Do NOT group content if the percent watched is 100% -- this will group everything up to 100% and start a new line...
+		#    * will now show that the viewer had watched the video completely (line1) and restarted it (line2)
+		
+		#just testing out grouping if percent_complete == 100
+		# if ($seenc{$orig_skey} && $seenc{$orig_skey} == 2) {$info->{'percent_complete'}  = 100;  }
+		# if ($seenc{$orig_skey} && $seenc{$orig_skey} == 5) {$info->{'percent_complete'}  = 100;  }
+		# $seenc{$orig_skey}++;
+		
+		my $is_completed = 0;
+		if ($watched_show_completed) {
+		    my $paused = &getSecPaused($k);
+		    my $info = &info_from_xml($is_watched->{$k}->{'xml'},$ntype,$is_watched->{$k}->{'time'},$is_watched->{$k}->{'stopped'},$paused);
+		    $skey = $skey . $completed{$orig_skey} if $completed{$orig_skey};
+		    if ($info->{'percent_complete'} > 99) {
+			my $d_out = "$is_watched->{$k}->{title} watched 100\% by $user on $year-$month-$day - starting a new line (more than once)\n";
+			$completed{$orig_skey}++;
+			$is_completed = 1; ## skey-incremented -- we can skip other skey checks
+			&DebugLog($d_out) if $completed{$orig_skey} > 1;
+		    }
+		}
+		# end 100% grouping
+		
+		## split lines if start/restart > $watched_grouping_maxhr
+		#    * do not just blindly group by day.. the start/restart should be NO MORE than a few hours apart ($watched_grouping_maxhr)
+		if (!$is_completed) {
+		    $skey = $seen_cur{$orig_skey}  if $seen_cur{$orig_skey};                 ## if we have set $seen_cur - reset skey to that
+		    $seen_epoch{$skey} = $is_watched->{$k}->{time}  if !$seen_epoch{$skey};  ## set epoch for skey (if not set)
+		    my $diff = $is_watched->{$k}->{time}-$seen_epoch{$skey};                 ## diff between last start and this start
+		    
+		    if ($diff > (60*60)*($watched_grouping_maxhr)) {
+			my $d_out = &durationrr($diff) . 
+			    " between start,restart of '$is_watched->{$k}->{title}' for $user on $year-$month-$day: starting a new line\n";
+			&DebugLog($d_out);
+			$skey = $orig_skey . $is_watched->{$k}->{time}; ## increment the skey
+			$seen_cur{$orig_skey} = $skey;                  ## set what the skey will be for future
+		    } 
+		    $seen_epoch{$skey} = $is_watched->{$k}->{time};  ## set the last epoch seen for this skey
+		}
+		## END split if > $watched_grouping_maxhr
+		
+		## stat -- quick and dirty -- to clean up later
+		$stats{$user}->{'total_duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
+		$stats{$user}->{'duration'}->{$serial} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
+		## end
+		
+		next if !$options{'watched'};
+		next if $is_watched->{$k}->{xml} =~ /<opt><\/opt>/i; ## bug -- fixed in 0.0.19
+		my $paused = &getSecPaused($k);
+
+		## grouping table is now used.. no need to go through logic if we are just printing.
+
+		#if ($options{'nogrouping'} && !$update_grouped_table) { # we always use grouping for grouped table!
+
+		if (!$update_grouped_table) { # we always use grouping for grouped table!
+		    if (!$seen_user{$user}) {
+			$seen_user{$user} = 1;
+			$print_stmt .= "\nUser: " . $user;
+			$print_stmt .= ' ['. $orig_user .']' if $user ne $orig_user;
+			$print_stmt .= "\n";
+		    }
+		    my $time = localtime ($is_watched->{$k}->{time} );
+		    my $info = &info_from_xml($is_watched->{$k}->{'xml'},$ntype,$is_watched->{$k}->{'time'},$is_watched->{$k}->{'stopped'},$paused);
+		    $info->{'ip_address'} = $is_watched->{$k}->{ip_address};
+		    my $alert = &Notify($info,1); ## only return formated alert
+		    $print_stmt .= sprintf(" %s: %s\n",$time, $alert);
+		}
+
+
+		## upate the grouped table
+		else {
+		    if (!$seen{$skey}) {
+			# these field are used for output
+			$seen{$skey}->{'ip_address'} = $is_watched->{$k}->{ip_address};
+			$seen{$skey}->{'time'} = $is_watched->{$k}->{time};
+			$seen{$skey}->{'xml'} = $is_watched->{$k}->{xml};
+			$seen{$skey}->{'user'} = $user;
+			$seen{$skey}->{'orig_user'} = $orig_user;
+			$seen{$skey}->{'stopped'} = $is_watched->{$k}->{stopped};
+			
+			## These fields are used to update the DB table --  ( some or cruft, but we will keep them the same )
+			## output will have these too, but we use the info_from_xml for formatting. We want the raw info for the DB
+			if ($update_grouped_table) {
+			    #$seen{$skey}->{'ip_address'} = '' if !$seen{$skey}->{'ip_address'};
+			    $seen{$skey}->{'ip_address'} = $is_watched->{$k}->{ip_address} || ''; ## special - fields didn't exist in old version
+			    $seen{$skey}->{'platform'} = $is_watched->{$k}->{'platform'};
+			    $seen{$skey}->{'db_key'} = $k;
+			    $seen{$skey}->{'title'} = $is_watched->{$k}->{'title'};
+			    $seen{$skey}->{'orig_title'} = $is_watched->{$k}->{'orig_title'};
+			    $seen{$skey}->{'orig_title_ep'} = $is_watched->{$k}->{'orig_title_ep'};
+			    $seen{$skey}->{'episode'} = $is_watched->{$k}->{'episode'};
+			    $seen{$skey}->{'season'} = $is_watched->{$k}->{'season'};
+			    $seen{$skey}->{'year'} = $is_watched->{$k}->{'year'};
+			    $seen{$skey}->{'rating'} = $is_watched->{$k}->{'rating'};
+			    $seen{$skey}->{'genre'} = $is_watched->{$k}->{'genre'};
+			    $seen{$skey}->{'summary'} = $is_watched->{$k}->{'summary'};
+			    #$seen{$skey}->{'notified'} = $is_watched->{$k}->{'notified'};
+			    if (!$seen{$skey}->{'paused'}) {
+				$seen{$skey}->{'paused'} = $paused;
+			    } else {
+				$seen{$skey}->{'paused'} = $seen{$skey}->{'paused'}+$paused;
+			    }
+			}
+			## end required db fields
+			
+			if (!$count_paused) {
+			    $seen{$skey}->{'duration'} += ($is_watched->{$k}->{stopped}-$is_watched->{$k}->{time})-$paused;
+			} else {
+			    $seen{$skey}->{'duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
+			}
+			
+		    } else {
+			## if same user/same movie/same day -- append duration -- must of been resumed
+			$seen{$skey}->{'duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
+			## update the group with the most recent XML
+			$seen{$skey}->{'xml'} = $is_watched->{$k}->{xml};
+			
+			if ($is_watched->{$k}->{stopped} > $seen{$skey}->{'stopped'}) {
+			    $seen{$skey}->{'stopped'} = $is_watched->{$k}->{stopped}; ## include max stopped in case someone wants to display it
+			}
+		    }
+		}
+	    }
+	} 
+	else {	    $print_stmt .= "\n* nothing watched\n";	}
+	
+	## Grouping Watched TITLE by day - default
+	if ($update_grouped_table) {	    &ProcessGrouped(\%seen);	}
+	
+	## show stats if --stats
+	if ($options{stats}) {
+	    $print_stmt .= sprintf("\n======================================== %s ========================================\n",'Stats');
+	    foreach my $user (keys %stats) {
+		$print_stmt .= sprintf("user: %s's total duration %s \n", $user, duration_exact($stats{$user}->{total_duration}));
+		foreach my $epoch (sort keys %{$stats{$user}->{duration}}) {
+		    my $h_date;
+		    if ($^O eq 'MSWin32') {
+			$h_date = strftime( "%a %b %d %Y", localtime($epoch) );
+		    } else {
+			$h_date = strftime "%a %b %e %Y", localtime($epoch);
+		    }
+		    $print_stmt .= sprintf(" %s: %s %s\n", $h_date, $user, duration_exact($stats{$user}->{duration}->{$epoch}));
+		}
+		$print_stmt .= "\n";
+	    }
+	}
+	
+	print $print_stmt if !$update_grouped_table; #print output if we are not updating the table ( job )
+	
+    }
+}    
+    
 
 
 __DATA__
