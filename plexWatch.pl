@@ -423,12 +423,14 @@ if ( ($options{'watched'} || $options{'watching'} || $options{'stats'}) && $opti
     printf("\n* Limiting results to %s %s\n", $options{'user'}, $extra);
 }
 
+## debug for now -- force updating the watched table
+my $update_grouped_table = 0;
 
 ####################################################################
 ## print all watched content 
 ##--watched
-if ($options{'watched'} || $options{'stats'}) {
-    
+if ($options{'watched'} || $options{'stats'} || $update_grouped_table) {
+    my $print_stmt;    
     my $stop = time();
     my ($start,$limit_start,$limit_end);
     
@@ -457,17 +459,21 @@ if ($options{'watched'} || $options{'stats'}) {
     my $is_watched = &GetWatched($start,$stop);
     
     ## already watched.
+
     if ($options{'watched'}) {
-	printf ("\n======================================== %s ========================================\n",'Watched');
+	$print_stmt .= sprintf ("\n======================================== %s ========================================\n",'Watched');
     }
-    print "\nDate Range: ";
-    if ($limit_start) {	print $limit_start;    } 
-    else {	print "Anytime";    }
-    print ' through ';
+    $print_stmt .= "\nDate Range: ";
+    if ($limit_start) {	$print_stmt .= $limit_start;    } 
+    else {	$print_stmt .= "Anytime";    }
+    $print_stmt .= ' through ';
     
-    if ($limit_end) {	print $limit_end;    } 
-    else {	print "Now";    }
-    
+    if ($limit_end) {	$print_stmt .= $limit_end;    } 
+    else {	$print_stmt .= "Now";    }
+    $print_stmt .= "\n"; ## clear any print_stmt now
+
+    print $print_stmt if !$update_grouped_table; #print output if we are not updating the table ( job )
+
     my %seen = ();
     my %seen_epoch = ();
     my %seen_cur = ();
@@ -477,7 +483,7 @@ if ($options{'watched'} || $options{'stats'}) {
     my %completed = ();
     my %seenc = (); ## testing
     if (keys %{$is_watched}) {
-	print "\n";
+        $print_stmt = ""; #clear the print
 	foreach my $k (sort {$is_watched->{$a}->{user} cmp $is_watched->{$b}->{'user'} || 
 				 $is_watched->{$a}->{time} cmp $is_watched->{$b}->{'time'} } (keys %{$is_watched}) ) {
 	    ## use display name 
@@ -577,15 +583,15 @@ if ($options{'watched'} || $options{'stats'}) {
 	    if ($options{'nogrouping'}) {
 		if (!$seen_user{$user}) {
 		    $seen_user{$user} = 1;
-		    print "\nUser: " . $user;
-		    print ' ['. $orig_user .']' if $user ne $orig_user;
-		    print "\n";
+		    $print_stmt .= "\nUser: " . $user;
+		    $print_stmt .= ' ['. $orig_user .']' if $user ne $orig_user;
+		    $print_stmt .= "\n";
 		}
 		my $time = localtime ($is_watched->{$k}->{time} );
 		my $info = &info_from_xml($is_watched->{$k}->{'xml'},$ntype,$is_watched->{$k}->{'time'},$is_watched->{$k}->{'stopped'},$paused);
 		$info->{'ip_address'} = $is_watched->{$k}->{ip_address};
 		my $alert = &Notify($info,1); ## only return formated alert
-		printf(" %s: %s\n",$time, $alert);
+		$print_stmt .= sprintf(" %s: %s\n",$time, $alert);
 	    } else {
 		if (!$seen{$skey}) {
 		    $seen{$skey}->{'ip_address'} = $is_watched->{$k}->{ip_address};
@@ -612,7 +618,7 @@ if ($options{'watched'} || $options{'stats'}) {
 		}
 	    }
 	}
-    } else {	    print "\n\n* nothing watched\n";	}
+    } else {	    $print_stmt .= "\n* nothing watched\n";	}
     
     ## Grouping Watched TITLE by day - default
     if (!$options{'nogrouping'}) {
@@ -622,25 +628,25 @@ if ($options{'watched'} || $options{'stats'}) {
 		       } (keys %seen) ) {
 	    if (!$seen_user{$seen{$k}->{user}}) {
 		$seen_user{$seen{$k}->{user}} = 1;
-		print "\nUser: " . $seen{$k}->{user};
-		print ' ['. $seen{$k}->{orig_user} .']' if $seen{$k}->{user} ne $seen{$k}->{orig_user};
-		print "\n";
+		$print_stmt .= "\nUser: " . $seen{$k}->{user};
+		$print_stmt .= ' ['. $seen{$k}->{orig_user} .']' if $seen{$k}->{user} ne $seen{$k}->{orig_user};
+		$print_stmt .= "\n";
 	    }
 	    my $time = localtime ($seen{$k}->{time} );
 	    
 	    my $info = &info_from_xml($seen{$k}->{xml},$ntype,$seen{$k}->{'time'},$seen{$k}->{'stopped'},0,$seen{$k}->{'duration'});
 	    $info->{'ip_address'} = $seen{$k}->{ip_address};
 	    my $alert = &Notify($info,1); ## only return formated alert
-	    printf(" %s: %s\n",$time, $alert);
+	    $print_stmt .= sprintf(" %s: %s\n",$time, $alert);
 	}
     }
-    print "\n";
+    $print_stmt .= "\n";
     
     ## show stats if --stats
     if ($options{stats}) {
-	printf ("\n======================================== %s ========================================\n",'Stats');
+	$print_stmt .=f ("\n======================================== %s ========================================\n",'Stats');
 	foreach my $user (keys %stats) {
-	    printf ("user: %s's total duration %s \n", $user, duration_exact($stats{$user}->{total_duration}));
+	    $print_stmt .=f ("user: %s's total duration %s \n", $user, duration_exact($stats{$user}->{total_duration}));
 	    foreach my $epoch (sort keys %{$stats{$user}->{duration}}) {
 			my $h_date;
 			if ($^O eq 'MSWin32') {
@@ -648,11 +654,14 @@ if ($options{'watched'} || $options{'stats'}) {
 			} else {
 				$h_date = strftime "%a %b %e %Y", localtime($epoch);
 			}
-			printf (" %s: %s %s\n", $h_date, $user, duration_exact($stats{$user}->{duration}->{$epoch}));
+			$print_stmt .=f (" %s: %s %s\n", $h_date, $user, duration_exact($stats{$user}->{duration}->{$epoch}));
 	    }
-	    print "\n";
+	    $print_stmt .= "\n";
 	}
     }
+
+    print $print_stmt if !$update_grouped_table; #print output if we are not updating the table ( job )
+
 }
 
 
