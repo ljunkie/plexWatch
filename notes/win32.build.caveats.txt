@@ -1,0 +1,14 @@
+== Added Modules ==
+Net::OAuth::SignatureMethod::HMAC_SHA1
+Net::OAuth::ProtectedResourceRequest
+Net::OAuth::ProtectedResourceRequest
+
+== Trim Modules ==
+Net::SMTP::TLS
+
+== raw ==
+--trim Time::ParseDate;Net::SMTP::TLS 
+--add Net::OAuth::SignatureMethod::HMAC_SHA1;Net::OAuth::ProtectedResourceRequest;Net::Twitter::Lite::API::V1_1 
+--shared public 
+--norunlib 
+--dyndll 

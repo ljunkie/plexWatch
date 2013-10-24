@@ -1,4 +1,42 @@
-# 0.0.20
+# 0.1.4 final
+    * added config table for plexWatch/Web - or - any other external apps wanted to parse the config
+    * Added grouped table for plexWatch/Web - or - any other external apps needing to query for a grouped output
+    * Twitter now works for windows
+    * Linux and Windows branches are now on the same code base (dev merged in 0.1.1, now master up to date)
+
+# 0.1.3-dev
+    * added config table for plexWatch/Web - or - any other external apps wanted to parse the config
+
+# 0.1.2-dev
+    * Added grouped table for plexWatch/Web - or - any other external apps needing to query for a grouped output
+
+# 0.1.1-dev
+    * Twitter now works for windows
+    * Linux and Windows branches (dev) are now on the same code base.
+
+# 0.1.0 - Final
+    * NEW: Email provider ( NonAuth, Auth, TLS/SSL supported) requires Net::SMTP::TLS
+            centos: yum install perl\(Net::SMTP::TLS\)
+            debian: apt-get install libnet-smtp-tls-perl
+            other: cpan install MIME::Lite
+    * NEW: paused/resumed state and time are now accounted for
+    * NEW: paused/resumed push types enabled - push_paused, pushed_resumed added to each provider
+    * NEW: you can override 'alert_format' per provider ( check out the EMAIL provider for an example )
+    * FIX: watched duration corrected going forward (accounts for paused content and can be overridden with $count_paused )
+            paused/resumed states have allowed this to work
+    * FIX: Redundant titles are now fixed         - Title/Application also will always show {user} unless overridden in config.pl
+            $appname is no longer used and replaced with {user} -- {user} if used even if config.pl has $appname ( no need to update config.pl )
+            before:  title: "plexWatch watched" msg: "user watched title etc...."
+             after:  title: "{user} watched"    msg: "title etc...."
+    * FIX: --test_notify will not print options to test ( and they actually correspond to the right notification type now!)
+    * FIX: do not print backup info every time --debug is called
+    * FIX: duration watched when video is paused, then stopped
+    * FIX: XML UTF-8 decoding/encoding ( only seemd to affect FC18 )
+    * FIX: Accent marks/umlauts are allowed
+    * Screenshots added to screenshots folder for iOS and Windows
+
+
+# 0.0.20-dev
 # * NEW: Email provider ( NonAuth, Auth, TLS/SSL supported) requires Net::SMTP::TLS
 #  	  centos: yum install perl\(Net::SMTP::TLS\)
 #  	  debian: apt-get install libnet-smtp-tls-perl
