@@ -48,8 +48,10 @@ if (!-e $dirname .'/config.pl') {
     &DebugLog($msg,1) if $msg;
     exit;
 }
+our ($data_dir, $server, $port, $appname, $user_display, $alert_format, $notify, $push_titles, $backup_opts, $myPlex_user, $myPlex_pass, $server_log, $log_client_ip, $debug_logging, $watched_show_completed, $watched_grouping_maxhr, $count_paused);
+my @config_vars = ("data_dir", "server", "port", "appname", "user_display", "alert_format", "notify", "push_titles", "backup_opts", "myPlex_user", "myPlex_pass", "server_log", "log_client_ip", "debug_logging", "watched_show_completed", "watched_grouping_maxhr", "count_paused");
 do $dirname.'/config.pl';
-use vars qw/$data_dir $server $port $appname $user_display $alert_format $notify $push_titles $backup_opts $myPlex_user $myPlex_pass $server_log $log_client_ip $debug_logging $watched_show_completed $watched_grouping_maxhr $count_paused/; 
+
 if (!$data_dir || !$server || !$port || !$appname || !$alert_format || !$notify) {
     ## TODO - make this information a little more useful!
     my $msg = "config file missing data";
@@ -221,6 +223,7 @@ my $script_fh;
 ## END
 
 my $dbh = &initDB(); ## Initialize sqlite db - last
+&UpdateConfig(\@config_vars);
 
 if (&getLastGroupedTime() == 0) {    &UpdateGroupedTable;} ## update DB table if first run.
 
@@ -953,6 +956,32 @@ sub ProcessGrouped() {
     $dbh->commit;
 }
 
+
+sub UpdateConfig() {
+    my $ref = shift;
+    my @vars = @$ref;
+    my $USER_CONFIG = {};
+    foreach my $name (@vars) { $USER_CONFIG->{$name} = ${$main::{$name}}; } 
+    use Data::Dumper;
+    my $xs = new XML::Simple( noattr => 1,XMLDecl => 1 );
+    my $xs2 = new XML::Simple( XMLDecl => 1);
+    my $xml = $xs->XMLout($USER_CONFIG);
+    my $xml_NoAttr = $xs2->XMLout($USER_CONFIG);
+    my $ref_blob = Dumper($USER_CONFIG);
+    
+    my $insert = $dbh->prepare("insert into config (xml,xml_NoAttr,hash_ref) values (?,?,?)");
+    my $delete = $dbh->prepare("DELETE FROM config");
+    my $vaccum = $dbh->prepare("VACUUM");
+    
+    # lock for changes - this is a HUGE speed increase ( takes < second to insert/update 1500 records )
+    $dbh->begin_work; 
+    $delete->execute;
+    $insert->execute($xml,$xml_NoAttr,$ref_blob) or die("Unable to execute query: $dbh->errstr\n");
+    # commit changes
+    $dbh->commit;
+    $vaccum->execute;
+}
+
 sub LocateIP() {
     ## locate IP by machineIdentifier in log file -- hoping this will be part of the API at some point
     ##  * added ratingKey -- sometimes the DirectPlay on LAN is missing the standated GET I am expecting..
@@ -1471,8 +1500,9 @@ sub initDB() {
     
     ## future tables..
     
-    &DB_ra_table($dbh);  ## verify/create RecentlyAdded table
+    &DB_ra_table($dbh);       ## verify/create RecentlyAdded table
     &DB_grouped_table($dbh);  ## verify/create grouped
+    &DB_config_table($dbh);   ## verify/create config table
     
     return $dbh;
 }
@@ -1658,6 +1688,73 @@ sub DB_grouped_table() {
 	    unless ( $dbidx_exists{$idx->{'name'}} );
     }
         
+    return $dbh;
+}
+
+
+sub DB_config_table() {
+    ## verify Recnetly Added table
+    my $dbh = shift;
+    my $dbtable = 'config';
+    my $sth = $dbh->prepare("SELECT name FROM SQLITE_MASTER");
+    $sth->execute or die("Unable to execute query: $dbh->errstr\n");
+    my $created = 0;
+    #ALTER TABLE Name ADD COLUMN new_column INTEGER DEFAULT 0
+    my %tables;
+    while (my @tmp = $sth->fetchrow_array) {    foreach (@tmp) {        $tables{$_} = $_;    }}
+    if ($tables{$dbtable}) { }
+    else {
+	my $cmd = "CREATE TABLE $dbtable (id INTEGER PRIMARY KEY );";
+        my $result_code = $dbh->do($cmd) or die("Unable to prepare execute $cmd: $dbh->errstr\n");
+	$created = 1;
+    }
+
+    ## Add new columns/indexes on the fly  -- and change definitions
+    my @dbcol = (
+	{ 'name' => 'xml', 'definition' => 'text', }, 
+	{ 'name' => 'xml_NoAttr', 'definition' => 'text', }, 
+        { 'name' => 'hash_ref', 'definition' => 'text', }, 
+	);
+    
+    &initDBtable($dbh,$dbtable,\@dbcol); ## this will just add the columns if needed ( already created the dbtable)
+    
+    ## check definitions
+    my %dbcol_exists = ();
+    
+    for ( @{ $dbh->selectall_arrayref( "PRAGMA TABLE_INFO($dbtable)") } ) { 
+	$dbcol_exists{$_->[1]} = $_->[2]; 
+    };
+    
+    ## alter table defintions if needed
+    my $alter_def = 0;
+    for my $col ( @dbcol ) {
+	if ($dbcol_exists{$col->{'name'}} && $dbcol_exists{$col->{'name'}} ne $col->{'definition'}) {	    $alter_def =1;	}
+    }
+    
+    if ($alter_def) {
+	my $dmsg = "New Table definitions.. upgrading DB";
+	&DebugLog($dmsg,1) if $dmsg;
+	
+	$dbh->begin_work;
+	
+	eval {
+	    local $dbh->{RaiseError} = 1;
+	    my $tmp_table = 'tmp_update_table';
+	    &initDBtable($dbh,$tmp_table,\@dbcol); ## create DB table with new sturction
+	    $dbh->do("INSERT INTO $tmp_table SELECT * FROM $dbtable");
+	    $dbh->do("DROP TABLE $dbtable");
+	    $dbh->do("ALTER TABLE $tmp_table RENAME TO $dbtable");
+	    $dbh->commit; 
+	};
+	if ($@) {
+	    $dmsg = "Could not upgrade table definitions - Transaction aborted because $@";
+	    &DebugLog($dmsg,1) if $dmsg;
+	    eval { $dbh->rollback };
+	}
+	$dmsg = "DB update DONE";
+	&DebugLog($dmsg,1) if $dmsg;
+    }
+    
     return $dbh;
 }
 
