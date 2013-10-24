@@ -958,7 +958,11 @@ sub UpdateConfig() {
     my $ref = shift;
     my @vars = @$ref;
     my $USER_CONFIG = {};
-    foreach my $name (@vars) { $USER_CONFIG->{$name} = ${$main::{$name}}; } 
+    foreach my $name (@vars) { 
+	if (defined(${$main::{$name}}))  {
+	    $USER_CONFIG->{$name} = ${$main::{$name}}; 
+	}
+    } 
     use Data::Dumper;
     my $xs = new XML::Simple( noattr => 1,XMLDecl => 1 );
     my $xs2 = new XML::Simple( XMLDecl => 1);
