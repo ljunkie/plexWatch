@@ -31,10 +31,7 @@ use Encode;
 if ($^O eq 'MSWin32') {
 
 }
-## end
-  #BEGIN { $ENV{PERL_LWP_SSL_VERIFY_HOSTNAME} = 0 }
-
-  ## non windows
+## non windows
 if ($^O ne 'MSWin32') {
  require Time::ParseDate;
  Time::ParseDate->import(); 
