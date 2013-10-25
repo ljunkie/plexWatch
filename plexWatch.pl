@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-my $version = '0.1.5';
+my $version = '0.1.6';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
@@ -27,6 +27,7 @@ use Time::Local;
 use open qw/:std :utf8/; ## default encoding of these filehandles all at once (binmode could also be used) 
 use utf8;
 use Encode;
+use JSON;
 ## windows
 if ($^O eq 'MSWin32') {
 
