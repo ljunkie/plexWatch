@@ -1,4 +1,7 @@
 # 0.1.4 final
+    * DB update: switch from xml to json for config storage
+
+# 0.1.4 final
     * added config table for plexWatch/Web - or - any other external apps wanted to parse the config
     * Added grouped table for plexWatch/Web - or - any other external apps needing to query for a grouped output
     * Twitter now works for windows

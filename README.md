@@ -1,4 +1,4 @@
-plexWatch - 0.1.4 (2013-10-24)
+plexWatch - 0.1.5 (2013-10-24)
 =========
 ***Notify*** and Log ***'Now Playing'*** and ***'Watched'*** content from a Plex Media Server + ***'Recently Added'*** (...and more)
 
