@@ -964,20 +964,20 @@ sub UpdateConfig() {
 	}
     } 
     use Data::Dumper;
-    my $xs = new XML::Simple( noattr => 1,XMLDecl => 1 );
-    my $xs2 = new XML::Simple( XMLDecl => 1);
-    my $xml = $xs->XMLout($USER_CONFIG);
-    my $xml_NoAttr = $xs2->XMLout($USER_CONFIG);
+    my $json = JSON->new->allow_nonref;
+    my $json_s = $json->encode($USER_CONFIG);
+    my $json_p = $json->pretty->encode( $USER_CONFIG );
+    
     my $ref_blob = Dumper($USER_CONFIG);
     
-    my $insert = $dbh->prepare("insert into config (xml,xml_NoAttr,hash_ref) values (?,?,?)");
+    my $insert = $dbh->prepare("insert into config (version,json,json_pretty,hash_ref) values (?,?,?,?)");
     my $delete = $dbh->prepare("DELETE FROM config");
     my $vaccum = $dbh->prepare("VACUUM");
     
     # lock for changes - this is a HUGE speed increase ( takes < second to insert/update 1500 records )
     $dbh->begin_work; 
     $delete->execute;
-    $insert->execute($xml,$xml_NoAttr,$ref_blob) or die("Unable to execute query: $dbh->errstr\n");
+    $insert->execute($version,$json_s,$json_p,$ref_blob) or die("Unable to execute query: $dbh->errstr\n");
     # commit changes
     $dbh->commit;
     $vaccum->execute;
@@ -1712,8 +1712,9 @@ sub DB_config_table() {
 
     ## Add new columns/indexes on the fly  -- and change definitions
     my @dbcol = (
-	{ 'name' => 'xml', 'definition' => 'text', }, 
-	{ 'name' => 'xml_NoAttr', 'definition' => 'text', }, 
+	{ 'name' => 'version', 'definition' => 'text', }, 
+	{ 'name' => 'json', 'definition' => 'text', }, 
+	{ 'name' => 'json_pretty', 'definition' => 'text', }, 
         { 'name' => 'hash_ref', 'definition' => 'text', }, 
 	);
     
