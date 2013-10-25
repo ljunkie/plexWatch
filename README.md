@@ -57,7 +57,7 @@ plexWatch - 0.1.5 (2013-10-24)
 * Getopt::Long;      (Perl base)
 * POSIX qw(strftime) (Perl base)
 * File::Basename     (Perl base)
-
+* JSON
 
 #### Required ONLY if you use twitter
 
@@ -154,12 +154,15 @@ $debug_logging = 1; ## logs to $data_dir/debug.log ( only really helps debug IP 
     sudo apt-get install libdbd-sqlite3-perl
     
     sudo apt-get install perl-doc
+    
+    sudo apt-get install libjson-perl
     ```
     * RHEL/Centos - yum
     
     ```bash
     yum -y install perl\(LWP::UserAgent\) perl\(XML::Simple\) perl\(Pod::Usage\) \
                perl\(DBI\) perl\(Time::Duration\)  perl\(Time::ParseDate\) perl\(DBD::SQLite\)
+               perl\(JSON\)
     ```
 
 5. **run** the script manually to verify it works: /opt/plexWatch/plexWatch.pl
@@ -722,6 +725,7 @@ __Answer__
     sudo cpan install Net::Twitter::Lite::WithAPIv1_1
     sudo cpan install Net::OAuth
     sudo cpan install Mozilla::CA
+    sudo cpan install JSON
     ```
 7. Now create data directory and set permission. Replace [user] with your username
 
