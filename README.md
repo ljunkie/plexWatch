@@ -48,7 +48,7 @@ plexWatch - 0.1.6 (2013-10-24)
 * DBI
 * Time::Duration;
 * Time::ParseDate;
-
+* JSON
 
 #### These should be part of the bast Perl install
 
@@ -154,11 +154,13 @@ $debug_logging = 1; ## logs to $data_dir/debug.log ( only really helps debug IP 
     sudo apt-get install libdbd-sqlite3-perl
     
     sudo apt-get install perl-doc
+
+    sudo apt-get install libjson-perl
     ```
     * RHEL/Centos - yum
     
     ```bash
-    yum -y install perl\(LWP::UserAgent\) perl\(XML::Simple\) perl\(Pod::Usage\) \
+    yum -y install perl\(LWP::UserAgent\) perl\(XML::Simple\) perl\(Pod::Usage\) perl\(JSON\)
                perl\(DBI\) perl\(Time::Duration\)  perl\(Time::ParseDate\) perl\(DBD::SQLite\)
     ```
 
