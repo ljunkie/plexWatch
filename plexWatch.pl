@@ -940,7 +940,16 @@ sub ProcessStart() {
 
 sub ProcessGrouped() {
     my $hash_ref = shift;
+    my $option = shift; #1 = force default (nothing special), #2 delete grouped table and process
     my %seen = %$hash_ref;
+    
+    if (defined($option) and $option == 2) {
+	print "\t*Optimizing grouped table...";
+	my $delete = $dbh->prepare("DELETE FROM grouped");
+	$delete->execute;
+	my $vaccum = $dbh->prepare("VACUUM");
+	$vaccum->execute;
+    }
 
     my $insert = $dbh->prepare("insert into grouped (session_id,time,stopped,paused,ip_address,title,platform,user,orig_title,orig_title_ep,genre,episode,season,summary,rating,year,xml) ".
 			       "values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
@@ -971,6 +980,8 @@ sub ProcessGrouped() {
     
     # commit changes
     $dbh->commit;
+    
+    print "Done\n"  if (defined($option) and $option == 2);
 }
 
 
@@ -3208,8 +3219,8 @@ sub BackupSQlite() {
     }
 
     if ($did_backup) {
-	my $vaccum = $dbh->prepare("VACUUM");
-	$vaccum->execute;
+	## TODO - this won't work if someone disabled backups. ( why disable backups though!)
+	&UpdateGroupedTable(2); # force a rebuild of the grouped table (daily)
     }
     
     ## exit if --backup was called..
@@ -3270,7 +3281,12 @@ sub PMSurl() {
 }
 
 sub UpdateGroupedTable() {
-    &Watched(1);
+    my $tmp = shift;
+    my $option = 1;
+    $option = $tmp if $tmp;
+    # 1 :  Process any new watched content ( for the current 2 days ) into the grouped table
+    # 2 :  Truncate grouped, processed all watched content to the DB
+    &Watched($option);
 }
 
 sub ShowWatched() {
@@ -3309,10 +3325,13 @@ sub Watched() {
 	}
 	
 	if ($update_grouped_table) {
-	    $start = &getLastGroupedTime(86400*2); ## just to be safe, we will process the last two days. It's still very quick
-	    $stop = time();
-	    $limit_start = localtime($start);  
-	    $limit_end = localtime($stop);
+	    ## skip limit if we have called for a full refresh (2)
+	    if ($update_grouped_table != 2) {
+		$start = &getLastGroupedTime(86400*2); ## just to be safe, we will process the last two days. It's still very quick
+		$stop = time();
+		$limit_start = localtime($start);  
+		$limit_end = localtime($stop);
+	    }
 	} else {
 	    &UpdateGroupedTable;
 	}
@@ -3357,17 +3376,19 @@ sub Watched() {
 		## use display name 
 		my ($user,$orig_user) = &FriendlyName($is_watched->{$k}->{user},$is_watched->{$k}->{platform});
 		
-		## skip/exclude users --user/--exclude_user
-		my $skip = 1;
-		## --exclude_user array ref
-		next if ( grep { $_ =~ /$is_watched->{$k}->{'user'}/i } @{$options{'exclude_user'}});
-		next if ( $user  && grep { $_ =~ /^$user$/i } @{$options{'exclude_user'}});
-		
-		if ($options{'user'}) {
-		    $skip = 0 if $user =~ /^$options{'user'}$/i; ## user display (friendly) matches specified 
-		    $skip = 0 if $orig_user =~ /^$options{'user'}$/i; ## user (non friendly) matches specified
-		}  else {	$skip = 0;    }
-		
+		my $skip = 0;
+		# Only SKIP user for display purposes. Do not skip user when updating the grouped table
+		if (!$update_grouped_table) {
+		    $skip = 1;
+                    ## skip/exclude users --user/--exclude_user
+		    next if ( grep { $_ =~ /$is_watched->{$k}->{'user'}/i } @{$options{'exclude_user'}});
+		    next if ( $user  && grep { $_ =~ /^$user$/i } @{$options{'exclude_user'}});
+		    
+		    if ($options{'user'}) {
+			$skip = 0 if $user =~ /^$options{'user'}$/i; ## user display (friendly) matches specified 
+			$skip = 0 if $orig_user =~ /^$options{'user'}$/i; ## user (non friendly) matches specified
+		    }  else {	$skip = 0;    }
+		}
 		next if $skip;
 		
 		## only show one watched status on movie/show per day (default) -- duration will be calculated from start/stop on each watch/resume
@@ -3527,7 +3548,7 @@ sub Watched() {
 	
 	## Grouping Watched TITLE by day - default
 	if ($update_grouped_table) {	 
-	    &ProcessGrouped(\%seen);	
+	    &ProcessGrouped(\%seen,$update_grouped_table);	
 	}
 	
 	## show stats if --stats
