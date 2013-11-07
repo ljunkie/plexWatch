@@ -1,11 +1,11 @@
 #!/usr/bin/perl
 
-my $version = '0.1.6';
+my $version = '0.1.7';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-10-24 17:54 PST
+# Modified: 2013-11-07 13:33 PST
 #
 #  Version: $version
 # https://github.com/ljunkie/plexWatch
@@ -163,6 +163,7 @@ GetOptions(\%options,
            'format_options',
 	   'test_notify:s',
 	   'recently_added:s',
+	   'id:s@',
 	   'version',
 	   'backup',
 	   'show_xml',
@@ -239,35 +240,52 @@ if  (defined($options{test_notify})) {
 
 ####################################################################
 ## RECENTLY ADDED 
-if ($options{'recently_added'}) {
-    my ($hkey);
-    my @want;
-    ## TO NOTE: plex used show and episode off an on. code for both
-    if ($options{'recently_added'} =~ /movie/i) {
-	push @want , 'movie';
-	$hkey = 'Video';
-    } 
-    if ($options{'recently_added'} =~ /show|tv|episode/i) {
-	push @want , 'show';
-	$hkey = 'Video';
-    }
-    
-    ## maybe someday.. TODO
-    #}    elsif ($options{'recently_added'} =~ /artists|music/i) {
-    #	$want = 'artist';
-    #	$hkey = 'Directory';
-    
-    if (!@want) {
-	#print "\n 'recently_added' must be: movie, show or artist\n\n";
-	my $msg = "'recently_added' must be: 'movie' or 'show' -- or a comma separated list";
-	&DebugLog($msg,1) if $msg;
-	exit;
-    }
-    
+if (defined($options{'recently_added'})) {
     my $plex_sections = &GetSectionsIDs(); ## allow for multiple sections with the same type (movie, show, etc) -- or different types (2013-08-01)
+    
+    my @want;
     my @merged = ();
-    foreach my $w (@want) {
-	foreach my $v (@{$plex_sections->{'types'}->{$w}}) {   push (@merged, $v); }
+    my $hkey = 'Video'; # for now, the only available option is Video
+    ## backwards compatibility
+    if (!$options{'id'}) {
+	if ($options{'recently_added'} =~ /movie/i) {
+	    push @want , 'movie';
+	} 
+	## TO NOTE: plex used show and episode off an on. code for both
+	if ($options{'recently_added'} =~ /show|tv|episode/i) {
+	    push @want , 'show';
+	}
+	foreach my $w (@want) {
+	    foreach my $v (@{$plex_sections->{'types'}->{$w}}) {   push (@merged, $v); }
+	}
+    } else {
+	# use the specific ID's specified
+	foreach my $id ( @{$options{'id'}} ) {
+	    if (ref($plex_sections->{'raw'}->{$id})) {
+		push @want , $plex_sections->{'raw'}->{$id}->{'type'};
+		push @merged , $id;
+	    } else {
+		print "\n\t**FAILURE - Section ID:$id does not exists!\n";
+	    }
+	}
+    }
+    
+    ## show usage if the command didn't fit the bill
+    if (!@merged) {
+	print "\n\t* Available Sections:\n\n";
+	printf("\t%-5s %-20s %-10s %-20s\n", 'ID','Title','Type','Path');
+	print "\t-------------------------------------------------------------------\n";
+	foreach my $key (keys %{$plex_sections->{'raw'}}) {
+	    next if $plex_sections->{'raw'}->{$key}->{'type'} !~ /movie|show|tv|episode/;
+	    printf("\t%-5s %-20s %-10s %-20s\n", $key,$plex_sections->{'raw'}->{$key}->{'title'},$plex_sections->{'raw'}->{$key}->{'type'}, $plex_sections->{'raw'}->{$key}->{'Location'}->{'path'});
+	}
+	
+	my $msg = "\n\t* Usage: \n\n";
+	$msg .= sprintf("\t%-22s: %s\n",'All Movie Sections',"$0 --recently_added=movie");
+	$msg .= sprintf("\t%-22s: %s\n",'All Movie/TV Sections',"$0 --recently_added=movie,show");
+	$msg .= sprintf("\t%-22s: %s\n",'Specific Section(s)',"$0 --recently_added --id=# --id=#");
+	print $msg . "\n";
+	exit;
     }
     
     my $info = &GetRecentlyAdded(\@merged,$hkey);
@@ -436,7 +454,7 @@ if ( ($options{'watched'} || $options{'watching'} || $options{'stats'}) && $opti
 &ShowWatched;
 
 ## no options -- we can continue.. otherwise --stats, --watched, --watching or --notify MUST be specified
-if (%options && !$options{'notify'} && !$options{'stats'} && !$options{'watched'} && !$options{'watching'} && !$options{'recently_added'} ) {
+if (%options && !$options{'notify'} && !$options{'stats'} && !$options{'watched'} && !$options{'watching'} && !defined($options{'recently_added'}) ) {
     my $msg =  "* Skipping any Notifications -- command line options set, use '--notify' or supply no options to enable notifications";
     print "\n$msg\n\n";
     &DebugLog($msg) if $msg;
@@ -3555,8 +3573,11 @@ plexWatch.pl [options]
         --user=...                      limit output to a specific user. Must be exact, case-insensitive
         --exclude_user=...              exclude users - you may specify multiple on the same line. '--notify --exclude_user=user1 --exclude_user=user2'
 
-   --recently_added=show,movie   notify when new movies or shows are added to the plex media server (required: config.pl: push_recentlyadded => 1) 
-           * you may specify only one or both on the same line separated by a comma. [--recently_added=show OR --recently_added=movie OR --recently_added=show,movie]
+   --recently_added               notify when new movies or shows are added to the plex media server (required: config.pl: push_recentlyadded => 1) 
+                                      All TV Show Sections : --recently_added=show 
+                                      All Movie Sections   : --recently_added=movie
+                                      Combined Movie/TV    : --recently_added=show,movie
+                                      Specific Sections    : --recently_added --id=# --id=#
 
    --stats                         show total time watched / per day breakout included
         --start=...                     limit watched status output to content started AFTER/ON said date/time
