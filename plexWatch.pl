@@ -304,6 +304,7 @@ if (defined($options{'recently_added'})) {
 	}
 	
 	my $item = &ParseDataItem($info->{$k});
+	next if (!ref($item) or !$item->{'title'});	## verify we can parse the metadata ( sometimes the scanner is still filling in the info )
 	my $res = &RAdataAlert($k,$item);
 	$alerts->{$item->{addedAt}.$k} = $res;
     }
