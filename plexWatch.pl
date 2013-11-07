@@ -973,7 +973,6 @@ sub UpdateConfig() {
     
     my $insert = $dbh->prepare("insert into config (version,json,json_pretty,hash_ref) values (?,?,?,?)");
     my $delete = $dbh->prepare("DELETE FROM config");
-    my $vaccum = $dbh->prepare("VACUUM");
     
     # lock for changes - this is a HUGE speed increase ( takes < second to insert/update 1500 records )
     $dbh->begin_work; 
@@ -981,7 +980,6 @@ sub UpdateConfig() {
     $insert->execute($version,$json_s,$json_p,$ref_blob) or die("Unable to execute query: $dbh->errstr\n");
     # commit changes
     $dbh->commit;
-    $vaccum->execute;
 }
 
 sub LocateIP() {
@@ -3083,6 +3081,7 @@ sub BackupSQlite() {
     #	},
     #   };
     
+    my $did_backup = 0;
     my $path  = $data_dir . '/db_backups';
     if (!-d $path) {
 	mkdir($path) or die "Unable to create $path\n";
@@ -3165,6 +3164,7 @@ sub BackupSQlite() {
 	    print '* ' . uc($type) ." backup not found -- trying now\n";
 	}
 	if ($do_backup) {
+	    $did_backup = 1; # just set if we backed up any DB
 	    my $keep =1;
 	    $keep = $backups->{$type}->{'keep'} if $backups->{$type}->{'keep'};
 	    
@@ -3186,6 +3186,11 @@ sub BackupSQlite() {
 	    print "DONE\n\n" if $debug || $options{'backup'};
 	}
 	
+    }
+
+    if ($did_backup) {
+	my $vaccum = $dbh->prepare("VACUUM");
+	$vaccum->execute;
     }
     
     ## exit if --backup was called..
