@@ -1,3 +1,10 @@
+# 0.1.7
+    * --recently_added allow users to specify specific sections ( more info: --recently_added )
+    * --exclude_user will mute a notification, but still be logged to the DB. useful for plexWeb/Watch
+    * --recently_added empty notifications: skip item if scanner is still processing ( we will come back to it later )
+    * speedup: do not autovaccum on every run
+    * recreate grouped table daily. Any changes made to config.pl will reflect within 24 hours ( or just call --backup )
+
 # 0.1.6
     * DB update: switch from xml to json for config storage
 
