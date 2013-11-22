@@ -234,7 +234,7 @@ If you want to use GNTP (growl), you will need to install a module
 #####  list all watched shows - no limit
 
 ```
-/opt/git/plexWatch/plexWatch.pl --watched 
+/opt/plexWatch/plexWatch.pl --watched 
 ======================================== Watched ========================================
 Date Range: Anytime through Now
 
@@ -251,7 +251,7 @@ User: carrie
 ##### list watched shows - limit by TODAY only
     
 ```
-/opt/git/plexWatch/plexWatch.pl --watched --start=today --start=tomorrow
+/opt/plexWatch/plexWatch.pl --watched --start=today --start=tomorrow
   
 ======================================== Watched ========================================
 Date Range: Fri Jun 28 00:00:00 2013 through Sat Jun 29 00:00:00 2013
@@ -263,7 +263,7 @@ Fri Jun 28 09:18:22 2013: jimbo watched: Married ... with Children - Mr. Empty P
 ##### list watched shows - limit by a start and stop date
     
 ```
-/opt/git/plexWatch/plexWatch.pl --watched --start="2 days ago" --stop="1 day ago"
+/opt/plexWatch/plexWatch.pl --watched --start="2 days ago" --stop="1 day ago"
  
 ======================================== Watched ========================================
 Date Range: Fri Jun 26 00:00:00 2013 through Thu Jun 27 00:00:00 2013
@@ -300,7 +300,7 @@ Date Range: Fri Jun 26 00:00:00 2013 through Thu Jun 27 00:00:00 2013
 * --start, --stop, --user options can be supplied to limit the output
 
 ```
-/opt/git/plexWatch/plexWatch.pl --stats
+/opt/plexWatch/plexWatch.pl --stats
    
 Date Range: Anytime through Now
 
