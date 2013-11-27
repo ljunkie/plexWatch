@@ -28,7 +28,7 @@ use open qw/:std :utf8/; ## default encoding of these filehandles all at once (b
 use utf8;
 use Encode;
 use JSON;
-use IO::Socket::SSL qw( SSL_VERIFY_NONE );
+use IO::Socket::SSL qw( SSL_VERIFY_NONE);
 
 ## windows
 if ($^O eq 'MSWin32') {
@@ -98,15 +98,8 @@ if (&ProviderEnabled('GNTP')) {
 }
 
 if (&ProviderEnabled('EMAIL')) {
-    #require MIME::Lite; mime::lite sucks
-    #MIME::Lite->import();
-    if ($^O ne 'MSWin32') {
-	require Net::SMTP::TLS;
-        Net::SMTP::TLS->import();
-    } else {
-	require Net::SMTPS;
-        Net::SMTPS->import();
-    }
+    require Net::SMTPS;
+    Net::SMTPS->import();
 }
 
 if ($log_client_ip) {
@@ -156,7 +149,7 @@ GetOptions(\%options,
            'exclude_user:s@',
            'watching',
 	   'notify',
-           'debug',
+           'debug:s',
            'start:s',
            'stop:s',
            'format_start:s',
@@ -181,17 +174,21 @@ if ($options{version}) {
 }
 
 
-my $debug = $options{'debug'};
+
 my $debug_xml = $options{'show_xml'};
 
 ## ONLY load modules if used
-if ($options{debug}) {
+if (defined($options{debug})) {
     require Data::Dumper;
     Data::Dumper->import(); 
-    require diagnostics;
-    diagnostics->import();
+    if ($options{debug} =~ /\d/ && $options{debug} > 1) {
+	require diagnostics;
+	diagnostics->import();
+    } else {
+	$options{debug} = 1;
+    }
 }
-
+my $debug = $options{'debug'};
 
 if ($options{'format_options'}) {
     print "\nFormat Options for alerts\n";
@@ -2347,47 +2344,25 @@ sub NotifyEMAIL() {
 	    # Configure smtp server - required one time only
 	    # Eval SMTP server - catch errors
 	    eval {
-		if ($^O eq 'MSWin32') { 
-		    ## Windows use Net::SMTPS ( supports SSL, TLS and none )
-		    ## errors do NOT croak, so we will have to catch them and die
-		    my $SSLmode = 'none';
-		    $SSLmode = 'starttls' if $email{'port'} == 587 || $email{'enable_tls'};
-		    $SSLmode = 'ssl'      if $email{'port'} == 465;
-		    my $mailer = new Net::SMTPS(
-			$email{'server'},
-			( $email{'server'} ? (Hello => $email{'server'}) : () ),
-			( $email{'port'} ? (Port => $email{'port'}) : () ),
-			doSSL => $SSLmode,
-			SSL_verify_mode => SSL_VERIFY_NONE,
-			);
-		    $mailer->auth( $email{'username'}, $email{'password'}) if  $email{'username'} &&  $email{'password'};
-		    $mailer->mail($email{'from'});
-		    if ($mailer->to($email{'to'})) {
-			$mailer->data;
-			$mailer->datasend("To: $email{'to'}\r\n");
-			$mailer->datasend("From: $email{'from'}\r\n");
-			$mailer->datasend("Subject: $email{'subject'}\r\n");
-			$mailer->datasend("X-Mailer: plexWatch\r\n");
-			$mailer->datasend($alert);
-			$mailer->dataend;
-			$mailer->quit;
-		    } else {
-			die($mailer->message);
-		    }
-		} 
-		else {
-		    ## linux - not the best module, but it works and is available for ALL linux flavors
-		    ## errors will croak, so nothing else needed to catch failures
-		    my $mailer = new Net::SMTP::TLS(
-			$email{'server'},
-			( $email{'server'} ? (Hello => $email{'server'}) : () ),
-			( $email{'port'} ? (Port => $email{'port'}) : () ),
-			( $email{'username'} ? (User => $email{'username'}) : () ),
-			( $email{'password'} ? (Password => $email{'password'}) : () ),
-			( $email{enable_tls}  ? () : (NoTLS => 1) ) ,
-			);
-		    $mailer->mail($email{'from'});
-		    $mailer->to($email{'to'});
+
+		#delete_package 'diagnostics';
+		#diagnostics->import();
+		## Windows use Net::SMTPS ( supports SSL, TLS and none )
+		## errors do NOT croak, so we will have to catch them and die
+		my $SSLmode = 'none';
+		$SSLmode = 'starttls' if $email{'port'} == 587 || $email{'enable_tls'};
+		$SSLmode = 'ssl'      if $email{'port'} == 465;
+		my $mailer = new Net::SMTPS(
+		    $email{'server'},
+		    ( $email{'server'} ? (Hello => $email{'server'}) : () ),
+		    ( $email{'port'} ? (Port => $email{'port'}) : () ),
+		    doSSL => $SSLmode,
+		    SSL_verify_mode => SSL_VERIFY_NONE,
+		    );
+		
+		$mailer->auth( $email{'username'}, $email{'password'}) if  $email{'username'} &&  $email{'password'};
+		$mailer->mail($email{'from'});
+		if ($mailer->to($email{'to'})) {
 		    $mailer->data;
 		    $mailer->datasend("To: $email{'to'}\r\n");
 		    $mailer->datasend("From: $email{'from'}\r\n");
@@ -2396,6 +2371,8 @@ sub NotifyEMAIL() {
 		    $mailer->datasend($alert);
 		    $mailer->dataend;
 		    $mailer->quit;
+		} else {
+		    die($mailer->message);
 		}
 	    };
 	    
