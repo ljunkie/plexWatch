@@ -67,7 +67,8 @@ $watched_show_completed = 1 if !defined($watched_show_completed);
 ## how many hours between starts of the same show do we allow grouping? 24 is max (3 hour default)
 $watched_grouping_maxhr = 3 if !defined($watched_grouping_maxhr);      
 
-## end
+my $max_ra_backlog = 2; ## not added to config yet ( keep trying RA backlog for 2 days max )
+## end 
 ############################################
 
 
@@ -304,15 +305,18 @@ if (defined($options{'recently_added'})) {
 	}
 	
 	my $item = &ParseDataItem($info->{$k});
-	next if (!ref($item) or !$item->{'title'});	## verify we can parse the metadata ( sometimes the scanner is still filling in the info )
+	next if (!ref($item) or !$item->{'title'} or $item->{'title'} !~ /\w+/);	## verify we can parse the metadata ( sometimes the scanner is still filling in the info )
 	my $res = &RAdataAlert($k,$item);
+	next if (!ref($res) or !$res->{'alert'} or $res->{'alert'} !~ /\w+/ );	## verify we can parse the metadata ( sometimes the scanner is still filling in the info )
+	
 	$alerts->{$item->{addedAt}.$k} = $res;
     }
 
 
     ## RA backlog - make sure we have all alerts -- some might has been added previously but notification failed and newer content has purged the results above
-    my $ra_done = &GetRecentlyAddedDB();
+    my $ra_done = &GetRecentlyAddedDB($max_ra_backlog);
     my $push_type = 'push_recentlyadded';
+    
     foreach my $provider (keys %{$notify}) {
 	next if (!&ProviderEnabled($provider,$push_type));
 	#next if ( !$notify->{$provider}->{'enabled'} || !$notify->{$provider}->{$push_type}); ## skip provider if not enabled
@@ -343,7 +347,7 @@ if (defined($options{'recently_added'})) {
 
 		## check age of notification. -- allow two days ( we will keep trying to notify for 2 days.. if we keep failing.. we need to skip this)
 		my $age = time()-$ra_done->{$key}->{'time'};
-		my $ra_max_fail_days = 2; ## TODO: advanced config options?
+		my $ra_max_fail_days = $max_ra_backlog; ## TODO: advanced config options?
 		if ($age > 86400*$ra_max_fail_days) {
 		    ## notification is OLD .. set notify = 2 to exclude from processing
 		    my $msg = "Could not notify $provider on [$key] $item->{'title'} for " . &durationrr($age) . " -- setting as old notification/done";
@@ -1353,8 +1357,10 @@ sub GetStarted() {
 }
 
 sub GetRecentlyAddedDB() {
-    my $info = ();
+    my $limit_days = shift;
     my $cmd = "select * from recently_added";
+    $cmd .= " where time > " . (time()-(86400*$limit_days)) if $limit_days;
+    my $info = ();
     my $sth = $dbh->prepare($cmd);
     $sth->execute or die("Unable to execute query: $dbh->errstr\n");
     while (my $row_hash = $sth->fetchrow_hashref) {
