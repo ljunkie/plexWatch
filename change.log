@@ -1,3 +1,6 @@
+# 0.1.8
+    * Windows EMAIL fix: TLS/SSL authentication is now supported
+
 # 0.1.7
     * --recently_added allow users to specify specific sections ( more info: --recently_added )
     * --exclude_user will mute a notification, but still be logged to the DB. useful for plexWeb/Watch
