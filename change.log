@@ -1,3 +1,6 @@
+# 0.1.9
+    * plexWatch/Web paused time: did not work with grouped option
+
 # 0.1.8
     * Windows EMAIL fix: TLS/SSL authentication is now supported
     * EMAIL notifications now requires Net::SMTPS ( windows is built in )
