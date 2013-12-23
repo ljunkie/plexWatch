@@ -954,9 +954,9 @@ sub ProcessGrouped() {
 	$vaccum->execute;
     }
 
-    my $insert = $dbh->prepare("insert into grouped (session_id,time,stopped,paused,ip_address,title,platform,user,orig_title,orig_title_ep,genre,episode,season,summary,rating,year,xml) ".
+    my $insert = $dbh->prepare("insert into grouped (session_id,time,stopped,paused_counter,ip_address,title,platform,user,orig_title,orig_title_ep,genre,episode,season,summary,rating,year,xml) ".
 			       "values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
-    my $update = $dbh->prepare("update grouped set stopped = ?, paused = ?, ip_address = ?, platform = ?, xml = ? where id = ?");
+    my $update = $dbh->prepare("update grouped set stopped = ?, paused_counter = ?, ip_address = ?, platform = ?, xml = ? where id = ?");
     
     # lock for changes - this is a HUGE speed increase ( takes < second to insert/update 1500 records )
     $dbh->begin_work; 
@@ -964,7 +964,7 @@ sub ProcessGrouped() {
     foreach my $k (sort {  $seen{$a}->{time} cmp $seen{$b}->{'time'}  } (keys %seen) ) {
 	my $info = $seen{$k};
 	## check if record exists
-	my $check = $dbh->prepare('select id,stopped,paused from grouped where session_id = ? and time = ?');
+	my $check = $dbh->prepare('select id,stopped,paused_counter from grouped where session_id = ? and time = ?');
 	$check->execute($info->{'db_key'},$info->{'time'}) or die("Unable to execute query: $dbh->errstr\n");
 	my @row = $check->fetchrow_array;
 	
