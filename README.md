@@ -670,6 +670,12 @@ __OSX__
 
 __Answer__
 
+Create a LaunchAgent plist file, called com.rcork.plexwatch.plist. This should be saved in ~/Library/LaunchAgents/
+
+```
+vim ~/Library/LaunchAgents/com.rcork.plexwatch.plist
+```
+Paste this text into the file, changing the /path/to/your/plexWatch variable, as appropriate. If you followed the directions above, this should be /opt/plexWatch/plexWatch.pl
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -691,6 +697,10 @@ __Answer__
 </plist>
 ```
 
+After you edit and save the file, you need to load the LaunchAgent:
+```
+launchctl load ~/Library/LaunchAgents/com.rcork.plexwatch.plist
+```
 
 
 * __How do I install on OSX__
