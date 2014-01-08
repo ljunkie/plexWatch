@@ -1,11 +1,11 @@
 #!/usr/bin/perl
 
-my $version = '0.1.8';
+my $version = '0.2.0';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-11-27 12:41 PST
+# Modified: 2013-12-23 09:12 PST
 #
 #  Version: $version
 # https://github.com/ljunkie/plexWatch
@@ -28,7 +28,7 @@ use open qw/:std :utf8/; ## default encoding of these filehandles all at once (b
 use utf8;
 use Encode;
 use JSON;
-use IO::Socket::SSL qw( SSL_VERIFY_NONE );
+use IO::Socket::SSL qw( SSL_VERIFY_NONE);
 
 ## windows
 if ($^O eq 'MSWin32') {
@@ -98,15 +98,8 @@ if (&ProviderEnabled('GNTP')) {
 }
 
 if (&ProviderEnabled('EMAIL')) {
-    #require MIME::Lite; mime::lite sucks
-    #MIME::Lite->import();
-    if ($^O ne 'MSWin32') {
-	require Net::SMTP::TLS;
-        Net::SMTP::TLS->import();
-    } else {
-	require Net::SMTPS;
-        Net::SMTPS->import();
-    }
+    require Net::SMTPS;
+    Net::SMTPS->import();
 }
 
 if ($log_client_ip) {
@@ -156,7 +149,7 @@ GetOptions(\%options,
            'exclude_user:s@',
            'watching',
 	   'notify',
-           'debug',
+           'debug:s',
            'start:s',
            'stop:s',
            'format_start:s',
@@ -181,17 +174,21 @@ if ($options{version}) {
 }
 
 
-my $debug = $options{'debug'};
+
 my $debug_xml = $options{'show_xml'};
 
 ## ONLY load modules if used
-if ($options{debug}) {
+if (defined($options{debug})) {
     require Data::Dumper;
     Data::Dumper->import(); 
-    require diagnostics;
-    diagnostics->import();
+    if ($options{debug} =~ /\d/ && $options{debug} > 1) {
+	require diagnostics;
+	diagnostics->import();
+    } else {
+	$options{debug} = 1;
+    }
 }
-
+my $debug = $options{'debug'};
 
 if ($options{'format_options'}) {
     print "\nFormat Options for alerts\n";
@@ -225,6 +222,13 @@ my $script_fh;
 ## END
 
 my $dbh = &initDB(); ## Initialize sqlite db - last
+
+my $DBversion =  &checkVersion();
+if ($DBversion ne $version) {
+    print "* Upgrading the plexWatch from $DBversion to $version -- (Forcing Backup)\n";
+    $options{'backup'} = 1;
+}
+
 &UpdateConfig(\@config_vars);
 
 if (&getLastGroupedTime() == 0) {    &UpdateGroupedTable;} ## update DB table if first run.
@@ -653,21 +657,10 @@ if ($options{'watching'}) {
 	    
 	    my $time = localtime ($in_progress->{$k}->{time} );
 	    
-	    ## switched to LIVE info
-	    #my $info = &info_from_xml($in_progress->{$k}->{'xml'},'watching',$in_progress->{$k}->{time});
-	    
-	    
 	    my $paused = &getSecPaused($k);
 	    my $info = &info_from_xml(XMLout($live->{$live_key}),'watching',$in_progress->{$k}->{time},time(),$paused);
 	    
 	    $info->{'ip_address'} = $in_progress->{$k}->{ip_address};
-	    
-	    ## disabled - --watching calls --notify ( so this is redundant)
-	    #&ProcessUpdate($live->{$live_key},$k); ## update XML  ## probably redundant as --watching calls --notify now -- (TODO)
-	    
-	    ## overwrite progress and time_left from live -- should be pulling live xml above at some point
-	    #$info->{'progress'} = &durationrr($live->{$live_key}->{viewOffset}/1000);
-	    #$info->{'time_left'} = &durationrr(($info->{raw_length}/1000)-($live->{$live_key}->{viewOffset}/1000));
 	    
 	    my $alert = &Notify($info,1); ## only return formated alert
 	    printf(" %s: %s\n",$time, $alert);
@@ -957,9 +950,9 @@ sub ProcessGrouped() {
 	$vaccum->execute;
     }
 
-    my $insert = $dbh->prepare("insert into grouped (session_id,time,stopped,paused,ip_address,title,platform,user,orig_title,orig_title_ep,genre,episode,season,summary,rating,year,xml) ".
+    my $insert = $dbh->prepare("insert into grouped (session_id,time,stopped,paused_counter,ip_address,title,platform,user,orig_title,orig_title_ep,genre,episode,season,summary,rating,year,xml) ".
 			       "values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
-    my $update = $dbh->prepare("update grouped set stopped = ?, paused = ?, ip_address = ?, platform = ?, xml = ? where id = ?");
+    my $update = $dbh->prepare("update grouped set stopped = ?, paused_counter = ?, ip_address = ?, platform = ?, xml = ? where id = ?");
     
     # lock for changes - this is a HUGE speed increase ( takes < second to insert/update 1500 records )
     $dbh->begin_work; 
@@ -967,7 +960,7 @@ sub ProcessGrouped() {
     foreach my $k (sort {  $seen{$a}->{time} cmp $seen{$b}->{'time'}  } (keys %seen) ) {
 	my $info = $seen{$k};
 	## check if record exists
-	my $check = $dbh->prepare('select id,stopped,paused from grouped where session_id = ? and time = ?');
+	my $check = $dbh->prepare('select id,stopped,paused_counter from grouped where session_id = ? and time = ?');
 	$check->execute($info->{'db_key'},$info->{'time'}) or die("Unable to execute query: $dbh->errstr\n");
 	my @row = $check->fetchrow_array;
 	
@@ -978,7 +971,7 @@ sub ProcessGrouped() {
 	## Existing record -- check if new info
 	else {
 	    # we can key off of stopped, paused -- stopped will probably be the only key since we are only looking for watched content now
-	    if ($row[1] != $info->{'stopped'} || $row[2] != $info->{'paused'}) {
+	    if ($row[1] ne $info->{'stopped'} || $row[2] ne $info->{'paused'}) {
 		$update->execute($info->{'stopped'},$info->{'paused'},$info->{'ip_address'},$info->{'platform'},$info->{'xml'},$row[0]) or die("Unable to execute query: $dbh->errstr\n");
 	    }
 	}
@@ -2347,47 +2340,25 @@ sub NotifyEMAIL() {
 	    # Configure smtp server - required one time only
 	    # Eval SMTP server - catch errors
 	    eval {
-		if ($^O eq 'MSWin32') { 
-		    ## Windows use Net::SMTPS ( supports SSL, TLS and none )
-		    ## errors do NOT croak, so we will have to catch them and die
-		    my $SSLmode = 'none';
-		    $SSLmode = 'starttls' if $email{'port'} == 587 || $email{'enable_tls'};
-		    $SSLmode = 'ssl'      if $email{'port'} == 465;
-		    my $mailer = new Net::SMTPS(
-			$email{'server'},
-			( $email{'server'} ? (Hello => $email{'server'}) : () ),
-			( $email{'port'} ? (Port => $email{'port'}) : () ),
-			doSSL => $SSLmode,
-			SSL_verify_mode => SSL_VERIFY_NONE,
-			);
-		    $mailer->auth( $email{'username'}, $email{'password'}) if  $email{'username'} &&  $email{'password'};
-		    $mailer->mail($email{'from'});
-		    if ($mailer->to($email{'to'})) {
-			$mailer->data;
-			$mailer->datasend("To: $email{'to'}\r\n");
-			$mailer->datasend("From: $email{'from'}\r\n");
-			$mailer->datasend("Subject: $email{'subject'}\r\n");
-			$mailer->datasend("X-Mailer: plexWatch\r\n");
-			$mailer->datasend($alert);
-			$mailer->dataend;
-			$mailer->quit;
-		    } else {
-			die($mailer->message);
-		    }
-		} 
-		else {
-		    ## linux - not the best module, but it works and is available for ALL linux flavors
-		    ## errors will croak, so nothing else needed to catch failures
-		    my $mailer = new Net::SMTP::TLS(
-			$email{'server'},
-			( $email{'server'} ? (Hello => $email{'server'}) : () ),
-			( $email{'port'} ? (Port => $email{'port'}) : () ),
-			( $email{'username'} ? (User => $email{'username'}) : () ),
-			( $email{'password'} ? (Password => $email{'password'}) : () ),
-			( $email{enable_tls}  ? () : (NoTLS => 1) ) ,
-			);
-		    $mailer->mail($email{'from'});
-		    $mailer->to($email{'to'});
+
+		#delete_package 'diagnostics';
+		#diagnostics->import();
+		## Windows use Net::SMTPS ( supports SSL, TLS and none )
+		## errors do NOT croak, so we will have to catch them and die
+		my $SSLmode = 'none';
+		$SSLmode = 'starttls' if $email{'port'} == 587 || $email{'enable_tls'};
+		$SSLmode = 'ssl'      if $email{'port'} == 465;
+		my $mailer = new Net::SMTPS(
+		    $email{'server'},
+		    ( $email{'server'} ? (Hello => $email{'server'}) : () ),
+		    ( $email{'port'} ? (Port => $email{'port'}) : () ),
+		    doSSL => $SSLmode,
+		    SSL_verify_mode => SSL_VERIFY_NONE,
+		    );
+		
+		$mailer->auth( $email{'username'}, $email{'password'}) if  $email{'username'} &&  $email{'password'};
+		$mailer->mail($email{'from'});
+		if ($mailer->to($email{'to'})) {
 		    $mailer->data;
 		    $mailer->datasend("To: $email{'to'}\r\n");
 		    $mailer->datasend("From: $email{'from'}\r\n");
@@ -2396,6 +2367,8 @@ sub NotifyEMAIL() {
 		    $mailer->datasend($alert);
 		    $mailer->dataend;
 		    $mailer->quit;
+		} else {
+		    die($mailer->message);
 		}
 	    };
 	    
@@ -3364,11 +3337,12 @@ sub Watched() {
 	
 	
 	my $is_watched;
+	my $FromGroupTable = 1;
 	if ($update_grouped_table || $options{'nogrouping'}) {
-	    $is_watched = &GetWatched($start,$stop,0);
-	} else {
-	    $is_watched = &GetWatched($start,$stop,1);	
+	    ## get watched from processed table (original)
+	    $FromGroupTable = 0;
 	}
+	$is_watched = &GetWatched($start,$stop,$FromGroupTable);	
 
 	## already watched.
 	
@@ -3393,7 +3367,6 @@ sub Watched() {
 	my %seen_user = ();
 	my %stats = ();
 	my $ntype = 'watched';
-	my %completed = ();
 	my %seenc = (); ## testing
 	if (keys %{$is_watched}) {
 	    $print_stmt = ""; #clear the print
@@ -3447,44 +3420,20 @@ sub Watched() {
 		my $orig_skey = $skey; ## DO NOT MODIFY THIS
 		
 		
-		## Do NOT group content if the percent watched is 100% -- this will group everything up to 100% and start a new line...
-		#    * will now show that the viewer had watched the video completely (line1) and restarted it (line2)
-		
-		#just testing out grouping if percent_complete == 100
-		# if ($seenc{$orig_skey} && $seenc{$orig_skey} == 2) {$info->{'percent_complete'}  = 100;  }
-		# if ($seenc{$orig_skey} && $seenc{$orig_skey} == 5) {$info->{'percent_complete'}  = 100;  }
-		# $seenc{$orig_skey}++;
-		
-		my $is_completed = 0;
-		if ($watched_show_completed) {
-		    my $paused = &getSecPaused($k);
-		    my $info = &info_from_xml($is_watched->{$k}->{'xml'},$ntype,$is_watched->{$k}->{'time'},$is_watched->{$k}->{'stopped'},$paused);
-		    $skey = $skey . $completed{$orig_skey} if $completed{$orig_skey};
-		    if ($info->{'percent_complete'} > 99) {
-			my $d_out = "$is_watched->{$k}->{title} watched 100\% by $user on $year-$month-$day - starting a new line (more than once)\n";
-			$completed{$orig_skey}++;
-			$is_completed = 1; ## skey-incremented -- we can skip other skey checks
-			&DebugLog($d_out) if $completed{$orig_skey} > 1 && !$update_grouped_table;
-		    }
-		}
-		# end 100% grouping
-		
 		## split lines if start/restart > $watched_grouping_maxhr
 		#    * do not just blindly group by day.. the start/restart should be NO MORE than a few hours apart ($watched_grouping_maxhr)
-		if (!$is_completed) {
-		    $skey = $seen_cur{$orig_skey}  if $seen_cur{$orig_skey};                 ## if we have set $seen_cur - reset skey to that
-		    $seen_epoch{$skey} = $is_watched->{$k}->{time}  if !$seen_epoch{$skey};  ## set epoch for skey (if not set)
-		    my $diff = $is_watched->{$k}->{time}-$seen_epoch{$skey};                 ## diff between last start and this start
-		    
-		    if ($diff > (60*60)*($watched_grouping_maxhr)) {
-			my $d_out = &durationrr($diff) . 
-			    " between start,restart of '$is_watched->{$k}->{title}' for $user on $year-$month-$day: starting a new line\n";
-			&DebugLog($d_out) if !$update_grouped_table;
-			$skey = $orig_skey . $is_watched->{$k}->{time}; ## increment the skey
-			$seen_cur{$orig_skey} = $skey;                  ## set what the skey will be for future
-		    } 
-		    $seen_epoch{$skey} = $is_watched->{$k}->{time};  ## set the last epoch seen for this skey
-		}
+		$skey = $seen_cur{$orig_skey}  if $seen_cur{$orig_skey};                 ## if we have set $seen_cur - reset skey to that
+		$seen_epoch{$skey} = $is_watched->{$k}->{time}  if !$seen_epoch{$skey};  ## set epoch for skey (if not set)
+		my $diff = $is_watched->{$k}->{time}-$seen_epoch{$skey};                 ## diff between last start and this start
+		
+		if ($diff > (60*60)*($watched_grouping_maxhr)) {
+		    my $d_out = &durationrr($diff) . 
+			" between start,restart of '$is_watched->{$k}->{title}' for $user on $year-$month-$day: starting a new line\n";
+		    &DebugLog($d_out) if !$update_grouped_table;
+		    $skey = $orig_skey . $is_watched->{$k}->{time}; ## increment the skey
+		    $seen_cur{$orig_skey} = $skey;                  ## set what the skey will be for future
+		} 
+		$seen_epoch{$skey} = $is_watched->{$k}->{time};  ## set the last epoch seen for this skey
 		## END split if > $watched_grouping_maxhr
 		
 		## stat -- quick and dirty -- to clean up later
@@ -3494,13 +3443,22 @@ sub Watched() {
 		
 		next if !$options{'watched'} && !$update_grouped_table;
 		next if $is_watched->{$k}->{xml} =~ /<opt><\/opt>/i; ## bug -- fixed in 0.0.19
-		my $paused = &getSecPaused($k);
 
-		## grouping table is now used.. no need to go through logic if we are just printing.
-
-		#if ($options{'nogrouping'} && !$update_grouped_table) { # we always use grouping for grouped table!
-
-		if (!$update_grouped_table) { # we always use grouping for grouped table!
+		my $paused;
+		if ($FromGroupTable == 1) {
+		    ## pulling from the grouped table - no need to dynamically update the paused counter this time
+		    $paused = $is_watched->{$k}->{paused_counter};
+		} else {
+		    ## used to dynamically get the paused counter if the content hasn't been stopped yet
+		    ## or return the paused time if already stopped
+		    $paused = &getSecPaused($k);
+		}
+		
+		my $time2 = localtime ($is_watched->{$k}->{time} );
+		
+		## grouping table is now available.. no need to go through logic if we are just printing
+		## i.e. we use the raw db results in either the 'grouped' or 'processed' table 
+		if (!$update_grouped_table) {
 		    if (!$seen_user{$user}) {
 			$seen_user{$user} = 1;
 			$print_stmt .= "\nUser: " . $user;
@@ -3515,7 +3473,7 @@ sub Watched() {
 		}
 
 
-		## upate the grouped table
+		## update the grouped table
 		else {
 		    if (!$seen{$skey}) {
 			# these field are used for output
@@ -3559,16 +3517,51 @@ sub Watched() {
 			
 		    } else {
 			## if same user/same movie/same day -- append duration -- must of been resumed
-			$seen{$skey}->{'duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
+			## tally up paused time, duration and set the stopped time accordingly 
+
+			## update paused counter
+			if (!$seen{$skey}->{'paused'}) {
+			    $seen{$skey}->{'paused'} = $paused;
+			} else {
+			    $seen{$skey}->{'paused'} = $seen{$skey}->{'paused'}+$paused;
+			}
+			
+			## update duration 
+			if (!$count_paused) {
+			    $seen{$skey}->{'duration'} += ($is_watched->{$k}->{stopped}-$is_watched->{$k}->{time})-$paused;
+			} else {
+			    $seen{$skey}->{'duration'} += $is_watched->{$k}->{stopped}-$is_watched->{$k}->{time};
+			}
+			
 			## update the group with the most recent XML
 			$seen{$skey}->{'xml'} = $is_watched->{$k}->{xml};
 			
-			if ($is_watched->{$k}->{stopped} > $seen{$skey}->{'stopped'}) {
-			    $seen{$skey}->{'stopped'} = $is_watched->{$k}->{stopped}; ## include max stopped in case someone wants to display it
-			}
+			## update stopped time
+                        # the stopped time is only used for getting the duration ( so it will not be correct in grouped, but that's fine )
+                        # stopped time = start time + duration_watched ( minus the paused counter if set in prefs )
+			$seen{$skey}->{'stopped'} =  $seen{$skey}->{'duration'}+$seen{$skey}->{'time'};
+			
+                        # Wrong way of getting the stopped time
+			#if ($is_watched->{$k}->{stopped} > $seen{$skey}->{'stopped'}) {
+			#    $seen{$skey}->{'stopped'} = $is_watched->{$k}->{stopped}; ## include max stopped in case someone wants to display it
+			#}
+			
 		    }
 		}
+
+		## watched rollover: if the show has been completed and we always start a new grouping after being watched fully, increment the key
+		if ($watched_show_completed) {
+		    my $paused = &getSecPaused($k);
+		    my $info = &info_from_xml($is_watched->{$k}->{'xml'},$ntype,$is_watched->{$k}->{'time'},$is_watched->{$k}->{'stopped'},$paused);
+		    if ($info->{'percent_complete'} > 99) {
+			my $d_out = "$is_watched->{$k}->{title} watched 100\% by $user on $year-$month-$day - incrementing seen key\n";
+			$seen_cur{$orig_skey} = $orig_skey . $is_watched->{$k}->{time}; ## increment the skey -- and set for the future keys if we need to append
+			&DebugLog($d_out) if !$update_grouped_table;
+		    }
+		}
+		## end watched rollover
 	    }
+	    
 	} 
 	else {	    $print_stmt .= "\n* nothing watched\n";	}
 	
@@ -3600,6 +3593,16 @@ sub Watched() {
     }
 }    
     
+
+sub checkVersion() {
+    my $cmd = "select * from config";
+    my $sth = $dbh->prepare($cmd);
+    $sth->execute or die("Unable to execute query: $dbh->errstr\n");
+    my $row = $sth->fetchrow_hashref;
+    my $total=0;
+    return $row->{'version'} if $row->{'version'};
+    return 0;
+}
 
 
 __DATA__
