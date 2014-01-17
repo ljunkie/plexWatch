@@ -1886,6 +1886,7 @@ sub NotifyTwitter() {
 	consumer_secret     => $tw{'consumer_secret'},
 	access_token        => $tw{'access_token'},
 	access_token_secret => $tw{'access_token_secret'},
+  apiurl              => "https://api.twitter.com/1.1",
 	
 	);
     
@@ -1896,10 +1897,24 @@ sub NotifyTwitter() {
 	## my $rl = $nt->rate_limit_status; not useful for writes atm
 	# twitter API doesn't publish limits for writes -- we will use this section to try again if they ever do.
 	# if ($err->code == 403 && $rl->{'resources'}->{'application'}->{'/application/rate_limit_status'}->{'remaining'} > 1) {
-	if ($err->code == 403) {
-	    $provider_452->{$provider} = 1;
-	    my $msg452 = uc($provider) . " error 403: $alert - (You are over the daily limit for sending Tweets. Please wait a few hours and try again.) -- setting $provider to back off additional notifications";
-	    &ConsoleLog($msg452,,1);
+  if ($err->code == 403) {
+    # Grabs the specific Twitter Error code and Message. 
+        my $twitter_error = $err->{'twitter_error'}->{'errors'}[0]->{'message'};
+        my $twitter_code = $err->{'twitter_error'}->{'errors'}[0]->{'code'};
+        my $send_msg = '- (You are over the daily limit for sending Tweets. Please wait a few hours and try again.) -- setting $provider to back off additional notifications';
+        $provider_452->{$provider} = 1;
+        ## Not a Rate Limit Error. We can now add more error codes as we see fit.
+        if ($twitter_code == 187) {
+          $send_msg = "Status is a duplicate msg ($twitter_code). Setting $provider to back off additional notifications";
+        }
+        my $msg452 = uc($provider) . " error 403: $alert - $send_msg";&ConsoleLog($msg452,,1);
+        if ($debug)
+        {
+          warn "HTTP Response Code: ", $err-> code, "\n", 
+    	    "HTTP Message......: ", $err->message, "\n",
+          "Twitter error.....: ", $twitter_code, "\n",
+    	    "Twitter message...: ", $twitter_error, "\n";
+        }
 	    return 0;
 	}
     }
