@@ -1099,7 +1099,12 @@ sub LocateIP() {
 		    &DebugLog($d_out);
 		    &DebugLog("$ip log match (line $count): $match") if $ip;
 		}
-		return $ip if $ip;
+		
+		## cleanup IP address and return
+		if ($ip) {
+		    $ip =~ s/^::ffff://g; ## clean ipv6 compatible address
+		    return $ip;
+		}
 	    }
 	}
     }
