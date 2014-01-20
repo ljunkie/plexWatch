@@ -1,11 +1,11 @@
 #!/usr/bin/perl
 
-my $version = '0.2.0';
+my $version = '0.2.1';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2014-01-08 12:12 PST
+# Modified: 2014-01-20 12:46 PST
 #
 #  Version: $version
 # https://github.com/ljunkie/plexWatch
@@ -1886,8 +1886,7 @@ sub NotifyTwitter() {
 	consumer_secret     => $tw{'consumer_secret'},
 	access_token        => $tw{'access_token'},
 	access_token_secret => $tw{'access_token_secret'},
-  apiurl              => "https://api.twitter.com/1.1",
-	
+	apiurl              => "https://api.twitter.com/1.1",
 	);
     
     my $result = eval { $nt->update($alert); };
@@ -1897,24 +1896,25 @@ sub NotifyTwitter() {
 	## my $rl = $nt->rate_limit_status; not useful for writes atm
 	# twitter API doesn't publish limits for writes -- we will use this section to try again if they ever do.
 	# if ($err->code == 403 && $rl->{'resources'}->{'application'}->{'/application/rate_limit_status'}->{'remaining'} > 1) {
-  if ($err->code == 403) {
-    # Grabs the specific Twitter Error code and Message. 
-        my $twitter_error = $err->{'twitter_error'}->{'errors'}[0]->{'message'};
-        my $twitter_code = $err->{'twitter_error'}->{'errors'}[0]->{'code'};
-        my $send_msg = '- (You are over the daily limit for sending Tweets. Please wait a few hours and try again.) -- setting $provider to back off additional notifications';
-        $provider_452->{$provider} = 1;
-        ## Not a Rate Limit Error. We can now add more error codes as we see fit.
-        if ($twitter_code == 187) {
-          $send_msg = "Status is a duplicate msg ($twitter_code). Setting $provider to back off additional notifications";
-        }
-        my $msg452 = uc($provider) . " error 403: $alert - $send_msg";&ConsoleLog($msg452,,1);
-        if ($debug)
-        {
-          warn "HTTP Response Code: ", $err-> code, "\n", 
-    	    "HTTP Message......: ", $err->message, "\n",
-          "Twitter error.....: ", $twitter_code, "\n",
-    	    "Twitter message...: ", $twitter_error, "\n";
-        }
+	if ($err->code == 403) {
+	    # Grabs the specific Twitter Error code and Message. 
+	    my $twitter_error = $err->{'twitter_error'}->{'errors'}[0]->{'message'};
+	    my $twitter_code = $err->{'twitter_error'}->{'errors'}[0]->{'code'};
+	    my $send_msg = '- (You are over the daily limit for sending Tweets. Please wait a few hours and try again.) -- setting $provider to back off additional notifications';
+	    $provider_452->{$provider} = 1;
+	    ## Not a Rate Limit Error. We can now add more error codes as we see fit.
+	    if ($twitter_code == 187) {
+		## TODO: We probably want to just mark this as notified, to move on -- since it's a duplicate
+		$send_msg = "Status is a duplicate msg ($twitter_code). Setting $provider to back off additional notifications";
+	    }
+	    my $msg452 = uc($provider) . " error 403: $alert - $send_msg";&ConsoleLog($msg452,,1);
+	    if ($debug)
+	    {
+		warn "HTTP Response Code: ", $err-> code, "\n", 
+		"HTTP Message......: ", $err->message, "\n",
+		"Twitter error.....: ", $twitter_code, "\n",
+		"Twitter message...: ", $twitter_error, "\n";
+	    }
 	    return 0;
 	}
     }
