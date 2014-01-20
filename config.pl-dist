@@ -2,6 +2,7 @@ $data_dir = '/opt/plexWatch/'; ## to store the DB, logfile - can be the same as 
 
 $server_log = '/var/lib/plexmediaserver/Library/Application Support/Plex Media Server/Logs/Plex Media Server.log'; ## used to log IP address of user (alpha)
 $log_client_ip = 0; ## requires $server_log to be available too. (requires File::ReadBackwards)
+	            ## also required DEBUG log to be turned on in the PMS
 
 $debug_logging = 1; ## logs to $data_dir/debug.log ( not verbose enough yet.. still todo )
 
