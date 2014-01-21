@@ -122,6 +122,7 @@ my $format_options = {
     'length' => 'length of video',
     'progress' => 'progress of video [only available/correct on --watching and stop events]',
     'time_left' => 'progress of video [only available/correct on --watching and stop events]',
+    'streamtype_extended' => '"Direct Play" or "Audio:copy Video:transcode"',
     'streamtype' => 'T or D - for Transcoded or Direct',
     'transcoded' => '1 or 0 - if transcoded',
     'state' => 'playing, paused or buffering [ or stopped ] (useful on --watching)',
@@ -198,8 +199,8 @@ if ($options{'format_options'}) {
     print "\n\t --watching='" . $alert_format->{'watching'} ."'";
     print "\n\n";
     
-    foreach my $k (keys %{$format_options}) {
-	printf("%20s %s\n", "{$k}", $format_options->{$k});
+    foreach my $k (sort keys %{$format_options}) {
+	printf("%25s %s\n", "{$k}", $format_options->{$k});
     }
     print "\n";
     exit;
@@ -2574,10 +2575,12 @@ sub info_from_xml() {
     my $isTranscoded = 0;
     my $transInfo; ## container used for transcoded information - not in use yet
     my $streamType = 'D';
+    my $streamTypeExtended = 'Direct Play';
     if (ref $vid->{TranscodeSession}) {
 	$isTranscoded = 1;
 	$transInfo = $vid->{TranscodeSession};
 	$streamType = 'T';
+	$streamTypeExtended = "Audio:" . $vid->{TranscodeSession}->{'audioDecision'} . " Video:" . $vid->{TranscodeSession}->{'videoDecision'};
     }
     
     ## Time left Info
@@ -2703,6 +2706,7 @@ sub info_from_xml() {
 	'state' => $state,
 	'transcoded' => $isTranscoded,
 	'streamtype' => $streamType,
+	'streamtype_extended' => $streamTypeExtended,
 	'transInfo' => $transInfo,
 	'machineIdentifier' => $ma_id,
 	'ratingKey' => $ratingKey,
