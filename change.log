@@ -1,5 +1,15 @@
+# 0.2.1
+    * new format option '{streamtype_extended}' -- includes the Audio/Video decision: "Direct Play" or "Audio:copy Video:transcode"
+    * cleanup ipv6 comptable ipv4 address
+    * twitter fixes (API change) h/t @RaginBajin
+
+# 0.2.0
+    *  fix logic for grouping table ( important fix -- data could be incorrect prior to version 0.2.0 )
+    * when version changes, the DB will auto upgrade/backup
+
 # 0.1.9
-    * plexWatch/Web paused time: did not work with grouped option
+    * grouped table was not using the right paused field (paused_counter) -- fixes paused display in plexWatch/Web
+    * EMAIL now requires Net::SMTPS -- Net::SMTP::TLS is junk (deprecated/abandoned)
 
 # 0.1.8
     * Windows EMAIL fix: TLS/SSL authentication is now supported

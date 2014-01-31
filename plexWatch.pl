@@ -1,11 +1,11 @@
 #!/usr/bin/perl
 
-my $version = '0.2.0';
+my $version = '0.2.1';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2013-12-23 09:12 PST
+# Modified: 2014-01-20 12:46 PST
 #
 #  Version: $version
 # https://github.com/ljunkie/plexWatch
@@ -122,6 +122,7 @@ my $format_options = {
     'length' => 'length of video',
     'progress' => 'progress of video [only available/correct on --watching and stop events]',
     'time_left' => 'progress of video [only available/correct on --watching and stop events]',
+    'streamtype_extended' => '"Direct Play" or "Audio:copy Video:transcode"',
     'streamtype' => 'T or D - for Transcoded or Direct',
     'transcoded' => '1 or 0 - if transcoded',
     'state' => 'playing, paused or buffering [ or stopped ] (useful on --watching)',
@@ -198,8 +199,8 @@ if ($options{'format_options'}) {
     print "\n\t --watching='" . $alert_format->{'watching'} ."'";
     print "\n\n";
     
-    foreach my $k (keys %{$format_options}) {
-	printf("%20s %s\n", "{$k}", $format_options->{$k});
+    foreach my $k (sort keys %{$format_options}) {
+	printf("%25s %s\n", "{$k}", $format_options->{$k});
     }
     print "\n";
     exit;
@@ -1099,7 +1100,12 @@ sub LocateIP() {
 		    &DebugLog($d_out);
 		    &DebugLog("$ip log match (line $count): $match") if $ip;
 		}
-		return $ip if $ip;
+		
+		## cleanup IP address and return
+		if ($ip) {
+		    $ip =~ s/^::ffff://g; ## clean ipv6 compatible address
+		    return $ip;
+		}
 	    }
 	}
     }
@@ -1886,7 +1892,7 @@ sub NotifyTwitter() {
 	consumer_secret     => $tw{'consumer_secret'},
 	access_token        => $tw{'access_token'},
 	access_token_secret => $tw{'access_token_secret'},
-	
+	apiurl              => "https://api.twitter.com/1.1",
 	);
     
     my $result = eval { $nt->update($alert); };
@@ -1897,9 +1903,24 @@ sub NotifyTwitter() {
 	# twitter API doesn't publish limits for writes -- we will use this section to try again if they ever do.
 	# if ($err->code == 403 && $rl->{'resources'}->{'application'}->{'/application/rate_limit_status'}->{'remaining'} > 1) {
 	if ($err->code == 403) {
+	    # Grabs the specific Twitter Error code and Message. 
+	    my $twitter_error = $err->{'twitter_error'}->{'errors'}[0]->{'message'};
+	    my $twitter_code = $err->{'twitter_error'}->{'errors'}[0]->{'code'};
+	    my $send_msg = '- (You are over the daily limit for sending Tweets. Please wait a few hours and try again.) -- setting $provider to back off additional notifications';
 	    $provider_452->{$provider} = 1;
-	    my $msg452 = uc($provider) . " error 403: $alert - (You are over the daily limit for sending Tweets. Please wait a few hours and try again.) -- setting $provider to back off additional notifications";
-	    &ConsoleLog($msg452,,1);
+	    ## Not a Rate Limit Error. We can now add more error codes as we see fit.
+	    if ($twitter_code == 187) {
+		## TODO: We probably want to just mark this as notified, to move on -- since it's a duplicate
+		$send_msg = "Status is a duplicate msg ($twitter_code). Setting $provider to back off additional notifications";
+	    }
+	    my $msg452 = uc($provider) . " error 403: $alert - $send_msg";&ConsoleLog($msg452,,1);
+	    if ($debug)
+	    {
+		warn "HTTP Response Code: ", $err-> code, "\n", 
+		"HTTP Message......: ", $err->message, "\n",
+		"Twitter error.....: ", $twitter_code, "\n",
+		"Twitter message...: ", $twitter_error, "\n";
+	    }
 	    return 0;
 	}
     }
@@ -2554,10 +2575,12 @@ sub info_from_xml() {
     my $isTranscoded = 0;
     my $transInfo; ## container used for transcoded information - not in use yet
     my $streamType = 'D';
+    my $streamTypeExtended = 'Direct Play';
     if (ref $vid->{TranscodeSession}) {
 	$isTranscoded = 1;
 	$transInfo = $vid->{TranscodeSession};
 	$streamType = 'T';
+	$streamTypeExtended = "Audio:" . $vid->{TranscodeSession}->{'audioDecision'} . " Video:" . $vid->{TranscodeSession}->{'videoDecision'};
     }
     
     ## Time left Info
@@ -2683,6 +2706,7 @@ sub info_from_xml() {
 	'state' => $state,
 	'transcoded' => $isTranscoded,
 	'streamtype' => $streamType,
+	'streamtype_extended' => $streamTypeExtended,
 	'transInfo' => $transInfo,
 	'machineIdentifier' => $ma_id,
 	'ratingKey' => $ratingKey,
