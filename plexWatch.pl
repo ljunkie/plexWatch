@@ -1570,6 +1570,7 @@ sub DB_ra_table() {
         { 'name' => 'EMAIL', 'definition' => 'INTEGER',},
         { 'name' => 'pushover', 'definition' => 'INTEGER',},
         { 'name' => 'boxcar', 'definition' => 'INTEGER',},
+        { 'name' => 'boxcar_v2', 'definition' => 'INTEGER',},
 
         );
 
@@ -2109,7 +2110,7 @@ sub NotifyBoxcar() {
         return 0;
     }
 
-    my %bc = %{$notify->{boxcar}};
+    my %bc = %{$notify->{$provider}};
     $bc{'message'} = $alert;
 
     ## BoxCars title [from name] is set in config.pl. If there is a real title for push type, It's 'From: push_type_title'
@@ -2130,7 +2131,7 @@ sub NotifyBoxcar() {
     $bc{'from'} .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};
 
     if (!$bc{'email'}) {
-        my $msg = "FAIL: Please specify and email address for boxcar in config.pl";
+        my $msg = "FAIL: Please specify an email address for boxcar in config.pl";
         &ConsoleLog($msg);
     } else {
         my $response = &NotifyBoxcarPOST(\%bc);
@@ -2161,6 +2162,64 @@ sub NotifyBoxcar() {
                     return 1;
                 }
             }
+        }
+    }
+
+    $provider_452->{$provider} = 1;
+    my $msg452 = uc($provider) . " failed: $alert - setting $provider to back off additional notifications\n";
+    &ConsoleLog($msg452,,1);
+    return 0;
+}
+
+sub NotifyBoxcar_V2() {
+    my $provider = 'boxcar_v2';
+
+    my $info = shift;
+    my ($alert) = &formatAlert($info,$provider);
+
+    my $alert_options = shift;
+
+    if ($provider_452->{$provider}) {
+        if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
+        return 0;
+    }
+
+    my %bc = %{$notify->{$provider}};
+    $bc{'message'} = $alert;
+
+    ## BoxCars title [from name] is set in config.pl. If there is a real title for push type, It's 'From: push_type_title'
+
+    ## allow formatting of appname (boxcar it's the 'from' key)
+    $bc{'from'} = '{user}' if $bc{'from'} eq $appname; ## force {user} if people still use $appname in config -- forcing update with the need to modify config.
+    my $format = $bc{'from'};
+    if ($format =~ /\{.*\}/) {
+        ### replacemnt templates with variables
+        my $regex = join "|", keys %{$alert_options};
+        $regex = qr/$regex/;
+        $bc{'from'} =~ s/{($regex)}/$alert_options->{$1}/g;
+        $bc{'from'} =~ s/{\w+}//g; ## remove any {word} - templates that failed
+        $bc{'from'} = $appname if !$bc{'from'}; ## replace appname if empty
+    }
+
+    $bc{'from'} .= ': ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};
+    $bc{'from'} .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};
+
+    if (!$bc{'access_token'}) {
+        my $msg = "FAIL: Please specify an Access Token for boxcar_v2 in config.pl";
+        &ConsoleLog($msg);
+    } else {
+        my $ua      = LWP::UserAgent->new();
+        $ua->timeout(20);
+        my $url = 'https://new.boxcar.io/api/notifications';
+        my $response = $ua->post( $url, [
+                                      "user_credentials" => $bc{'access_token'},
+                                      "notification[title]"=> $bc{'from'},
+                                      "notification[long_message]" => $bc{'message'},
+                                      "notification[sound]" => "bird-1",  ]);
+        
+        if ($response->is_success) {
+            print uc($provider) . " Notification successfully posted.\n" if $debug;
+            return 1;
         }
     }
 
@@ -3083,6 +3142,7 @@ sub GetNotifyfuncs() {
         pushover => \&NotifyPushOver,
         twitter => \&NotifyTwitter,
         boxcar => \&NotifyBoxcar,
+        boxcar_v2 => \&NotifyBoxcar_V2,
         file => \&NotifyFile,
         GNTP => \&NotifyGNTP,
         EMAIL => \&NotifyEMAIL,
