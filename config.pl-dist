@@ -2,7 +2,7 @@ $data_dir = '/opt/plexWatch/'; ## to store the DB, logfile - can be the same as 
 
 $server_log = '/var/lib/plexmediaserver/Library/Application Support/Plex Media Server/Logs/Plex Media Server.log'; ## used to log IP address of user (alpha)
 $log_client_ip = 0; ## requires $server_log to be available too. (requires File::ReadBackwards)
-	            ## also required DEBUG log to be turned on in the PMS
+## also required DEBUG log to be turned on in the PMS
 
 $debug_logging = 1; ## logs to $data_dir/debug.log ( not verbose enough yet.. still todo )
 
@@ -21,10 +21,10 @@ $appname = 'plexWatch';
 ## Give a user a more friendly name. I.E. REAL_USER will now be Frank
 ## you may also specify the platform with user+platform
 $user_display = {'REAL_USER1' => 'Frank',
-		 'REAL_USER2' => 'Rob & Carrie',
-		 'REAL_USER2+Roku 3' => 'Family Room',
-		 'REAL_USER2+Roku' => 'Family Room',
-		 'REAL_USER2+iOS' => 'Rob',
+                 'REAL_USER2' => 'Rob & Carrie',
+                 'REAL_USER2+Roku 3' => 'Family Room',
+                 'REAL_USER2+Roku' => 'Family Room',
+                 'REAL_USER2+iOS' => 'Rob',
 };
 
 
@@ -37,160 +37,171 @@ $user_display = {'REAL_USER1' => 'Frank',
 $alert_format = {'start'    =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in] {ip_address}',
                  'paused'   =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in] [{percent_complete}%] {ip_address}',
                  'resumed'  =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in] [{percent_complete}%] {ip_address}',
-		 'stop'     =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} for {duration} [{percent_complete}%] {ip_address}',
-		 'watched'  =>  '{user} watched {title} [{streamtype}] [{year}] [{length}] [{rating}] on {platform} for {duration} [{percent_complete}%] {ip_address}',
-		 'watching' =>  '{user} {state} {title} [{streamtype}] [{year}] [{rating}] [{length}] on {platform} for {duration} [{percent_complete}%] [{time_left} left] {ip_address}'
+                 'stop'     =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} for {duration} [{percent_complete}%] {ip_address}',
+                 'watched'  =>  '{user} watched {title} [{streamtype}] [{year}] [{length}] [{rating}] on {platform} for {duration} [{percent_complete}%] {ip_address}',
+                 'watching' =>  '{user} {state} {title} [{streamtype}] [{year}] [{rating}] [{length}] on {platform} for {duration} [{percent_complete}%] [{time_left} left] {ip_address}'
 };
 
 ## Notification Options
 $notify = {
-    
+
     'file' => {
         'enabled' => 1,  ## 0 or 1 - set to 1 to enable File Logging
         'filename' => "$data_dir/plexWatch.log", ## default is plexWatch.log
     },
-    
+
     'prowl' => {
-	'enabled' => 0, ## 0 or 1 - set to 1 to enable PROWL
-	'push_recentlyadded'  => 0,
-	'push_watched'        => 0,
-	'push_watching'       => 0,
-	'push_paused'         => 0,
-	'push_resumed'        => 0,
-	'apikey' => 'YOUR API KEY', ## your API key
-	'application' => '{user}',
-	'priority' => 0,
-	'url' => '',
-    },
-    
-    'pushover' => {
-	'enabled' => 0, ## set to 1 to enable Pushover
-	'push_recentlyadded'  => 0,
-	'push_watched'        => 0,
-	'push_watching'       => 0,
-	'push_paused'         => 0,
-	'push_resumed'        => 0,
-	'token' => 'YOUR APP TOKEN', ## your app token
-	'user' => 'YOUR USER TOKEN',  ## your user token
-	'title' => '{user}',
-	'sound' => 'intermission',
-    },
-    
-    'growl' => {
-	'enabled' => 0, ## set to 1 to enable local growl (You should probably used GNTP - growl supported for multiple platforms - below)
-	'push_recentlyadded'  => 0,
-	'push_watched'        => 0,
-	'push_watching'       => 0,
-	'push_paused'         => 0,
-	'push_resumed'        => 0,
-	'application' => '{user}',
-	'script' => '/usr/local/bin/growlnotify',
-	'icon' => '/Applications/Plex Media Server.app/Contents/Resources/MyPlex.icns',
-    },
-    
-    
-    'twitter' => {
-        'enabled'             => 0, ## set to 1 to enable local growl
-	'push_recentlyadded'  => 0,
-	'push_watched'        => 0,
-	'push_watching'       => 0,
+        'enabled' => 0, ## 0 or 1 - set to 1 to enable PROWL
+        'push_recentlyadded'  => 0,
+        'push_watched'        => 0,
+        'push_watching'       => 0,
         'push_paused'         => 0,
         'push_resumed'        => 0,
-	'title'               => '{user}',
-	'consumer_key'        => '',
+        'apikey' => 'YOUR API KEY', ## your API key
+        'application' => '{user}',
+        'priority' => 0,
+        'url' => '',
+    },
+
+    'pushover' => {
+        'enabled' => 0, ## set to 1 to enable Pushover
+        'push_recentlyadded'  => 0,
+        'push_watched'        => 0,
+        'push_watching'       => 0,
+        'push_paused'         => 0,
+        'push_resumed'        => 0,
+        'token' => 'YOUR APP TOKEN', ## your app token
+        'user' => 'YOUR USER TOKEN',  ## your user token
+        'title' => '{user}',
+        'sound' => 'intermission',
+    },
+
+    'growl' => {
+        'enabled' => 0, ## set to 1 to enable local growl (You should probably used GNTP - growl supported for multiple platforms - below)
+        'push_recentlyadded'  => 0,
+        'push_watched'        => 0,
+        'push_watching'       => 0,
+        'push_paused'         => 0,
+        'push_resumed'        => 0,
+        'application' => '{user}',
+        'script' => '/usr/local/bin/growlnotify',
+        'icon' => '/Applications/Plex Media Server.app/Contents/Resources/MyPlex.icns',
+    },
+
+
+    'twitter' => {
+        'enabled'             => 0, ## set to 1 to enable local growl
+        'push_recentlyadded'  => 0,
+        'push_watched'        => 0,
+        'push_watching'       => 0,
+        'push_paused'         => 0,
+        'push_resumed'        => 0,
+        'title'               => '{user}',
+        'consumer_key'        => '',
         'consumer_secret'     => '',
         'access_token'        => '',
         'access_token_secret' => '',
-	'alert_format' => {
-	    'start'    =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in]',
-	    'paused'   =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in] [{percent_complete}%]',
-	    'resumed'  =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in] [{percent_complete}%]',
-	    'stop'     =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} for {duration} [{percent_complete}%]',
-	},
+        'alert_format' => {
+            'start'    =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in]',
+            'paused'   =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in] [{percent_complete}%]',
+            'resumed'  =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in] [{percent_complete}%]',
+            'stop'     =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} for {duration} [{percent_complete}%]',
+        },
     },
-    
+
     'boxcar' => {
-        'enabled' => 0, ## set to 1 to enable local growl
-	'push_recentlyadded'  => 0,
-	'push_watched'        => 0,
-	'push_watching'       => 0,
+        'enabled' => 0, ## set to 1 to enable local boxcar
+        'push_recentlyadded'  => 0,
+        'push_watched'        => 0,
+        'push_watching'       => 0,
         'push_paused'         => 0,
         'push_resumed'        => 0,
-	'email' => '',                          ## YOUR email address registered at boxcar
-	'from' => '{user}',                     ## From Name displayed on boxcar
-	'provider_key' => 'o2eI7rcwya5XFETaXdlh',                        ## plexWatch app is 'o2eI7rcwya5XFETaXdlh'. You may supply your own.
-	'provider_secret' => 'h4pJjyBoEMk1rwK2EH3NLemO4fQ0ql9HnRgVfwg4', ## plexWatch app is 'h4pJjyBoEMk1rwK2EH3NLemO4fQ0ql9HnRgVfwg4'. You may supply your own.
-	'icon_url' => '', # Leave empty ('') for plexWatch icon. You may supply your own (57x57)
+        'email' => '',                          ## YOUR email address registered at boxcar
+        'from' => '{user}',                     ## From Name displayed on boxcar
+        'provider_key' => 'o2eI7rcwya5XFETaXdlh',                        ## plexWatch app is 'o2eI7rcwya5XFETaXdlh'. You may supply your own.
+        'provider_secret' => 'h4pJjyBoEMk1rwK2EH3NLemO4fQ0ql9HnRgVfwg4', ## plexWatch app is 'h4pJjyBoEMk1rwK2EH3NLemO4fQ0ql9HnRgVfwg4'. You may supply your own.
+        'icon_url' => '', # Leave empty ('') for plexWatch icon. You may supply your own (57x57)
     },
-    
-    ## GNTP (GROWL) -- multiple destinations are supported 
-    'GNTP' => { 
-	'1' => 	{
-	    'enabled' => 0, ## set to 1 to enable local growl
-	    'push_recentlyadded'  => 0,
-	    'push_watched'        => 0,
-	    'push_watching'       => 0,
+
+    'boxcar_v2' => {
+        'enabled' => 0, ## set to 1 to enable local boxcar_v2 ( device specific )
+        'push_recentlyadded'  => 0,
+        'push_watched'        => 0,
+        'push_watching'       => 0,
+        'push_paused'         => 0,
+        'push_resumed'        => 0,
+        'access_token'        => '', # Access token from your Device
+        'from' => '{user}',          ## From Name displayed on boxcar
+    },
+
+    ## GNTP (GROWL) -- multiple destinations are supported
+    'GNTP' => {
+        '1' => 	{
+            'enabled' => 0, ## set to 1 to enable local growl
+            'push_recentlyadded'  => 0,
+            'push_watched'        => 0,
+            'push_watching'       => 0,
             'push_paused'         => 0,
             'push_resumed'        => 0,
-	    'application' => $appname,
+            'application' => $appname,
             'title' => '{user}',
-	    'server' => '10.0.0.1', # destination ip/host
-	    'port' => '23053',      # default 23053
-	    'password' => '',       # '' for no pass
-	    'icon_url' => 'https://rarforge.com/images/plexWatch.57x57.png',
-	    'sticky' => 1,
-	},
-	
-	'2' => 	{
-	    'enabled' => 0, ## set to 1 to enable local growl
-	    'push_recentlyadded'  => 0,
-	    'push_watched'        => 0,
-	    'push_watching'       => 0,
+            'server' => '10.0.0.1', # destination ip/host
+            'port' => '23053',      # default 23053
+            'password' => '',       # '' for no pass
+            'icon_url' => 'https://rarforge.com/images/plexWatch.57x57.png',
+            'sticky' => 1,
+        },
+
+        '2' => 	{
+            'enabled' => 0, ## set to 1 to enable local growl
+            'push_recentlyadded'  => 0,
+            'push_watched'        => 0,
+            'push_watching'       => 0,
             'push_paused'         => 0,
             'push_resumed'        => 0,
-	    'application' => '{user}',
-	    'server' => '192.168.10.100', # destination ip/host
-	    'port' => '23053',      # default 23053
-	    'password' => '',       # '' for no pass
-	    'icon_url' => 'https://rarforge.com/images/plexWatch.57x57.png',
-	    'sticky' => 0,
-	},
+            'application' => '{user}',
+            'server' => '192.168.10.100', # destination ip/host
+            'port' => '23053',      # default 23053
+            'password' => '',       # '' for no pass
+            'icon_url' => 'https://rarforge.com/images/plexWatch.57x57.png',
+            'sticky' => 0,
+        },
     },
-    
-    
-    ## EMAIL -- multiple destinations are supported 
-    'EMAIL' => { 
-	
-	'1' => 	{
-	    'enabled' => 0, ## set to 1 to enable local EMAIL
-	    'push_recentlyadded'  => 0,
-	    'push_watched'        => 1,
-	    'push_watching'       => 1,
-	    'push_paused'         => 1,
-	    'push_resumed'        => 1,
-	    'server' => '', # your mail server
-	    'port' => '25', # your mail server port defalt 25 (587 is also a good choice)
-	    'from' => '',   # your From email address: 'user@domain.com'
-	    'to' => '',     # Email address to receive notification: 'user@domain.com'
-	    'username' => '', # AUTH if needed [optional]
-	    'password' => '', # AUTH if needed [optional]
-	    'subject' => '{user} {push_title} {title}', ## push_title is special for EMAIL (for now)
-	    'enable_tls' => 0,  # ENABLE for TLS support ( your smtp server must allow STARTTLS )
-	    'alert_format' => {
-	    	'start'    =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in] {ip_address} {all_details}',
-		'paused'   =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in] [{percent_complete}%] {ip_address} {all_details}',
-		'resumed'  =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in] [{percent_complete}%] {ip_address} {all_details}',
-		'stop'     =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} for {duration} [{percent_complete}%] {ip_address} {all_details}',
-	    },
-	},
-	
-	'2' => 	{
-	    'enabled' => 0, ## set to 1 to enable EMAIL
-	    ## fill in the rest if you need more then 1 email notification
-	},
-	
+
+
+    ## EMAIL -- multiple destinations are supported
+    'EMAIL' => {
+
+        '1' => 	{
+            'enabled' => 0, ## set to 1 to enable local EMAIL
+            'push_recentlyadded'  => 0,
+            'push_watched'        => 1,
+            'push_watching'       => 1,
+            'push_paused'         => 1,
+            'push_resumed'        => 1,
+            'server' => '', # your mail server
+            'port' => '25', # your mail server port defalt 25 (587 is also a good choice)
+            'from' => '',   # your From email address: 'user@domain.com'
+            'to' => '',     # Email address to receive notification: 'user@domain.com'
+            'username' => '', # AUTH if needed [optional]
+            'password' => '', # AUTH if needed [optional]
+            'subject' => '{user} {push_title} {title}', ## push_title is special for EMAIL (for now)
+            'enable_tls' => 0,  # ENABLE for TLS support ( your smtp server must allow STARTTLS )
+            'alert_format' => {
+                'start'    =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in] {ip_address} {all_details}',
+                'paused'   =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in] [{percent_complete}%] {ip_address} {all_details}',
+                'resumed'  =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in] [{percent_complete}%] {ip_address} {all_details}',
+                'stop'     =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} for {duration} [{percent_complete}%] {ip_address} {all_details}',
+            },
+        },
+
+        '2' => 	{
+            'enabled' => 0, ## set to 1 to enable EMAIL
+            ## fill in the rest if you need more then 1 email notification
+        },
+
     },
-    
+
 };
 
 $push_titles = {
@@ -206,5 +217,4 @@ $push_titles = {
 $watched_show_completed = 1; ## advanced config -- always show completed show/movie as it's own line
 $watched_grouping_maxhr = 2; ## advanced config -- do not group shows together if start/restart is > X hours
 $count_paused = 0; ## included paused time in time watched ( probably do not want this )
-
 
