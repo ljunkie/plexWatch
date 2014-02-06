@@ -1893,6 +1893,7 @@ sub NotifyTwitter() {
         consumer_secret     => $tw{'consumer_secret'},
         access_token        => $tw{'access_token'},
         access_token_secret => $tw{'access_token_secret'},
+        ssl                 => 1,
         apiurl              => "https://api.twitter.com/1.1",
         );
 
