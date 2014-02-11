@@ -540,6 +540,7 @@ if ($options{'notify'}) {
                 $info->{'ip_address'} = $started->{$k}->{ip_address};
                 &SetStopped($started->{$k}->{id},$stop_epoch);  # will mark as unnotified
 
+                $info->{'decoded'} = 1; ## XML - already decoded
                 &Notify($info) if $options{'notify'} != 2;
                 &SetNotified($started->{$k}->{id}) if $options{'notify'} != 2;
             }
@@ -551,6 +552,7 @@ if ($options{'notify'}) {
         my $start_epoch = time();
         my $stop_epoch = ''; ## not stopped yet
         my $info = &info_from_xml(XMLout($live->{$k}),'start',$start_epoch,$stop_epoch,0);
+        $info->{'decoded'} = 1; ## live XML - already decoded
 
         ## for insert
         my $db_key = $k . '_' . $live->{$k}->{key} . '_' . $info->{orig_user};
@@ -712,7 +714,9 @@ sub formatAlert() {
     $format =~ s/{{($regex)}}/$info->{$1}/g; ## regex replace variables
 
     # we get some oddities if we do not decode any utf8 first ( mainly due to the double space replacement regex )
-    $format = decode('utf8',$format) if eval { decode('UTF-8', $format); 1 };
+    if (!$info->{'decoded'}) {
+        $format = decode('utf8',$format) if eval { decode('UTF-8', $format); 1 };
+    }
     $format =~ s/\[\]//g;                 ## trim any empty variable encapsulated in []
     $format =~ s/\s+/ /g;                 ## remove double spaces
     $format =~ s/\\n/\n/g;                ## allow \n to be an actual new line
@@ -728,7 +732,9 @@ sub formatAlert() {
             if (!ref($info->{$key})) {
                 if ($info->{$key}) {
                     my $value = $info->{$key};
-                    $value = decode('utf8',$value) if eval { decode('UTF-8', $value); 1 };                    
+                    if (!$info->{'decoded'}) {
+                        $value = decode('utf8',$value) if eval { decode('UTF-8', $value); 1 };                    
+                    }
                     $format .= sprintf("%20s: %s\n",$key,$value);
                 }
             } else {
@@ -736,7 +742,9 @@ sub formatAlert() {
                 foreach my $k2 (keys %{$info->{$key}} ) {
                     if (!ref($info->{$key}->{$k2})) {
                         my $value = $info->{$key}->{$k2};
-                        $value = decode('utf8',$value) if eval { decode('UTF-8', $value); 1 };                    
+                        if (!$info->{'decoded'}) {
+                            $value = decode('utf8',$value) if eval { decode('UTF-8', $value); 1 };                    
+                        }
                         $f_extra .= sprintf("%20s: %s\n",$k2,$value);
                     }
                 }
@@ -2453,7 +2461,9 @@ sub NotifyEMAIL() {
         }
 
         # Subject needs to be decoded (body will be sent as UTF8 encoded)
-        $email{'subject'} = decode('utf8',$email{'subject'}) if eval { decode('UTF-8', $email{'subject'}); 1 };                   
+        if (!$info->{'decoded'}) {
+            $email{'subject'} = decode('utf8',$email{'subject'}) if eval { decode('UTF-8', $email{'subject'}); 1 };                   
+        }
 
         if (!$email{'server'} || !$email{'port'} || !$email{'from'} || !$email{'to'} ) {
             my $msg = "FAIL: Please specify a server, port, to and from address for $provider [$k] in config.pl";
@@ -2582,7 +2592,7 @@ sub consoletxt() {
     $console =~ s/\n\n/\n/g;
     $console =~ s/\n/,/g;
     $console =~ s/,$//; # get rid of last comma
-    $console = decode('utf8',$console) if eval { decode('UTF-8', $console); 1 };
+    #$console = decode('utf8',$console) if eval { decode('UTF-8', $console); 1 };
     return $console;
 }
 
