@@ -531,7 +531,7 @@ if ($options{'notify'}) {
                 my $stop_epoch = time();
 
                 ## process the update - need to supply the original XML (as an xml_ref) and session_id
-                my $xml_ref = XMLin(encode('utf8',$started->{$k}->{'xml'}),KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
+                my $xml_ref = XMLin($started->{$k}->{'xml'},KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
                 $xml_ref->{Player}->{'state'} = 'stopped'; # force state as 'stopped' (since this XML is from the DB)
                 &ProcessUpdate($xml_ref, $started->{$k}->{'session_id'} ); ## go through normal update -- will set paused counter etc..
 
