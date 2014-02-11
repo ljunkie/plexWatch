@@ -1,11 +1,11 @@
 #!/usr/bin/perl
 
-my $version = '0.2.3';
+my $version = '0.2.4';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2014-02-03 17:25 PST
+# Modified: 2014-02-10 20:15 PST
 #
 #  Version: $version
 # https://github.com/ljunkie/plexWatch
@@ -430,8 +430,6 @@ sub RAdataAlert() {
         $alert_url .= ' http://www.imdb.com/find?s=tt&q=' . urlencode($item->{'imdb_title'});
     }
 
-    #$alert =~ s/[^[:ascii:]]+//g;  ## remove non ascii ( now UTF8 )
-
     $result->{'alert'} = $alert;
     $result->{'item_id'} = $item_id;
     $result->{'debug_done'} = $debug_done;
@@ -647,8 +645,11 @@ if ($options{'watching'}) {
             }  else {   $skip = 0;    }
 
             next if $skip;
-
-
+            
+            # user encodings
+            $user = decode('utf8',$user) if eval { decode('UTF-8', $user); 1 };
+            $orig_user = decode('utf8',$orig_user) if eval { decode('UTF-8', $orig_user); 1 };
+            
             if (!$seen{$user}) {
                 $seen{$user} = 1;
                 print "\nUser: " . $user;
@@ -702,29 +703,41 @@ sub formatAlert() {
     }
     if ($debug) { print "\nformat: $format\n";}
 
+    ## just to be sure we don't have any conflicts -- use double curly brackets {{variable}} ( users still only use 1 {variable} )
+    $format =~ s/{/{{/g;
+    $format =~ s/}/}}/g;
+    
     my $regex = join "|", keys %{$info};
     $regex = qr/$regex/;
-    $format =~ s/{($regex)}/$info->{$1}/g; ## regex replace variables
+    $format =~ s/{{($regex)}}/$info->{$1}/g; ## regex replace variables
+
+    # we get some oddities if we do not decode any utf8 first ( mainly due to the double space replacement regex )
+    $format = decode('utf8',$format) if eval { decode('UTF-8', $format); 1 };
     $format =~ s/\[\]//g;                 ## trim any empty variable encapsulated in []
     $format =~ s/\s+/ /g;                 ## remove double spaces
-    #$format =~ s/[^[:ascii:]]+//g;        ## remove non ascii ( now UTF8 )
     $format =~ s/\\n/\n/g;                ## allow \n to be an actual new line
-    $format =~ s/{newline}/\n/g;                ## allow \n to be an actual new line
-
+    $format =~ s/{{newline}}/\n/g;        ## allow \n to be an actual new line
 
     ## special for now.. might make ths more useful -- just thrown together since email can include a ton of info
-    if ($format =~ /{all_details}/i) {
-        $format =~ s/\s*{all_details}\s*//i;
+
+    if ($format =~ /{{all_details}}/i) {
+        $format =~ s/\s*{{all_details}}\s*//i;
         $format .= sprintf("\n\n%10s %s\n","","-----All Details-----");
         my $f_extra;
         foreach my $key (keys %{$info} ) {
             if (!ref($info->{$key})) {
-                $format .= sprintf("%20s: %s\n",$key,$info->{$key}) if $info->{$key};
+                if ($info->{$key}) {
+                    my $value = $info->{$key};
+                    $value = decode('utf8',$value) if eval { decode('UTF-8', $value); 1 };                    
+                    $format .= sprintf("%20s: %s\n",$key,$value);
+                }
             } else {
                 $f_extra .= sprintf("\n\n%10s %s\n","","-----$key-----");
                 foreach my $k2 (keys %{$info->{$key}} ) {
                     if (!ref($info->{$key}->{$k2})) {
-                        $f_extra .= sprintf("%20s: %s\n",$k2,$info->{$key}->{$k2});
+                        my $value = $info->{$key}->{$k2};
+                        $value = decode('utf8',$value) if eval { decode('UTF-8', $value); 1 };                    
+                        $f_extra .= sprintf("%20s: %s\n",$k2,$value);
                     }
                 }
             }
@@ -1206,6 +1219,19 @@ sub ProcessRecentlyAdded() {
 }
 
 sub GetSessions() {
+
+    # Debug testing XML response from API (using a file)
+    # my $test = 1;
+    # if ($test) {
+    #     open FILE, "< sessions.xml" or die $!;
+    #     my $lines = "";
+    #     while (<FILE>) { $lines .= $_; }
+    #     close FILE;
+    #     print $lines;
+    #     my $data = XMLin(encode('utf8',$lines),KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
+    #     return $data->{'Video'};
+    # } 
+
     my $proto = 'http';
     $proto = 'https' if $port == 32443;
     my $url = "$proto://$server:$port/status/sessions";
@@ -2532,12 +2558,11 @@ sub NotifyGrowl() {
 }
 
 sub consoletxt() {
-    ## remove line breaks and none ascii
     my $console = shift;
     $console =~ s/\n\n/\n/g;
     $console =~ s/\n/,/g;
     $console =~ s/,$//; # get rid of last comma
-#    $console =~ s/[^[:ascii:]]+//g;
+    $console = decode('utf8',$console) if eval { decode('UTF-8', $console); 1 };
     return $console;
 }
 
@@ -2600,11 +2625,9 @@ sub info_from_xml() {
     my $duration = shift; ## special case to group start/stops
     $paused = 0 if !$paused;
 
-    ## start time is in xml
-
-
-    my $vid = XMLin(encode('utf8',$hash),KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
-
+    # ljunkie (2013-02-10) -- DO NOT re-encode to utf8 ( we already expect utf8)
+    # my $vid = XMLin(encode('utf8',$hash),KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video'];)
+    my $vid = XMLin($hash,KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
 
     ## paused or playing? stopped is forced and required from ntype
     my $state = 'unknown';
@@ -2741,6 +2764,10 @@ sub info_from_xml() {
     #   }
 
     my ($user,$tmp) = &FriendlyName($orig_user,$platform);
+    
+    ## these should stay encoded
+    #$user = decode('utf8',$user) if eval { decode('UTF-8', $user); 1 };
+    #$orig_user = decode('utf8',$orig_user) if eval { decode('UTF-8', $orig_user); 1 };
 
     ## ADD keys here when needed for &Notify hash
     my $info = {
@@ -3474,6 +3501,10 @@ sub Watched() {
                     }  else {   $skip = 0;    }
                 }
                 next if $skip;
+
+                # user encodings
+                $user = decode('utf8',$user) if eval { decode('UTF-8', $user); 1 };
+                $orig_user = decode('utf8',$orig_user) if eval { decode('UTF-8', $orig_user); 1 };
 
                 ## only show one watched status on movie/show per day (default) -- duration will be calculated from start/stop on each watch/resume
                 ## --nogrouping will display movie as many times as it has been started on the same day.
