@@ -1,11 +1,11 @@
 #!/usr/bin/perl
 
-my $version = '0.2.4';
+my $version = '0.2.5';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2014-02-10 20:15 PST
+# Modified: 2014-02-11 12:33 PST
 #
 #  Version: $version
 # https://github.com/ljunkie/plexWatch
@@ -2011,6 +2011,11 @@ sub NotifyProwl() {
         $prowl{'application'} = $appname if !$prowl{'application'}; ## replace appname if empty
     }
 
+    # Prowl required UTF8
+    $prowl{'application'} = encode('utf8',$prowl{'application'}) if eval { encode('UTF-8', $prowl{'application'}); 1 };                   
+    $prowl{'event'} = encode('utf8',$prowl{'event'}) if eval { encode('UTF-8', $prowl{'event'}); 1 };                   
+    $prowl{'notification'} = encode('utf8',$prowl{'notification'}) if eval { encode('UTF-8', $prowl{'notification'}); 1 };                   
+    
     # URL encode our arguments
     $prowl{'application'} =~ s/([^A-Za-z0-9])/sprintf("%%%02X", ord($1))/seg;
     $prowl{'event'} =~ s/([^A-Za-z0-9])/sprintf("%%%02X", ord($1))/seg;
@@ -2359,6 +2364,10 @@ sub NotifyGNTP() {
                     ]);
             };
 
+            # GNTP required UTF8
+            $gntp{'title'} = encode('utf8',$gntp{'title'}) if eval { encode('UTF-8', $gntp{'title'}); 1 };                   
+            $alert = encode('utf8',$alert) if eval { encode('UTF-8', $alert); 1 };                   
+
             if (!$@) {
                 $growl->notify(
                     Priotity => 0,
@@ -2418,6 +2427,13 @@ sub NotifyEMAIL() {
             next;
         }
 
+        # do not send message if body is empty or too small
+        if (length($alert) < 5) {
+        my $msg452 = uc($provider) . " 452: body of message is empty? body: $alert";
+        &DebugLog($msg452,0);
+        return 0;
+        }
+
         my %email = %{$notify->{EMAIL}->{$k}};
         $email{'message'} = $alert;
 
@@ -2436,9 +2452,8 @@ sub NotifyEMAIL() {
             $email{'subject'} = $email{'subject'} . ' ';
         }
 
-
-        #$email{'subject'} .= $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};
-
+        # Subject needs to be decoded (body will be sent as UTF8 encoded)
+        $email{'subject'} = decode('utf8',$email{'subject'}) if eval { decode('UTF-8', $email{'subject'}); 1 };                   
 
         if (!$email{'server'} || !$email{'port'} || !$email{'from'} || !$email{'to'} ) {
             my $msg = "FAIL: Please specify a server, port, to and from address for $provider [$k] in config.pl";
@@ -2467,11 +2482,16 @@ sub NotifyEMAIL() {
                 $mailer->mail($email{'from'});
                 if ($mailer->to($email{'to'})) {
                     $mailer->data;
+                    $mailer->datasend("MIME-Version: 1.0\n");
+                    $mailer->datasend("Content-Transfer-Encoding: 8bit\n");
+                    $mailer->datasend("Content-Type:text/plain; charset=utf-8\n");      
+                    $mailer->datasend("X-Mailer: plexWatch\r\n");
                     $mailer->datasend("To: $email{'to'}\r\n");
                     $mailer->datasend("From: $email{'from'}\r\n");
                     $mailer->datasend("Subject: $email{'subject'}\r\n");
-                    $mailer->datasend("X-Mailer: plexWatch\r\n");
-                    $mailer->datasend($alert);
+                    $mailer->datasend("\r\n");
+                    $mailer->datasend($email{'message'});
+                    $mailer->datasend("\r\n");
                     $mailer->dataend;
                     $mailer->quit;
                 } else {
