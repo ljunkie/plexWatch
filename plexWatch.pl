@@ -495,9 +495,9 @@ if ($options{'notify'}) {
 
     ## Quick hack to notify stopped content before start -- get a list of playing content
     foreach my $k (keys %{$live}) {
-        my $user = (split('\@',$live->{$k}->{User}->{title}))[0];
-        if (!$user) {   $user = 'Local';    }
-        my $db_key = $k . '_' . $live->{$k}->{key} . '_' . $user;
+        my $userID = $live->{$k}->{User}->{id};
+        $userID = 'Local' if !$userID;
+        my $db_key = $k . '_' . $live->{$k}->{key} . '_' . $userID;
         $playing->{$db_key} = 1;
     }
 
@@ -555,8 +555,10 @@ if ($options{'notify'}) {
         $info->{'decoded'} = 1; ## live XML - already decoded
 
         ## for insert
-        my $db_key = $k . '_' . $live->{$k}->{key} . '_' . $info->{orig_user};
-
+        my $userID = $info->{userID};
+        $userID = 'Local' if !$userID;
+        my $db_key = $k . '_' . $live->{$k}->{key} . '_' . $userID;
+        
         ## these shouldn't be neede any more - to clean up as we now use XML data from DB
         $info->{'orig_title'} = $live->{$k}->{title};
         $info->{'orig_title_ep'} = '';
@@ -664,7 +666,7 @@ if ($options{'watching'}) {
             if ($user ne $orig_user) {
                 $info->{'user'} = encode('utf8',  $info->{'user'}) if eval { encode('UTF-8',   $info->{'user'}); 1 };
             }
-            
+
             $info->{'ip_address'} = $in_progress->{$k}->{ip_address};
 
             my $alert = &Notify($info,1); ## only return formated alert
@@ -2772,6 +2774,9 @@ sub info_from_xml() {
     my $orig_user = (split('\@',$vid->{User}->{title}))[0]     if $vid->{User}->{title};
     if (!$orig_user) {$orig_user = 'Local';        }
 
+    my $userID = $vid->{User}->{id};
+    $userID = 'Local' if !$userID;
+    
     $year = $vid->{year} if $vid->{year};
     $rating .= $vid->{contentRating} if ($vid->{contentRating});
     $summary = $vid->{summary} if $vid->{summary};
@@ -2805,6 +2810,7 @@ sub info_from_xml() {
     ## ADD keys here when needed for &Notify hash
     my $info = {
         'user' => $user,
+        'userID' => $userID,
         'orig_user' => $orig_user,
         'title' =>  $title,
         'platform' => $platform,
