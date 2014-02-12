@@ -660,8 +660,10 @@ if ($options{'watching'}) {
             my $paused = &getSecPaused($k);
             my $info = &info_from_xml(XMLout($live->{$live_key}),'watching',$in_progress->{$k}->{time},time(),$paused);
 
-            # encode the user for output
-            $info->{'user'} = encode('utf8',  $info->{'user'}) if eval { encode('UTF-8',   $info->{'user'}); 1 };
+            ## encode the user for output ( only if different -- otherwise we will take what Plex has set)
+            if ($user ne $orig_user) {
+                $info->{'user'} = encode('utf8',  $info->{'user'}) if eval { encode('UTF-8',   $info->{'user'}); 1 };
+            }
             
             $info->{'ip_address'} = $in_progress->{$k}->{ip_address};
 
@@ -3604,6 +3606,11 @@ sub Watched() {
                 if (!$update_grouped_table) {
                     if (!$seen_user{$user}) {
                         $seen_user{$user} = 1;
+                        # user isn't changed ( no friendly name ) decode the content
+                        if ($user eq $orig_user) {
+                            $user  = decode('utf8',  $user) if eval { decode('UTF-8',$user); 1 };
+                            $orig_user = $user;
+                        }
                         $print_stmt .= "\nUser: " . $user;
                         $print_stmt .= ' ['. $orig_user .']' if $user ne $orig_user;
                         $print_stmt .= "\n";
@@ -3611,8 +3618,10 @@ sub Watched() {
                     my $time = localtime ($is_watched->{$k}->{time} );
                     my $info = &info_from_xml($is_watched->{$k}->{'xml'},$ntype,$is_watched->{$k}->{'time'},$is_watched->{$k}->{'stopped'},$paused);
 
-                    ## encode the user for output
-                    $info->{'user'} = encode('utf8',  $info->{'user'}) if eval { encode('UTF-8',   $info->{'user'}); 1 };
+                    ## encode the user for output ( only if different -- otherwise we will take what Plex has set)
+                    if ($user ne $orig_user) {
+                        $info->{'user'} = encode('utf8',  $info->{'user'}) if eval { encode('UTF-8',   $info->{'user'}); 1 };
+                    }
                     
                     $info->{'ip_address'} = $is_watched->{$k}->{ip_address};
                     my $alert = &Notify($info,1); ## only return formated alert
