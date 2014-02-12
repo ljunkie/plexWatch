@@ -630,7 +630,7 @@ if ($options{'watching'}) {
         foreach my $k (sort { $in_progress->{$a}->{user} cmp $in_progress->{$b}->{'user'} || $in_progress->{$a}->{time} cmp $in_progress->{$b}->{'time'} } (keys %{$in_progress}) ) {
             my $live_key = (split("_",$k))[0];
             if (!$live->{$live_key}) {
-                print "must of been stopped-- but unnotified";
+                #print "must of been stopped-- but unnotified";
                 next;
             }
             $found_live = 1;
@@ -652,7 +652,7 @@ if ($options{'watching'}) {
             
             if (!$seen{$user}) {
                 $seen{$user} = 1;
-                print "\nUser: " . $user;
+                print "\nUser: " .decode('utf8',  $user);
                 print ' ['. $orig_user .']' if $user ne $orig_user;
                 print "\n";
             }
@@ -664,6 +664,9 @@ if ($options{'watching'}) {
 
             ## encode the user for output ( only if different -- otherwise we will take what Plex has set)
             if ($user ne $orig_user) {
+                $info->{'user'} = encode('utf8',  $info->{'user'}) if eval { encode('UTF-8',   $info->{'user'}); 1 };
+            } elsif  ($info->{time} > 1392090762) {
+                # everything after 2013-02-11 is not encoded properly ( excluding above which is special )
                 $info->{'user'} = encode('utf8',  $info->{'user'}) if eval { encode('UTF-8',   $info->{'user'}); 1 };
             }
 
@@ -3528,10 +3531,16 @@ sub Watched() {
                     my ($user,$orig_user) = &FriendlyName($is_watched->{$k}->{user},$is_watched->{$k}->{platform});
                     $is_watched->{$k}->{user} = $user;
                     $is_watched->{$k}->{orig_user} = $orig_user;
+
+                    $is_watched->{$k}->{'encoded'} = 0;
                     if ($user ne $orig_user) {
-                        $is_watched->{$k}->{user_enc} = encode('utf8', $user) if eval { decode('UTF-8', $user); 1 };
-                        $is_watched->{$k}->{'encoded'} = 1;
+                        $is_watched->{$k}->{user_enc} = encode('utf8', $user) if eval { encode('UTF-8', $user); 1 };
+                        $is_watched->{$k}->{'encoded'} = 1;                        
+                    } elsif  ($is_watched->{$k}->{time} > 1392090762) {
+                        # everything after 2013-02-11 is not encoded properly ( excluding above which is special )
+                        $is_watched->{$k}->{'encoded'} = 2;
                     }
+                    
                 }
             }
             
@@ -3540,6 +3549,7 @@ sub Watched() {
                 ## use display name
                 my $user = $is_watched->{$k}->{user};
                 my $orig_user = $is_watched->{$k}->{orig_user};
+                
                 if ($update_grouped_table) {
                     ($user,$orig_user) = &FriendlyName($is_watched->{$k}->{user},$is_watched->{$k}->{platform});
                 }
@@ -3559,7 +3569,18 @@ sub Watched() {
                     }
                     
                     if ($options{'user'}) {
-                        my $include  = decode('utf8', $options{'user'}) if eval { decode('UTF-8', $options{'user'}); 1 };
+                        # ghetto I know, I have to deal with some old data
+                        # needs cleanup -- but old data in the wrong format is the issue.. backwards compatiblity
+                        # I just wish perl had a way to detect unicode for sure
+                        my $include = $options{'user'};
+                        $skip = 0 if $user =~ /^$include$/i; ## user display (friendly) matches specified
+                        $skip = 0 if $orig_user =~ /^$include$/i; ## user (non friendly) matches specified
+                        
+                        $include  = decode('utf8', $options{'user'}) if eval { decode('UTF-8', $options{'user'}); 1 };
+                        $skip = 0 if $user =~ /^$include$/i; ## user display (friendly) matches specified
+                        $skip = 0 if $orig_user =~ /^$include$/i; ## user (non friendly) matches specified
+
+                        $include  = encode('utf8', $options{'user'}) if eval { encode('UTF-8', $options{'user'}); 1 };
                         $skip = 0 if $user =~ /^$include$/i; ## user display (friendly) matches specified
                         $skip = 0 if $orig_user =~ /^$include$/i; ## user (non friendly) matches specified
                     }  else {   $skip = 0;    }
@@ -3637,8 +3658,9 @@ sub Watched() {
                 if (!$update_grouped_table) {
                     if (!$seen_user{$user}) {
                         $seen_user{$user} = 1;
-                        # user isn't changed ( no friendly name ) decode the content
-                        if (!$is_watched->{$k}->{'encoded'}) {
+                        # needs cleanup -- but old data in the wrong format is the issue.. backwards compatiblity
+                        # I just wish perl had a way to detect unicode for sure
+                        if (!$is_watched->{$k}->{'encoded'} or $is_watched->{$k}->{'encoded'} == 2) {
                             $user  = decode('utf8',  $user) if eval { decode('UTF-8',$user); 1 };
                             $orig_user = $user;
                         }
