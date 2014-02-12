@@ -3515,22 +3515,47 @@ sub Watched() {
         my %seenc = (); ## testing
         if (keys %{$is_watched}) {
             $print_stmt = ""; #clear the print
+            
+            ## sort by the friendly name+device if exists for output
+            if (!$update_grouped_table) {
+                foreach my $k (sort keys %{$is_watched}) {
+                    my ($user,$orig_user) = &FriendlyName($is_watched->{$k}->{user},$is_watched->{$k}->{platform});
+                    $is_watched->{$k}->{user} = $user;
+                    $is_watched->{$k}->{orig_user} = $orig_user;
+                    if ($user ne $orig_user) {
+                        $is_watched->{$k}->{user_enc} = encode('utf8', $user) if eval { decode('UTF-8', $user); 1 };
+                        $is_watched->{$k}->{'encoded'} = 1;
+                    }
+                }
+            }
+            
             foreach my $k (sort {$is_watched->{$a}->{user} cmp $is_watched->{$b}->{'user'} ||
                                      $is_watched->{$a}->{time} cmp $is_watched->{$b}->{'time'} } (keys %{$is_watched}) ) {
                 ## use display name
-                my ($user,$orig_user) = &FriendlyName($is_watched->{$k}->{user},$is_watched->{$k}->{platform});
-
+                my $user = $is_watched->{$k}->{user};
+                my $orig_user = $is_watched->{$k}->{orig_user};
+                if ($update_grouped_table) {
+                    ($user,$orig_user) = &FriendlyName($is_watched->{$k}->{user},$is_watched->{$k}->{platform});
+                }
+                    
+                
                 my $skip = 0;
                 # Only SKIP user for display purposes. Do not skip user when updating the grouped table
                 if (!$update_grouped_table) {
                     $skip = 1;
                     ## skip/exclude users --user/--exclude_user
+                    
                     next if ( grep { $_ =~ /$is_watched->{$k}->{'user'}/i } @{$options{'exclude_user'}});
                     next if ( $user  && grep { $_ =~ /^$user$/i } @{$options{'exclude_user'}});
-
+                    # encoded user 
+                    if ($is_watched->{$k}->{'user_enc'}) {
+                        next if ( grep { $_ =~ /$is_watched->{$k}->{'user_enc'}/i } @{$options{'exclude_user'}});
+                    }
+                    
                     if ($options{'user'}) {
-                        $skip = 0 if $user =~ /^$options{'user'}$/i; ## user display (friendly) matches specified
-                        $skip = 0 if $orig_user =~ /^$options{'user'}$/i; ## user (non friendly) matches specified
+                        my $include  = decode('utf8', $options{'user'}) if eval { decode('UTF-8', $options{'user'}); 1 };
+                        $skip = 0 if $user =~ /^$include$/i; ## user display (friendly) matches specified
+                        $skip = 0 if $orig_user =~ /^$include$/i; ## user (non friendly) matches specified
                     }  else {   $skip = 0;    }
                 }
                 next if $skip;
@@ -3607,7 +3632,7 @@ sub Watched() {
                     if (!$seen_user{$user}) {
                         $seen_user{$user} = 1;
                         # user isn't changed ( no friendly name ) decode the content
-                        if ($user eq $orig_user) {
+                        if (!$is_watched->{$k}->{'encoded'}) {
                             $user  = decode('utf8',  $user) if eval { decode('UTF-8',$user); 1 };
                             $orig_user = $user;
                         }
@@ -3619,7 +3644,7 @@ sub Watched() {
                     my $info = &info_from_xml($is_watched->{$k}->{'xml'},$ntype,$is_watched->{$k}->{'time'},$is_watched->{$k}->{'stopped'},$paused);
 
                     ## encode the user for output ( only if different -- otherwise we will take what Plex has set)
-                    if ($user ne $orig_user) {
+                    if ($is_watched->{$k}->{'encoded'}) {
                         $info->{'user'} = encode('utf8',  $info->{'user'}) if eval { encode('UTF-8',   $info->{'user'}); 1 };
                     }
                     
