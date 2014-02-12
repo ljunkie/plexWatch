@@ -648,10 +648,6 @@ if ($options{'watching'}) {
 
             next if $skip;
             
-            # user encodings
-            $user = decode('utf8',$user) if eval { decode('UTF-8', $user); 1 };
-            $orig_user = decode('utf8',$orig_user) if eval { decode('UTF-8', $orig_user); 1 };
-            
             if (!$seen{$user}) {
                 $seen{$user} = 1;
                 print "\nUser: " . $user;
@@ -664,6 +660,9 @@ if ($options{'watching'}) {
             my $paused = &getSecPaused($k);
             my $info = &info_from_xml(XMLout($live->{$live_key}),'watching',$in_progress->{$k}->{time},time(),$paused);
 
+            # encode the user for output
+            $info->{'user'} = encode('utf8',  $info->{'user'}) if eval { encode('UTF-8',   $info->{'user'}); 1 };
+            
             $info->{'ip_address'} = $in_progress->{$k}->{ip_address};
 
             my $alert = &Notify($info,1); ## only return formated alert
@@ -708,21 +707,26 @@ sub formatAlert() {
     ## just to be sure we don't have any conflicts -- use double curly brackets {{variable}} ( users still only use 1 {variable} )
     $format =~ s/{/{{/g;
     $format =~ s/}/}}/g;
-    
     my $regex = join "|", keys %{$info};
     $regex = qr/$regex/;
-    $format =~ s/{{($regex)}}/$info->{$1}/g; ## regex replace variables
 
-    # we get some oddities if we do not decode any utf8 first ( mainly due to the double space replacement regex )
+    ## decoding doesn't play nice if we have mixed content ( one variable umlauts, another cryillic)  try and decode each string
     if (!$info->{'decoded'}) {
-        $format = decode('utf8',$format) if eval { decode('UTF-8', $format); 1 };
+        foreach my $key (keys %{$info}) {
+            ## save come cpu cycles.
+            if (!ref($info->{$key}) && $format =~ /{$key}/) {
+                $info->{$key} = decode('utf8',$info->{$key}) if eval { decode('UTF-8', $info->{$key}); 1 };
+            }
+        }
     }
+    
+    $format =~ s/{{($regex)}}/$info->{$1}/g; ## regex replace variables
     $format =~ s/\[\]//g;                 ## trim any empty variable encapsulated in []
     $format =~ s/\s+/ /g;                 ## remove double spaces
     $format =~ s/\\n/\n/g;                ## allow \n to be an actual new line
     $format =~ s/{{newline}}/\n/g;        ## allow \n to be an actual new line
 
-    ## special for now.. might make ths more useful -- just thrown together since email can include a ton of info
+    ## special for now.. might make this more useful -- just thrown together since email can include a ton of info
 
     if ($format =~ /{{all_details}}/i) {
         $format =~ s/\s*{{all_details}}\s*//i;
@@ -2794,10 +2798,7 @@ sub info_from_xml() {
     #   }
 
     my ($user,$tmp) = &FriendlyName($orig_user,$platform);
-    
-    ## these should stay encoded
-    #$user = decode('utf8',$user) if eval { decode('UTF-8', $user); 1 };
-    #$orig_user = decode('utf8',$orig_user) if eval { decode('UTF-8', $orig_user); 1 };
+    # DO NOT decode/encode user
 
     ## ADD keys here when needed for &Notify hash
     my $info = {
@@ -3532,10 +3533,6 @@ sub Watched() {
                 }
                 next if $skip;
 
-                # user encodings
-                $user = decode('utf8',$user) if eval { decode('UTF-8', $user); 1 };
-                $orig_user = decode('utf8',$orig_user) if eval { decode('UTF-8', $orig_user); 1 };
-
                 ## only show one watched status on movie/show per day (default) -- duration will be calculated from start/stop on each watch/resume
                 ## --nogrouping will display movie as many times as it has been started on the same day.
 
@@ -3613,6 +3610,10 @@ sub Watched() {
                     }
                     my $time = localtime ($is_watched->{$k}->{time} );
                     my $info = &info_from_xml($is_watched->{$k}->{'xml'},$ntype,$is_watched->{$k}->{'time'},$is_watched->{$k}->{'stopped'},$paused);
+
+                    ## encode the user for output
+                    $info->{'user'} = encode('utf8',  $info->{'user'}) if eval { encode('UTF-8',   $info->{'user'}); 1 };
+                    
                     $info->{'ip_address'} = $is_watched->{$k}->{ip_address};
                     my $alert = &Notify($info,1); ## only return formated alert
                     $print_stmt .= sprintf(" %s: %s\n",$time, $alert);
