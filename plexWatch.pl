@@ -2472,7 +2472,7 @@ sub NotifyEMAIL() {
         }
 
         # Subject needs to be decoded (body will be sent as UTF8 encoded)
-        if (!$info->{'decoded'}) {
+        if (ref($info) && !$info->{'decoded'}) {
             $email{'subject'} = decode('utf8',$email{'subject'}) if eval { decode('UTF-8', $email{'subject'}); 1 };                   
         }
 
