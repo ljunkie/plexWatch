@@ -69,6 +69,10 @@ plexWatch - 0.2.5 (2014-02-11)
 
 * Growl::GNTP
 
+#### Required ONLY if you use Email
+
+* Email::SMTPS
+
 
 #### Required ONLY if 'Client IP Logging' is enable 
 
