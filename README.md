@@ -22,19 +22,22 @@ plexWatch - 0.2.5 (2014-02-11)
 ### Read More about plexWatch
 
 **Supported Push Notifications** 
+* Email
 * https://pushover.net
 * https://prowlapp.com
 * http://growl.info/ (via GrowlNotify @ http://growl.info/downloads#generaldownloads)
 * https://twitter.com/ (create a new app @ https://dev.twitter.com/apps)
-* https://boxcar.io/ 
+* https://boxcar.io/ & boxcar V2
 * SNARL/GROWL: GNTP notifications supported. Anything that uses GNTP *should* work
 
 **What it does**
 * notify when a user starts watching a video
 * notify when a user stops watching a video
+* notify when a user pauses watching a video
+* notify when a user resumes watching a video
 * notify on recently added content to a PMS server
-* notifies via prowl, pushover, growl, twitter, boxcar, GNTP and/or a log file
-* enable/disable notifications per provider & per notification type (watching, watched, recently added)
+* notifies via email, prowl, pushover, growl, twitter, boxcar, GNTP and/or a log file
+* enable/disable notifications per provider & per notification type (start, stop, paush, resume, recently added)
 * backed by a SQLite DB (for state and history)
 * CLI to query watched videos, videos being watched and stats on time watched per user
 * Limit output per user or exclude users
@@ -64,14 +67,23 @@ plexWatch - 0.2.5 (2014-02-11)
 * Net::Twitter::Lite::WithAPIv1_1
 * Net::OAuth
 
+```sudo cpan Net::Twitter::Lite```
+
+```sudo cpan Net::OAuth``` 
+
 
 #### Required ONLY if you use GNTP
 
 * Growl::GNTP
 
+```sudo cpan Growl::GNTP```
+
+
 #### Required ONLY if you use Email
 
-* Email::SMTPS
+* Net::SMTPS
+
+```sudo cpan Net::SMTPS```
 
 
 #### Required ONLY if 'Client IP Logging' is enable 
@@ -184,6 +196,15 @@ $debug_logging = 1; ## logs to $data_dir/debug.log ( only really helps debug IP 
     * __OSX__: use a launchagent instead of cron. Refer to the __FAQ__ on the bottom. 
 
 
+7. [*optional*] If you want Recently Added notifiations - setup another crontab or launchagent entry
+    * __linux__: /etc/crontab
+
+    ```bash
+    */15 * * * * YOUR_USERNAME /opt/plexWatch/plexWatch.pl --recently_added=movie,tv
+    ```
+    * __OSX__: use a launchagent instead of cron. Refer to the __FAQ__ on the bottom.
+
+
 <br/>
 
 ### Twitter integration 
@@ -209,11 +230,24 @@ If you want to use twitter, you will need to install two more Perl modules
     ```
 
 #### Twitter setup
+
 * create a new app @ https://dev.twitter.com/apps
-* make sure to set set ApplicationType to read/write
-* enable notification for twitter in config.pl
-
-
+* click "Create New App"
+    * Name: unique name for for your app
+    * Description: fill something in...
+    * Website: you need some valid website..
+    * (read) and accept terms
+    * click "Create you Twitter Application"
+* click "Modify app permission" under the Details Tab
+    * change to Read and Write
+    * update settings
+* click the "API keys" tab
+    * click "create my access token"
+    * click "Test OAuth" button to view the required API keys need for config.pl
+* Edit the config.pl
+    * enable notification for twitter in config.pl
+    * enter in the required keys, secrets and tokens
+    
 
 <br/>
 ### GNTP integration
@@ -367,7 +401,7 @@ user: Stans's total duration 3 hours and 56 seconds
 
 
 <br/>g
-## Notification format
+### Notification format
 
 * You can edit the format of your alerts and cli output or --watching --watched. This can be done  in the config.pl or on the cli 
 
@@ -382,6 +416,38 @@ user: Stans's total duration 3 hours and 56 seconds
  --format_watched=".."   : modify cli output for --watched  :: --format_watched='{user} watched {title} on {platform} for {duration}'
     
  --format_watching=".."  : modify cli output for --watching :: --format_watching='{user} watching {title} on {platform}'
+```
+
+```
+
+
+<br/>
+### Advanced --recently_added options
+
+
+* All Movie Sections : ```./plexWatch.pl --recently_added=movie```
+
+* All Movie / TV Sections : ```./plexWatch.pl --recently_added=movie,show```
+
+* Specific Section(s) : ```./plexWatch.pl --recently_added --id=# --id=#```
+
+```
+./plexWatch.exe --recently_added
+
+        * Available Sections:
+
+        ID    Title                Type       Path                
+        -------------------------------------------------------------------
+        8     Concerts             movie      /NFS/Videos/Music   
+        6     Movies               movie      /NFS/Videos/Film    
+        17    Holiday Movies       movie      /NFS/Videos/Others/Holiday_Movies
+        5     TV Shows             show       /NFS/Videos/TV      
+
+        * Usage:
+
+        All Movie Sections    : ./plexWatch.pl --recently_added=movie
+        All Movie/TV Sections : ./plexWatch.pl --recently_added=movie,show
+        Specific Section(s)   : ./plexWatch.pl --recently_added --id=# --id=#
 ```
 
 
