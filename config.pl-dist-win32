@@ -214,8 +214,7 @@ $push_titles = {
 
 
 # Advanced
-$watched_show_completed = 1; ## advanced config -- always show completed show/movie as it's own line
-$watched_grouping_maxhr = 2; ## advanced config -- do not group shows together if start/restart is > X hours
-$count_paused = 0; ## included paused time in time watched ( probably do not want this )
-
-
+$watched_show_completed = 1;  ## advanced config -- always show completed show/movie as it's own line
+$watched_grouping_maxhr = 2;  ## advanced config -- do not group shows together if start/restart is > X hours
+$count_paused = 0;            ## included paused time in time watched ( probably do not want this )
+$inc_non_library_content = 0; ## non library content (channels) are excluded. Set to 1 to include them

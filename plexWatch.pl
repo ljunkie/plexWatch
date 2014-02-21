@@ -48,7 +48,7 @@ if (!-e $dirname .'/config.pl') {
     &DebugLog($msg,1) if $msg;
     exit;
 }
-our ($data_dir, $server, $port, $appname, $user_display, $alert_format, $notify, $push_titles, $backup_opts, $myPlex_user, $myPlex_pass, $server_log, $log_client_ip, $debug_logging, $watched_show_completed, $watched_grouping_maxhr, $count_paused);
+our ($data_dir, $server, $port, $appname, $user_display, $alert_format, $notify, $push_titles, $backup_opts, $myPlex_user, $myPlex_pass, $server_log, $log_client_ip, $debug_logging, $watched_show_completed, $watched_grouping_maxhr, $count_paused, $inc_non_library_content);
 my @config_vars = ("data_dir", "server", "port", "appname", "user_display", "alert_format", "notify", "push_titles", "backup_opts", "myPlex_user", "myPlex_pass", "server_log", "log_client_ip", "debug_logging", "watched_show_completed", "watched_grouping_maxhr", "count_paused");
 do $dirname.'/config.pl';
 
@@ -68,6 +68,9 @@ $watched_show_completed = 1 if !defined($watched_show_completed);
 
 ## how many hours between starts of the same show do we allow grouping? 24 is max (3 hour default)
 $watched_grouping_maxhr = 3 if !defined($watched_grouping_maxhr);
+
+## DO not include non library content by default ( channels )
+$inc_non_library_content = 0 if !defined($inc_non_library_content);
 
 my $max_ra_backlog = 2; ## not added to config yet ( keep trying RA backlog for 2 days max )
 ## end
@@ -1078,7 +1081,7 @@ sub LocateIP() {
                     if ($log_line =~ /\s+\[(.*)\:\d+\]\s+(GET|HEAD]).*[^\d]$item.*(X-Plex-Client-Identifier|session)=$find/i) {
                         $ip = $1;
                         $match = $log_line . " [ by $2:$find + item:$item]";
-                    } 
+                    }
                     # pre 0.9.9.3
                     elsif ($log_line =~ /(GET|HEAD]).*[^\d]$item.*(X-Plex-Client-Identifier|session)=$find.*\s+\[(.*)\:\d+\]/i) {
                         $ip = $3;
@@ -1290,7 +1293,23 @@ sub GetSessions() {
         }
 
         my $data = XMLin(encode('utf8',$XML),KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
-        return $data->{'Video'};
+
+        # verify xml results/remove invalid and unwanted items
+        my $container = {};
+        foreach my $key (keys %{$data->{'Video'}}) {
+            my $libraryKey = $data->{'Video'}->{$key}->{'key'};
+            # should we exclude the item? for now this is mainly related to non library content (channels)
+            if (!excludeContent($libraryKey)) {
+                $container->{$key} = $data->{'Video'}->{$key};
+            } else {
+                my $dmsg = "Excluding non library content: $data->{'Video'}->{$key}->{'title'}";
+                &DebugLog($dmsg) if $dmsg;
+            }
+        }
+        
+        # clean results
+        return $container; 
+        #return $data->{'Video'};
     } else {
         my $dmsg = "Failed to get request $url - The result:";
         $dmsg .= $response->decoded_content();
@@ -3813,6 +3832,26 @@ sub Watched() {
     }
 }
 
+sub excludeContent() {
+    # expected results
+    # 0: include 
+    # 1: exclude
+
+    my $key = shift;
+    # if we include library content -- return 0
+    return 0 if $inc_non_library_content;
+    # include library content ( always )
+    return 0 if isLibraryContent($key);
+    # exlude other content
+    return 1;
+}
+
+sub isLibraryContent(){
+    my $key = shift;
+    ## determined for now based on the items key. It must include "/library".
+    return 1 if $key =~ /\/library/i;
+    return 0
+}
 
 sub checkVersion() {
     my $cmd = "select * from config";
