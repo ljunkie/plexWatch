@@ -1074,11 +1074,22 @@ sub LocateIP() {
                 while( defined( my $log_line = $bw->readline ) && !$ip) {
                     last if ($count > $max_lines);
                     $count++;
-
-                    if ($log_line =~ /(GET|HEAD]).*[^\d]$item.*(X-Plex-Client-Identifier|session)=$find.*\s+\[(.*)\:\d+\]/i) {
+                    # 0.9.9.3 [ip:port] has been moved to the front of the log 
+                    if ($log_line =~ /\s+\[(.*)\:\d+\]\s+(GET|HEAD]).*[^\d]$item.*(X-Plex-Client-Identifier|session)=$find/i) {
+                        $ip = $1;
+                        $match = $log_line . " [ by $2:$find + item:$item]";
+                    } 
+                    # pre 0.9.9.3
+                    elsif ($log_line =~ /(GET|HEAD]).*[^\d]$item.*(X-Plex-Client-Identifier|session)=$find.*\s+\[(.*)\:\d+\]/i) {
                         $ip = $3;
                         $match = $log_line . " [ by $2:$find + item:$item]";
                     }
+                    # 0.9.9.3+ fallback
+                    elsif ($log_line =~ /\s+\[(.*)\:\d+\]\s+(GET|HEAD).*(X-Plex-Client-Identifier|session)=$find/i) {
+                        $ip = $1;
+                        $match = $log_line . " [ by $2:$find only]";
+                    }
+                    # pre 0.9.9.3 fallback
                     elsif ($log_line =~ /(GET|HEAD).*(X-Plex-Client-Identifier|session)=$find.*\s+\[(.*)\:\d+\]/i) {
                         $ip = $3;
                         $match = $log_line . " [ by $2:$find only]";
