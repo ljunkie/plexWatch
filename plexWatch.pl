@@ -1077,22 +1077,27 @@ sub LocateIP() {
                 while( defined( my $log_line = $bw->readline ) && !$ip) {
                     last if ($count > $max_lines);
                     $count++;
-                    # 0.9.9.3 [ip:port] has been moved to the front of the log 
+                    next if $log_line =~ /\[127\.0\.0\.1:\d+\]/; # ignore local request [ usually PUT requests, not GET|HEAD ]
+                    
+                    #0.9.9.3+ -- IP in the beginnng of the log
                     if ($log_line =~ /\s+\[(.*)\:\d+\]\s+(GET|HEAD]).*[^\d]$item.*(X-Plex-Client-Identifier|session)=$find/i) {
                         $ip = $1;
                         $match = $log_line . " [ by $2:$find + item:$item]";
                     }
+                    elsif ($log_line =~ /\s+\[(.*)\:\d+\]\s+(GET|HEAD).*(X-Plex-Client-Identifier|session)=$find/i) {
+                        $ip = $1;
+                        $match = $log_line . " [ by $2:$find only]";
+                    }
+                    if ($log_line =~ /\s+\[(.*)\:\d+\]\s+(GET|HEAD]).*$find/i) {
+                        $ip = $1;
+                        $match = $log_line . " [ by client:$find only]";
+                    }
+                    
                     # pre 0.9.9.3
                     elsif ($log_line =~ /(GET|HEAD]).*[^\d]$item.*(X-Plex-Client-Identifier|session)=$find.*\s+\[(.*)\:\d+\]/i) {
                         $ip = $3;
                         $match = $log_line . " [ by $2:$find + item:$item]";
                     }
-                    # 0.9.9.3+ fallback
-                    elsif ($log_line =~ /\s+\[(.*)\:\d+\]\s+(GET|HEAD).*(X-Plex-Client-Identifier|session)=$find/i) {
-                        $ip = $1;
-                        $match = $log_line . " [ by $2:$find only]";
-                    }
-                    # pre 0.9.9.3 fallback
                     elsif ($log_line =~ /(GET|HEAD).*(X-Plex-Client-Identifier|session)=$find.*\s+\[(.*)\:\d+\]/i) {
                         $ip = $3;
                         $match = $log_line . " [ by $2:$find only]";
@@ -1118,28 +1123,36 @@ sub LocateIP() {
                     while( defined( my $log_line = $bw->readline ) && !$ip) {
                         last if ($count > $max_lines);
                         $count++;
-
-                        if ($log_line =~ /GET.*playing.*ratingKey=$find[^\d].*\s+\[(.*)\:\d+\]/) {
+                        next if $log_line =~ /\[127\.0\.0\.1:\d+\]/; # ignore local request [ usually PUT requests, not GET|HEAD ]
+                        
+                        #0.9.9.3+ -- IP in the beginnng of the log
+                        if ($log_line =~ /\[(.*)\:\d+\].*GET.*playing.*ratingKey=$find[^\d]/) {
                             $ip = $1;
                             $match = $log_line . "[ fallback match 1 ]";
                         }
-                        elsif ($log_line =~ /GET.*\/$find\?checkFiles.*\s+\[(.*)\:\d+\]/) {
+                        elsif ($log_line =~ /\[(.*)\:\d+\].*GET.*\/$find\?checkFiles/) {
                             $ip = $1;
                             $match = $log_line . "[ fallback match 2 ]";
                         }
-                        elsif ($log_line =~ /GET.*[^\d]$find[^\d].*\s+\[(.*)\:\d+\]/) {
+                        elsif ($log_line =~ /\[(.*)\:\d+\].*GET.*[^\d]$find[^\d]/) {
                             $ip = $1;
                             $match = $log_line . "[ fallback match 3 ]";
                         }
-                        ## best line to match (but not always available at start)
-                        # Request: GET /:/timeline?time=0&duration=1399200&state=playing&ratingKey=87959&key=%2Flibrary%2Fmetadata%2F87959&containerKey=http%3A%2F%2F10.0.0.5%3A32400%2Flibrary%2Fmetadata%2F87958%2Fchildren [10.0.0.5:3283] (469 live)
-
-                        ## option 2 (called before starting -- maybe)
-                        # Request: GET /library/metadata/87959?checkFiles=1 [10.0.0.5:43515] (469 live)
-
-                        # worst of all three -- this is just a view
-                        # Request: GET /photo/:/transcode?url=http%3A%2F%2F127.0.0.1%3A32400%2Flibrary%2Fmetadata%2F87959%2Fthumb%2F1377723508&width=214&height=306&format=jpeg&background=363636 [10.0.0.5:61215] (469 live)
-
+                        
+                        # pre 0.9.9.2
+                        elsif ($log_line =~ /GET.*playing.*ratingKey=$find[^\d].*\s+\[(.*)\:\d+\]/) {
+                            $ip = $1;
+                            $match = $log_line . "[ fallback match 1 pre ]";
+                        }
+                        elsif ($log_line =~ /GET.*\/$find\?checkFiles.*\s+\[(.*)\:\d+\]/) {
+                            $ip = $1;
+                            $match = $log_line . "[ fallback match 2 pre ]";
+                        }
+                        elsif ($log_line =~ /GET.*[^\d]$find[^\d].*\s+\[(.*)\:\d+\]/) {
+                            $ip = $1;
+                            $match = $log_line . "[ fallback match 3 pre]";
+                        }
+                        
                     }
                     $d_out .= $ip if $ip;
                     $d_out .= "NO IP found ($count lines searched)" if !$ip;
