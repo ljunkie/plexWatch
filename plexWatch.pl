@@ -1,11 +1,11 @@
 #!/usr/bin/perl
 
-my $version = '0.2.6';
+my $version = '0.2.7';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2014-02-21 12:58 PST
+# Modified: 2014-02-21 17:35 PST
 #
 #  Version: $version
 # https://github.com/ljunkie/plexWatch
@@ -1066,6 +1066,10 @@ sub LocateIP() {
             if (-f $log) {
                 my $match;
 
+                my $ipRegex = '\[[f:]*([\d\.\:a-f]*?)\:\d+\]'; # works with 0.9.9.3
+                                                               # ipv4    [192.168.1.5:60847]
+                                                               # ipv4v6  [ffff::192.168.1.5:60847]
+                                                               # ipv6    [2001:0db8:0000:0000:0000:ff00:0042:8329:60847] 
                 my $bw = File::ReadBackwards->new( $log ) or die "can't read 'log_file' $!" ;
 
                 my $ip;
@@ -1080,15 +1084,15 @@ sub LocateIP() {
                     next if $log_line =~ /\[127\.0\.0\.1:\d+\]/; # ignore local request [ usually PUT requests, not GET|HEAD ]
                     
                     #0.9.9.3+ -- IP in the beginnng of the log
-                    if ($log_line =~ /\s+\[(.*)\:\d+\]\s+(GET|HEAD]).*[^\d]$item.*(X-Plex-Client-Identifier|session)=$find/i) {
+                    if ($log_line =~ /\s+$ipRegex\s+(GET|HEAD]).*[^\d]$item.*(X-Plex-Client-Identifier|session)=$find/i) {
                         $ip = $1;
                         $match = $log_line . " [ by $2:$find + item:$item]";
                     }
-                    elsif ($log_line =~ /\s+\[(.*)\:\d+\]\s+(GET|HEAD).*(X-Plex-Client-Identifier|session)=$find/i) {
+                    elsif ($log_line =~ /\s+$ipRegex\s+(GET|HEAD).*(X-Plex-Client-Identifier|session)=$find/i) {
                         $ip = $1;
                         $match = $log_line . " [ by $2:$find only]";
                     }
-                    if ($log_line =~ /\s+\[(.*)\:\d+\]\s+(GET|HEAD]).*$find/i) {
+                    if ($log_line =~ /\s+$ipRegex\s+(GET|HEAD]).*$find/i) {
                         $ip = $1;
                         $match = $log_line . " [ by client:$find only]";
                     }
@@ -1103,7 +1107,7 @@ sub LocateIP() {
                         $match = $log_line . " [ by $2:$find only]";
                     }
                 }
-
+                
                 $d_out .= $ip if $ip;
                 $d_out .= "NO IP found ($count lines searched)" if !$ip;
                 &DebugLog($d_out);
@@ -1126,15 +1130,15 @@ sub LocateIP() {
                         next if $log_line =~ /\[127\.0\.0\.1:\d+\]/; # ignore local request [ usually PUT requests, not GET|HEAD ]
                         
                         #0.9.9.3+ -- IP in the beginnng of the log
-                        if ($log_line =~ /\[(.*)\:\d+\].*GET.*playing.*ratingKey=$find[^\d]/) {
+                        if ($log_line =~ /$ipRegex.*GET.*playing.*ratingKey=$find[^\d]/) {
                             $ip = $1;
                             $match = $log_line . "[ fallback match 1 ]";
                         }
-                        elsif ($log_line =~ /\[(.*)\:\d+\].*GET.*\/$find\?checkFiles/) {
+                        elsif ($log_line =~ /$ipRegex.*GET.*\/$find\?checkFiles/) {
                             $ip = $1;
                             $match = $log_line . "[ fallback match 2 ]";
                         }
-                        elsif ($log_line =~ /\[(.*)\:\d+\].*GET.*[^\d]$find[^\d]/) {
+                        elsif ($log_line =~ /$ipRegex.*GET.*[^\d]$find[^\d]/) {
                             $ip = $1;
                             $match = $log_line . "[ fallback match 3 ]";
                         }
