@@ -793,7 +793,7 @@ __Answer__
     3. If this is first time launching cpan, it will ask if you want to automatically configure. Hit Enter
         1. It will ask if you want to automatically pick download mirrors. Type No and hit enter
         2. Pick mirrors for your region. I've had the best luck with .edu mirrors
-    4. Type "install cpan" without the quotes and hit enter. This will update cpan to the latest version
+    4. Type "install CPAN" without the quotes and hit enter. This will update cpan to the latest version
     5. Type "reload cpan" without the quotes and hit enter.
     6. Type "exit" without the quotes and hit enter
     7. Install required perl modules from Terminal
