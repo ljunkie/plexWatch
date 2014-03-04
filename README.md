@@ -787,8 +787,8 @@ __Answer__
 2. Copy config.pl-dist to config.pl and modify for your notification options
 3. Install XCode from Mac App Strore
 4. Install XCode command line tools by launching XCode, going to preferences, downloads, Install Command Line Tools
-4a. If this does not work, from Terminal, type "xcode-select --install"
-4b. Software Update should now prompt you to install the Developer Tools. Install them.
+    1. If this does not work, from Terminal, type "xcode-select --install"
+    2. Software Update should now prompt you to install the Developer Tools. Install them.
 5. Configure CPAN
     1. Launch Terminal.app
     2. Type "cpan" without the quotes and press enter
