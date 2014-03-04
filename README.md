@@ -787,6 +787,8 @@ __Answer__
 2. Copy config.pl-dist to config.pl and modify for your notification options
 3. Install XCode from Mac App Strore
 4. Install XCode command line tools by launching XCode, going to preferences, downloads, Install Command Line Tools
+4a. If this does not work, from Terminal, type "xcode-select --install"
+4b. Software Update should now prompt you to install the Developer Tools. Install them.
 5. Configure CPAN
     1. Launch Terminal.app
     2. Type "cpan" without the quotes and press enter
@@ -804,6 +806,7 @@ __Answer__
     sudo cpan install Net::Twitter::Lite::WithAPIv1_1
     sudo cpan install Net::OAuth
     sudo cpan install Mozilla::CA
+    sudo cpan install JSON
     ```
 7. Now create data directory and set permission. Replace [user] with your username
 
