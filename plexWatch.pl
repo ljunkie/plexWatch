@@ -3117,7 +3117,7 @@ sub GetRecentlyAdded() {
     foreach my $section (@$section) {
         my $url = $host . '/library/sections/'.$section.'/recentlyAdded';
         ## limit the output to the last 25 added.
-        $url .= '?query=c&X-Plex-Container-Start=0&X-Plex-Container-Size=25';
+        $url .= '?X-Plex-Container-Start=0&X-Plex-Container-Size=25';
         my $response = $ua->get( &PMSurl($url) );
         if ( ! $response->is_success ) {
             print "Failed to get Library Sections from $url\n";
