@@ -1,4 +1,4 @@
-plexWatch - 0.0.19-RC1 - WIN32
+plexWatch - v0.2.8 - WIN32
 =========
 
 ***Notify*** and Log ***'Now Playing'*** and ***'Watched'*** content from a Plex Media Server + ***'Recently Added'*** (...and more)
