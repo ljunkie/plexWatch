@@ -1661,6 +1661,7 @@ sub DB_ra_table() {
         { 'name' => 'GNTP', 'definition' => 'INTEGER',},
         { 'name' => 'EMAIL', 'definition' => 'INTEGER',},
         { 'name' => 'pushover', 'definition' => 'INTEGER',},
+	{ 'name' => 'pushbullet', 'definition' => 'INTEGER',},
         { 'name' => 'boxcar', 'definition' => 'INTEGER',},
         { 'name' => 'boxcar_v2', 'definition' => 'INTEGER',},
 
@@ -2327,6 +2328,65 @@ sub NotifyBoxcar_V2() {
     return 0;
 }
 
+sub NotifyPushbullet() {
+    my $provider = 'pushbullet';
+
+    #my $alert = shift;
+    my $info = shift;
+    my ($alert) = &formatAlert($info,$provider);
+
+    my $alert_options = shift;
+
+    if ($provider_452->{$provider}) {
+	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
+	return 0;
+    }
+
+    my %po = %{$notify->{pushbullet}};
+    my $ua = LWP::UserAgent->new(  ssl_opts => {
+	verify_hostname => 0,
+	SSL_verify_mode => "SSL_VERIFY_NONE",
+				   });
+    $ua->timeout(20);
+    $po{'message'} = $alert;
+
+    ## allow formatting of appname
+    $po{'title'} = '{user}' if $po{'title'} eq $appname; ## force {user} if people still use $appname in config -- forcing update with the need to modify config.
+    my $format = $po{'title'};
+
+
+    if ($format =~ /\{.*\}/) {
+	my $regex = join "|", keys %{$alert_options};
+	$regex = qr/$regex/;
+	$po{'title'} =~ s/{($regex)}/$alert_options->{$1}/g;
+	$po{'title'} =~ s/{\w+}//g; ## remove any {word} - templates that failed
+	$po{'title'} = $appname if !$po{'title'}; ## replace appname if empty
+    }
+    $po{'title'} .= ': ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};
+    $po{'title'} .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};
+
+    my $response = $ua->post( "https://$po{'apikey'}\@api.pushbullet.com/api/pushes", [
+				  "device_iden" => $po{'device'},
+				  "type" => 'note',
+				  "title" => $po{'title'},
+				  "body" => $po{'message'},
+			      ]);
+    my $content  = $response->decoded_content();
+
+
+    if ($content !~ /\"created\":/) {
+	print STDERR "Failed to post Pushbullet notification -- $po{'message'} result:$content\n";
+	$provider_452->{$provider} = 1;
+	my $msg452 = uc($provider) . " failed: $alert -  setting $provider to back off additional notifications\n";
+	&ConsoleLog($msg452,,1);
+
+	return 0;
+    }
+
+    my $dmsg = uc($provider) . " Notification successfully posted.\n" if $debug;
+    &DebugLog($dmsg) if $dmsg && $debug;
+    return 1;     ## success
+}
 
 sub NotifyGNTP() {
     my $provider = 'GNTP';
@@ -3260,6 +3320,7 @@ sub GetNotifyfuncs() {
         twitter => \&NotifyTwitter,
         boxcar => \&NotifyBoxcar,
         boxcar_v2 => \&NotifyBoxcar_V2,
+	pushbullet => \&NotifyPushbullet,
         file => \&NotifyFile,
         GNTP => \&NotifyGNTP,
         EMAIL => \&NotifyEMAIL,
