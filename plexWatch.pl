@@ -1,11 +1,11 @@
 #!/usr/bin/perl
 
-my $version = '0.2.8';
+my $version = '0.2.9';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2014-03-05 12:16 PST
+# Modified: 2014-03-07 14:07 PST
 #
 #  Version: $version
 # https://github.com/ljunkie/plexWatch
@@ -238,6 +238,9 @@ if ($DBversion ne $version) {
 if (&getLastGroupedTime() == 0) {    &UpdateGroupedTable;} ## update DB table if first run.
 
 &BackupSQlite; ## check if the SQLdb needs to be backed up
+
+## update any missing rating keys
+&updateRatingKeys();
 
 my $PMS_token = &PMSToken(); # sets token if required
 
@@ -561,7 +564,7 @@ if ($options{'notify'}) {
         my $userID = $info->{userID};
         $userID = 'Local' if !$userID;
         my $db_key = $k . '_' . $live->{$k}->{key} . '_' . $userID;
-        
+
         ## these shouldn't be neede any more - to clean up as we now use XML data from DB
         $info->{'orig_title'} = $live->{$k}->{title};
         $info->{'orig_title_ep'} = '';
@@ -608,7 +611,7 @@ if ($options{'notify'}) {
             $info->{'ip_address'} = &LocateIP($info) if ref $info;
             ## end the dirty feeling
 
-            my $insert_id = &ProcessStart($live->{$k},$db_key,$info->{'title'},$info->{'platform'},$info->{'orig_user'},$info->{'orig_title'},$info->{'orig_title_ep'},$info->{'genre'},$info->{'episode'},$info->{'season'},$info->{'summary'},$info->{'rating'},$info->{'year'},$info->{'ip_address'});
+            my $insert_id = &ProcessStart($live->{$k},$db_key,$info->{'title'},$info->{'platform'},$info->{'orig_user'},$info->{'orig_title'},$info->{'orig_title_ep'},$info->{'genre'},$info->{'episode'},$info->{'season'},$info->{'summary'},$info->{'rating'},$info->{'year'},$info->{'ip_address'}, $info->{'ratingKey'}, $info->{'parentRatingKey'}, $info->{'grandparentRatingKey'} );
             &Notify($info) if $options{'notify'} != 2;
             ## should probably have some checks to make sure we were notified.. TODO
             &SetNotified($insert_id)  if $options{'notify'} != 2;
@@ -652,7 +655,7 @@ if ($options{'watching'}) {
             }  else {   $skip = 0;    }
 
             next if $skip;
-            
+
             if (!$seen{$user}) {
                 $seen{$user} = 1;
                 print "\nUser: " .decode('utf8',  $user);
@@ -729,7 +732,7 @@ sub formatAlert() {
             }
         }
     }
-    
+
     $format =~ s/{{($regex)}}/$info->{$1}/g; ## regex replace variables
     $format =~ s/\[\]//g;                 ## trim any empty variable encapsulated in []
     $format =~ s/\s+/ /g;                 ## remove double spaces
@@ -747,7 +750,7 @@ sub formatAlert() {
                 if ($info->{$key}) {
                     my $value = $info->{$key};
                     if (!$info->{'decoded'}) {
-                        $value = decode('utf8',$value) if eval { decode('UTF-8', $value); 1 };                    
+                        $value = decode('utf8',$value) if eval { decode('UTF-8', $value); 1 };
                     }
                     $format .= sprintf("%20s: %s\n",$key,$value);
                 }
@@ -757,7 +760,7 @@ sub formatAlert() {
                     if (!ref($info->{$key}->{$k2})) {
                         my $value = $info->{$key}->{$k2};
                         if (!$info->{'decoded'}) {
-                            $value = decode('utf8',$value) if eval { decode('UTF-8', $value); 1 };                    
+                            $value = decode('utf8',$value) if eval { decode('UTF-8', $value); 1 };
                         }
                         $f_extra .= sprintf("%20s: %s\n",$k2,$value);
                     }
@@ -966,10 +969,10 @@ sub ProviderEnabled() {
 }
 
 sub ProcessStart() {
-    my ($xmlref,$db_key,$title,$platform,$user,$orig_title,$orig_title_ep,$genre,$episode,$season,$summary,$rating,$year,$ip) = @_;
+    my ($xmlref,$db_key,$title,$platform,$user,$orig_title,$orig_title_ep,$genre,$episode,$season,$summary,$rating,$year,$ip,$ratingKey,$parentRatingKey,$grandparentRatingKey) = @_;
     my $xml =  XMLout($xmlref);
-    my $sth = $dbh->prepare("insert into processed (session_id,ip_address,title,platform,user,orig_title,orig_title_ep,genre,episode,season,summary,rating,year,xml) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
-    $sth->execute($db_key,$ip,$title,$platform,$user,$orig_title,$orig_title_ep,$genre,$episode,$season,$summary,$rating,$year,$xml) or die("Unable to execute query: $dbh->errstr\n");
+    my $sth = $dbh->prepare("insert into processed (session_id,ip_address,title,platform,user,orig_title,orig_title_ep,genre,episode,season,summary,rating,year,xml,ratingKey,parentRatingKey,grandparentRatingKey) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+    $sth->execute($db_key,$ip,$title,$platform,$user,$orig_title,$orig_title_ep,$genre,$episode,$season,$summary,$rating,$year,$xml,$ratingKey,$parentRatingKey,$grandparentRatingKey) or die("Unable to execute query: $dbh->errstr\n");
     return  $dbh->sqlite_last_insert_rowid();
 }
 
@@ -986,8 +989,8 @@ sub ProcessGrouped() {
         $vaccum->execute;
     }
 
-    my $insert = $dbh->prepare("insert into grouped (session_id,time,stopped,paused_counter,ip_address,title,platform,user,orig_title,orig_title_ep,genre,episode,season,summary,rating,year,xml) ".
-                               "values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+    my $insert = $dbh->prepare("insert into grouped (session_id,time,stopped,paused_counter,ip_address,title,platform,user,orig_title,orig_title_ep,genre,episode,season,summary,rating,year,xml,ratingKey,parentRatingKey,grandparentRatingKey) ".
+                               "values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
     my $update = $dbh->prepare("update grouped set stopped = ?, paused_counter = ?, ip_address = ?, platform = ?, xml = ? where id = ?");
 
     # lock for changes - this is a HUGE speed increase ( takes < second to insert/update 1500 records )
@@ -1002,7 +1005,7 @@ sub ProcessGrouped() {
 
         ## New record - Insert
         if (!$row[0]) {
-            $insert->execute($info->{'db_key'},$info->{'time'},$info->{'stopped'},$info->{'paused'},$info->{'ip_address'},$info->{'title'},$info->{'platform'},$info->{'orig_user'},$info->{'orig_title'},$info->{'orig_title_ep'},$info->{'genre'},$info->{'episode'},$info->{'season'},$info->{'summary'},$info->{'rating'},$info->{'year'},$info->{'xml'}) or die("Unable to execute query: $dbh->errstr\n");
+            $insert->execute($info->{'db_key'},$info->{'time'},$info->{'stopped'},$info->{'paused'},$info->{'ip_address'},$info->{'title'},$info->{'platform'},$info->{'orig_user'},$info->{'orig_title'},$info->{'orig_title_ep'},$info->{'genre'},$info->{'episode'},$info->{'season'},$info->{'summary'},$info->{'rating'},$info->{'year'},$info->{'xml'}, $info->{'ratingKey'},$info->{'parentRatingKey'},$info->{'grandparentRatingKey'}) or die("Unable to execute query: $dbh->errstr\n");
         }
         ## Existing record -- check if new info
         else {
@@ -1069,7 +1072,7 @@ sub LocateIP() {
                 my $ipRegex = '\[[f:]*([\d\.\:a-f]*?)\:\d+\]'; # works with 0.9.9.3
                                                                # ipv4    [192.168.1.5:60847]
                                                                # ipv4v6  [ffff::192.168.1.5:60847]
-                                                               # ipv6    [2001:0db8:0000:0000:0000:ff00:0042:8329:60847] 
+                                                               # ipv6    [2001:0db8:0000:0000:0000:ff00:0042:8329:60847]
                 my $bw = File::ReadBackwards->new( $log ) or die "can't read 'log_file' $!" ;
 
                 my $ip;
@@ -1082,7 +1085,7 @@ sub LocateIP() {
                     last if ($count > $max_lines);
                     $count++;
                     next if $log_line =~ /\[127\.0\.0\.1:\d+\]/; # ignore local request [ usually PUT requests, not GET|HEAD ]
-                    
+
                     #0.9.9.3+ -- IP in the beginnng of the log
                     if ($log_line =~ /\s+$ipRegex\s+(GET|HEAD]).*[^\d]$item.*(X-Plex-Client-Identifier|session)=$find/i) {
                         $ip = $1;
@@ -1096,7 +1099,7 @@ sub LocateIP() {
                         $ip = $1;
                         $match = $log_line . " [ by client:$find only]";
                     }
-                    
+
                     # pre 0.9.9.3
                     elsif ($log_line =~ /(GET|HEAD]).*[^\d]$item.*(X-Plex-Client-Identifier|session)=$find.*\s+\[(.*)\:\d+\]/i) {
                         $ip = $3;
@@ -1107,7 +1110,7 @@ sub LocateIP() {
                         $match = $log_line . " [ by $2:$find only]";
                     }
                 }
-                
+
                 $d_out .= $ip if $ip;
                 $d_out .= "NO IP found ($count lines searched)" if !$ip;
                 &DebugLog($d_out);
@@ -1128,7 +1131,7 @@ sub LocateIP() {
                         last if ($count > $max_lines);
                         $count++;
                         next if $log_line =~ /\[127\.0\.0\.1:\d+\]/; # ignore local request [ usually PUT requests, not GET|HEAD ]
-                        
+
                         #0.9.9.3+ -- IP in the beginnng of the log
                         if ($log_line =~ /$ipRegex.*GET.*playing.*ratingKey=$find[^\d]/) {
                             $ip = $1;
@@ -1142,7 +1145,7 @@ sub LocateIP() {
                             $ip = $1;
                             $match = $log_line . "[ fallback match 3 ]";
                         }
-                        
+
                         # pre 0.9.9.2
                         elsif ($log_line =~ /GET.*playing.*ratingKey=$find[^\d].*\s+\[(.*)\:\d+\]/) {
                             $ip = $1;
@@ -1156,7 +1159,7 @@ sub LocateIP() {
                             $ip = $1;
                             $match = $log_line . "[ fallback match 3 pre]";
                         }
-                        
+
                     }
                     $d_out .= $ip if $ip;
                     $d_out .= "NO IP found ($count lines searched)" if !$ip;
@@ -1236,7 +1239,7 @@ sub ProcessUpdate() {
             if ($p_epoch) {
                 my $sec = $now-$p_epoch;
                 $p_counter += $sec;
-                $extra .= sprintf(",paused = %s",'NULL'); # set Paused to NULL
+                $extra .= sprintf(",paused = %s",'null'); # set Paused to NULL
                 $extra .= sprintf(",paused_counter = %s",$p_counter); #update counter
                 my $dmsg = sprintf "* removing Paused state and setting paused counter to %s seconds [this duration %s sec]\n",$p_counter,$sec;
                 &DebugLog($dmsg) if $dmsg;
@@ -1280,7 +1283,7 @@ sub GetSessions() {
     #     print $lines;
     #     my $data = XMLin(encode('utf8',$lines),KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
     #     return $data->{'Video'};
-    # } 
+    # }
 
     my $proto = 'http';
     $proto = 'https' if $port == 32443;
@@ -1323,9 +1326,9 @@ sub GetSessions() {
                 &DebugLog($dmsg) if $dmsg;
             }
         }
-        
+
         # clean results
-        return $container; 
+        return $container;
         #return $data->{'Video'};
     } else {
         my $dmsg = "Failed to get request $url - The result:";
@@ -1420,6 +1423,61 @@ sub GetUnNotified() {
         $info->{$row_hash->{'session_id'}} = $row_hash;
     }
     return $info;
+}
+
+
+sub updateRatingKeys() {
+    # populate the DB keys (new) from the XML record
+    #  same logic can be used for other info we need later
+
+    # ORDER of keys must be ratingKey, parent, grandparent ( used in logic for updates )
+    my @keys = qw(ratingKey parentRatingKey grandparentRatingKey);
+    # for now we will only update OLD records if the ratingKey is missing. Might want to update the logic to verify all keys are there if it's an episode
+    my @tables = qw(processed grouped);
+    foreach my $table (@tables) {
+        my $cmd = "select id,xml," . join(",",@keys) ." from $table where ratingKey is null and xml is not null";
+        my $sth = $dbh->prepare($cmd);
+        $sth->execute or die("Unable to execute query: $dbh->errstr\n");
+
+        my @batchUpdates;
+        while (my $row_hash = $sth->fetchrow_hashref) {
+            if (defined($row_hash->{xml})) {
+                my $xml_ref = XMLin($row_hash->{xml});
+                if (ref($xml_ref)) {
+                    my @updates;
+                    my $hasUpdates = 0;
+                    foreach my $key (@keys) {
+                        my $cur = $row_hash->{$key} || 'NULL';
+                        my $new = $xml_ref->{$key} || 'NULL';
+                        $hasUpdates = 1 if ($cur ne $new);
+                        push (@updates,$new);
+                    }
+
+                    # push the update to the batch if modified
+                    if ($hasUpdates) {
+                        push(@updates,$row_hash->{id});
+                        push(@batchUpdates,[@updates]);
+                    }
+                }
+            }
+        }
+
+        if (@batchUpdates) {
+            my $sth = $dbh->prepare("update $table set ratingKey = ?, parentRatingKey = ?, grandparentRatingKey = ? where id = ?");
+            $dbh->begin_work;
+            foreach my $record (@batchUpdates) {
+                my @array = @$record;
+                if (scalar @array == 4) {
+                    ## hack to set NULL back to a real NULL. DBI requires undef for nulls
+                    for (my $i = 0; $i < scalar(@array); $i++) {
+                        $array[$i] = undef if (!$array[$i] or $array[$i] =~ /^null$/i);
+                    }
+                    $sth->execute(@array) or die("Unable to execute query: $dbh->errstr\n");
+                }
+            }
+            $dbh->commit;
+        }
+    }
 }
 
 sub GetTestNotify() {
@@ -1522,12 +1580,12 @@ sub SetStopped() {
     my $time = shift;
     if ($db_key) {
         $time = time() if !$time;
-        my $sth = $dbh->prepare("update processed set stopped = ?,paused = NULL,notified = NULL where id = ?");
+        my $sth = $dbh->prepare("update processed set stopped = ?,paused = null,notified = null where id = ?");
         $sth->execute($time,$db_key) or die("Unable to execute query: $dbh->errstr\n");
     }
     ## BUG FIX - remove paused state for any stopped item - this can be removed at a later date (TODO)
     ## fixes in place to account for this anyways. It's just DB cleanup
-    my $sth = $dbh->prepare("update processed set paused = NULL where stopped is not NULL");
+    my $sth = $dbh->prepare("update processed set paused = null where stopped is not null");
     $sth->execute() or die("Unable to execute query: $dbh->errstr\n");
     &UpdateGroupedTable; ## update the grouped table
 }
@@ -1567,6 +1625,9 @@ sub initDB() {
         { 'name' => 'paused_counter', 'definition' => 'INTEGER',},
         { 'name' => 'xml', 'definition' => 'text',},
         { 'name' => 'ip_address', 'definition' => 'text',},
+        { 'name' => 'ratingKey', 'definition' => 'integer', },
+        { 'name' => 'parentRatingKey', 'definition' => 'integer', },
+        { 'name' => 'grandparentRatingKey', 'definition' => 'integer', },
         );
 
     my @dbidx = (
@@ -1574,6 +1635,9 @@ sub initDB() {
         { 'name' => 'timeIdx', 'table' => 'time', },
         { 'name' => 'stoppedIdx', 'table' => 'stopped', },
         { 'name' => 'notifiedIdx', 'table' => 'notified', },
+        { 'name' => 'ratingKeyIdx', 'table' => 'ratingKey', },
+        { 'name' => 'parentRatingKeyIdx', 'table' => 'parentRatingKey', },
+        { 'name' => 'grandparentRatingKeyIdx', 'table' => 'grandparentRatingKey', },
         );
 
     &initDBtable($dbh,$dbtable,\@dbcol);
@@ -1761,6 +1825,9 @@ sub DB_grouped_table() {
         { 'name' => 'paused_counter', 'definition' => 'INTEGER',},
         { 'name' => 'xml', 'definition' => 'text',},
         { 'name' => 'ip_address', 'definition' => 'text',},
+        { 'name' => 'ratingKey', 'definition' => 'integer', },
+        { 'name' => 'parentRatingKey', 'definition' => 'integer', },
+        { 'name' => 'grandparentRatingKey', 'definition' => 'integer', },
         );
 
     my @dbidx = (
@@ -1768,6 +1835,9 @@ sub DB_grouped_table() {
         { 'name' => 'GtimeIdx', 'table' => 'time', },
         { 'name' => 'GstoppedIdx', 'table' => 'stopped', },
         { 'name' => 'GnotifiedIdx', 'table' => 'notified', },
+        { 'name' => 'GratingKeyIdx', 'table' => 'ratingKey', },
+        { 'name' => 'GparentRatingKeyIdx', 'table' => 'parentRatingKey', },
+        { 'name' => 'GgrandparentRatingKeyIdx', 'table' => 'grandparentRatingKey', },
         );
 
     &initDBtable($dbh,$dbtable,\@dbcol); ## this will just add the columns if needed ( already created the dbtable)
@@ -2079,10 +2149,10 @@ sub NotifyProwl() {
     }
 
     # Prowl required UTF8
-    $prowl{'application'} = encode('utf8',$prowl{'application'}) if eval { encode('UTF-8', $prowl{'application'}); 1 };                   
-    $prowl{'event'} = encode('utf8',$prowl{'event'}) if eval { encode('UTF-8', $prowl{'event'}); 1 };                   
-    $prowl{'notification'} = encode('utf8',$prowl{'notification'}) if eval { encode('UTF-8', $prowl{'notification'}); 1 };                   
-    
+    $prowl{'application'} = encode('utf8',$prowl{'application'}) if eval { encode('UTF-8', $prowl{'application'}); 1 };
+    $prowl{'event'} = encode('utf8',$prowl{'event'}) if eval { encode('UTF-8', $prowl{'event'}); 1 };
+    $prowl{'notification'} = encode('utf8',$prowl{'notification'}) if eval { encode('UTF-8', $prowl{'notification'}); 1 };
+
     # URL encode our arguments
     $prowl{'application'} =~ s/([^A-Za-z0-9])/sprintf("%%%02X", ord($1))/seg;
     $prowl{'event'} =~ s/([^A-Za-z0-9])/sprintf("%%%02X", ord($1))/seg;
@@ -2315,7 +2385,7 @@ sub NotifyBoxcar_V2() {
                                       "notification[title]"=> $bc{'from'},
                                       "notification[long_message]" => $bc{'message'},
                                       "notification[sound]" => "bird-1",  ]);
-        
+
         if ($response->is_success) {
             print uc($provider) . " Notification successfully posted.\n" if $debug;
             return 1;
@@ -2491,8 +2561,8 @@ sub NotifyGNTP() {
             };
 
             # GNTP required UTF8
-            $gntp{'title'} = encode('utf8',$gntp{'title'}) if eval { encode('UTF-8', $gntp{'title'}); 1 };                   
-            $alert = encode('utf8',$alert) if eval { encode('UTF-8', $alert); 1 };                   
+            $gntp{'title'} = encode('utf8',$gntp{'title'}) if eval { encode('UTF-8', $gntp{'title'}); 1 };
+            $alert = encode('utf8',$alert) if eval { encode('UTF-8', $alert); 1 };
 
             if (!$@) {
                 $growl->notify(
@@ -2580,7 +2650,7 @@ sub NotifyEMAIL() {
 
         # Subject needs to be decoded (body will be sent as UTF8 encoded)
         if (ref($info) && !$info->{'decoded'}) {
-            $email{'subject'} = decode('utf8',$email{'subject'}) if eval { decode('UTF-8', $email{'subject'}); 1 };                   
+            $email{'subject'} = decode('utf8',$email{'subject'}) if eval { decode('UTF-8', $email{'subject'}); 1 };
         }
 
         if (!$email{'server'} || !$email{'port'} || !$email{'from'} || !$email{'to'} ) {
@@ -2612,7 +2682,7 @@ sub NotifyEMAIL() {
                     $mailer->data;
                     $mailer->datasend("MIME-Version: 1.0\n");
                     $mailer->datasend("Content-Transfer-Encoding: 8bit\n");
-                    $mailer->datasend("Content-Type:text/plain; charset=utf-8\n");      
+                    $mailer->datasend("Content-Type:text/plain; charset=utf-8\n");
                     $mailer->datasend("X-Mailer: plexWatch\r\n");
                     $mailer->datasend("To: $email{'to'}\r\n");
                     $mailer->datasend("From: $email{'from'}\r\n");
@@ -2777,6 +2847,7 @@ sub info_from_xml() {
     # my $vid = XMLin(encode('utf8',$hash),KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video'];)
     my $vid = XMLin($hash,KeyAttr => { Video => 'sessionKey' }, ForceArray => ['Video']);
 
+
     ## paused or playing? stopped is forced and required from ntype
     my $state = 'unknown';
     if ($ntype =~ /watched|stop/) {
@@ -2790,6 +2861,8 @@ sub info_from_xml() {
     my $ma_id = '';
     $ma_id = $vid->{Player}->{'machineIdentifier'} if $vid->{Player}->{'machineIdentifier'};
     my $ratingKey = $vid->{'ratingKey'} if $vid->{'ratingKey'};
+    my $parentRatingKey = $vid->{'parentRatingKey'} if $vid->{'parentRatingKey'};
+    my $grandparentRatingKey = $vid->{'grandparentRatingKey'} if $vid->{'grandparentRatingKey'};
 
     ## how many minutes in are we? TODO - cleanup when < 90 -- formatting is a bit odd with [0 seconds in]
     my $viewOffset = 0;
@@ -2886,7 +2959,7 @@ sub info_from_xml() {
 
     my $userID = $vid->{User}->{id};
     $userID = 'Local' if !$userID;
-    
+
     $year = $vid->{year} if $vid->{year};
     $rating .= $vid->{contentRating} if ($vid->{contentRating});
     $summary = $vid->{summary} if $vid->{summary};
@@ -2946,6 +3019,8 @@ sub info_from_xml() {
         'transInfo' => $transInfo,
         'machineIdentifier' => $ma_id,
         'ratingKey' => $ratingKey,
+        'parentRatingKey' => $parentRatingKey,
+        'grandparentRatingKey' => $grandparentRatingKey,
     };
 
     return $info;
@@ -3632,7 +3707,7 @@ sub Watched() {
         my %seenc = (); ## testing
         if (keys %{$is_watched}) {
             $print_stmt = ""; #clear the print
-            
+
             ## sort by the friendly name+device if exists for output
             if (!$update_grouped_table) {
                 foreach my $k (sort keys %{$is_watched}) {
@@ -3643,39 +3718,39 @@ sub Watched() {
                     $is_watched->{$k}->{'encoded'} = 0;
                     if ($user ne $orig_user) {
                         $is_watched->{$k}->{user_enc} = encode('utf8', $user) if eval { encode('UTF-8', $user); 1 };
-                        $is_watched->{$k}->{'encoded'} = 1;                        
+                        $is_watched->{$k}->{'encoded'} = 1;
                     } elsif  ($is_watched->{$k}->{time} > 1392090762) {
                         # everything after 2013-02-11 is not encoded properly ( excluding above which is special )
                         $is_watched->{$k}->{'encoded'} = 2;
                     }
-                    
+
                 }
             }
-            
+
             foreach my $k (sort {$is_watched->{$a}->{user} cmp $is_watched->{$b}->{'user'} ||
                                      $is_watched->{$a}->{time} cmp $is_watched->{$b}->{'time'} } (keys %{$is_watched}) ) {
                 ## use display name
                 my $user = $is_watched->{$k}->{user};
                 my $orig_user = $is_watched->{$k}->{orig_user};
-                
+
                 if ($update_grouped_table) {
                     ($user,$orig_user) = &FriendlyName($is_watched->{$k}->{user},$is_watched->{$k}->{platform});
                 }
-                    
-                
+
+
                 my $skip = 0;
                 # Only SKIP user for display purposes. Do not skip user when updating the grouped table
                 if (!$update_grouped_table) {
                     $skip = 1;
                     ## skip/exclude users --user/--exclude_user
-                    
+
                     next if ( grep { $_ =~ /$is_watched->{$k}->{'user'}/i } @{$options{'exclude_user'}});
                     next if ( $user  && grep { $_ =~ /^$user$/i } @{$options{'exclude_user'}});
-                    # encoded user 
+                    # encoded user
                     if ($is_watched->{$k}->{'user_enc'}) {
                         next if ( grep { $_ =~ /$is_watched->{$k}->{'user_enc'}/i } @{$options{'exclude_user'}});
                     }
-                    
+
                     if ($options{'user'}) {
                         # ghetto I know, I have to deal with some old data
                         # needs cleanup -- but old data in the wrong format is the issue.. backwards compatiblity
@@ -3683,7 +3758,7 @@ sub Watched() {
                         my $include = $options{'user'};
                         $skip = 0 if $user =~ /^$include$/i; ## user display (friendly) matches specified
                         $skip = 0 if $orig_user =~ /^$include$/i; ## user (non friendly) matches specified
-                        
+
                         $include  = decode('utf8', $options{'user'}) if eval { decode('UTF-8', $options{'user'}); 1 };
                         $skip = 0 if $user =~ /^$include$/i; ## user display (friendly) matches specified
                         $skip = 0 if $orig_user =~ /^$include$/i; ## user (non friendly) matches specified
@@ -3783,7 +3858,7 @@ sub Watched() {
                     if ($is_watched->{$k}->{'encoded'}) {
                         $info->{'user'} = encode('utf8',  $info->{'user'}) if eval { encode('UTF-8',   $info->{'user'}); 1 };
                     }
-                    
+
                     $info->{'ip_address'} = $is_watched->{$k}->{ip_address};
                     my $alert = &Notify($info,1); ## only return formated alert
                     $print_stmt .= sprintf(" %s: %s\n",$time, $alert);
@@ -3817,6 +3892,9 @@ sub Watched() {
                             $seen{$skey}->{'rating'} = $is_watched->{$k}->{'rating'};
                             $seen{$skey}->{'genre'} = $is_watched->{$k}->{'genre'};
                             $seen{$skey}->{'summary'} = $is_watched->{$k}->{'summary'};
+                            $seen{$skey}->{'ratingKey'} = $is_watched->{$k}->{'ratingKey'};
+                            $seen{$skey}->{'parentRatingKey'} = $is_watched->{$k}->{'parentRatingKey'};
+                            $seen{$skey}->{'grandparentRatingKey'} = $is_watched->{$k}->{'grandparentRatingKey'};
                             #$seen{$skey}->{'notified'} = $is_watched->{$k}->{'notified'};
                             if (!$seen{$skey}->{'paused'}) {
                                 $seen{$skey}->{'paused'} = $paused;
@@ -3912,7 +3990,7 @@ sub Watched() {
 
 sub excludeContent() {
     # expected results
-    # 0: include 
+    # 0: include
     # 1: exclude
 
     my $key = shift;
