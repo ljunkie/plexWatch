@@ -134,6 +134,18 @@ $notify = {
         'from' => '{user}',          ## From Name displayed on boxcar
     },
 
+    'pushbullet' => {
+        'enabled' => 0,
+        'push_recentlyadded'  => 0,
+        'push_watched'        => 0,
+        'push_watching'       => 0,
+        'push_paused'         => 0,
+        'push_resumed'        => 0,
+        'title'               => '{user}',
+        'apikey'              => 'API KEY', # Pushbullet API key https://www.pushbullet.com/account
+        'device'              => 'DEVICE IDEN', # https://api.pushbullet.com/api/devices put yor API key as username and password empty
+    },
+
     ## GNTP (GROWL) -- multiple destinations are supported
     'GNTP' => {
         '1' => 	{
