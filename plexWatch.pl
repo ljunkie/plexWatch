@@ -1595,6 +1595,7 @@ sub initDB() {
 
     my $dbtable = 'processed';
     my $dbh = DBI->connect("dbi:SQLite:dbname=$data_dir/plexWatch.db","","");
+    $dbh->do("PRAGMA  journal_mode = WAL");
     my $sth = $dbh->prepare("SELECT name FROM SQLITE_MASTER");
     $sth->execute or die("Unable to execute query: $dbh->errstr\n");
     #ALTER TABLE Name ADD COLUMN new_column INTEGER DEFAULT 0
