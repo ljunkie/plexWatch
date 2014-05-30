@@ -709,12 +709,23 @@ sub formatAlert() {
     my $type = $info->{'ntype'};
     my @types = qw(start watched watching stop paused resumed);
     my $format;
-    foreach my $tkey (@types) {
-        if ($type =~ /$tkey/i) {
-            $format = $alert_format->{$tkey}; # default alert formats per notify type
-            $format = $n_prov_format->{'alert_format'}->{$tkey} if $n_prov_format->{'alert_format'}->{$tkey}; # provider override
+
+    my $format_key = 'alert_format';
+
+    # external provider (scripts) uses script_format
+    if (defined($provider) && $provider eq 'external') {
+        $format_key = 'script_format';
+        return -1 if !$n_prov_format->{$format_key}->{$type};
+        $format = $n_prov_format->{$format_key}->{$type};
+    } else {
+        foreach my $tkey (@types) {
+            if ($type =~ /$tkey/i) {
+                $format = $alert_format->{$tkey}; # default alert formats per notify type
+                $format = $n_prov_format->{$format_key}->{$tkey} if $n_prov_format->{$format_key}->{$tkey}; # provider override
+            }
         }
     }
+
     if ($debug) { print "\nformat: $format\n";}
 
     ## just to be sure we don't have any conflicts -- use double curly brackets {{variable}} ( users still only use 1 {variable} )
@@ -874,7 +885,33 @@ sub NotifyFile() {
     return 1;
 }
 
+sub NotifyExternal() {
+    my $provider = 'external';
 
+    # This is just a pretty basic routine to call external scripts.
+    
+    my $info = shift;
+    my $alert_options = shift;
+    
+    my ($success,$error);
+    foreach my $k (keys %{$notify->{$provider}}) {
+        my ($command) = &formatAlert($info,$provider,$k);
+        next if $command eq -1;
+
+        my $push_type = $alert_options->{'push_type'};
+        if (ref $notify->{$provider}->{$k} && $notify->{$provider}->{$k}->{'enabled'}  &&  $notify->{$provider}->{$k}->{$push_type}) {
+            print "$provider key:$k enabled for this $alert_options->{'push_type'}\n" if $debug;
+        } else {
+            print "$provider key:$k NOT enabled for this $alert_options->{'push_type'} - skipping\n" if $debug;
+            next;
+        }
+        
+        &DebugLog($provider . '-' . $k . ': ' . $push_type . ' enabled -> run cmd: ' . $command);
+        system($command)
+    }
+    
+    return 1; # for now... success!
+}
 
 
 sub DebugLog() {
@@ -3400,6 +3437,7 @@ sub GetNotifyfuncs() {
         file => \&NotifyFile,
         GNTP => \&NotifyGNTP,
         EMAIL => \&NotifyEMAIL,
+        external => \&NotifyExternal,
         );
     my $error;
     ## this SHOULD never happen if the code is released -- this is just a reminder for whomever is adding a new provider in config.pl
