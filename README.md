@@ -1,4 +1,4 @@
-plexWatch - 0.2.9-DEV (2014-03-05)
+plexWatch - 0.3.0-DEV (2014-05-07)
 =========
 ***Notify*** and Log ***'Now Playing'*** and ***'Watched'*** content from a Plex Media Server + ***'Recently Added'*** (...and more)
 
@@ -30,6 +30,7 @@ plexWatch - 0.2.9-DEV (2014-03-05)
 * https://boxcar.io/ & boxcar V2
 * https://pushbullet.com
 * SNARL/GROWL: GNTP notifications supported. Anything that uses GNTP *should* work
+* External Scripts: home automation, pause download clients, etc (rudimentary plugins) 
 
 **What it does**
 * notify when a user starts watching a video
