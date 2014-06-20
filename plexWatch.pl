@@ -2435,8 +2435,9 @@ sub NotifyPushbullet() {
     $po{'title'} .= ': ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};
     $po{'title'} .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};
 
+	## This is a kluge, it ignores the device name and thus pushes out to ALL devices registered with pushbullet.  I tried an if/then/else statement on a device name set to "all" but that failed completely.  I don't know much about perl, so that is probably why.
     my $response = $ua->post( "https://$po{'apikey'}\@api.pushbullet.com/api/pushes", [
-				  "device_iden" => $po{'device'},
+				  #"device_iden" => $po{'device'},
 				  "type" => 'note',
 				  "title" => $po{'title'},
 				  "body" => $po{'message'},
@@ -4214,5 +4215,4 @@ This program will Notify and Log 'Now Playing' content from a Plex Media Server
 nothing to see here.
 
 =cut
-
 
