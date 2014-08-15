@@ -1,11 +1,11 @@
 #!/usr/bin/perl
 
-my $version = '0.3.0';
+my $version = '0.3.1';
 my $author_info = <<EOF;
 ##########################################
 #   Author: Rob Reed
 #  Created: 2013-06-26
-# Modified: 2014-05-29 18:07 PST
+# Modified: 2014-08-14 23:40 PST
 #
 #  Version: $version
 # https://github.com/ljunkie/plexWatch
@@ -166,6 +166,7 @@ GetOptions(\%options,
            'id:s@',
            'version',
            'backup',
+           'clean_extras',
            'show_xml',
            'help|?'
     ) or pod2usage(2);
@@ -234,6 +235,13 @@ if ($DBversion ne $version) {
 }
 
 &UpdateConfig(\@config_vars);
+
+# clean any extras we may have logged. Make sure to run this before any
+# backup or grouped table update as those come along with this.
+if ($options{'clean_extras'}) {
+    &extrasCleaner();
+    exit;
+} 
 
 if (&getLastGroupedTime() == 0) {    &UpdateGroupedTable;} ## update DB table if first run.
 
@@ -1355,8 +1363,14 @@ sub GetSessions() {
         my $container = {};
         foreach my $key (keys %{$data->{'Video'}}) {
             my $libraryKey = $data->{'Video'}->{$key}->{'key'};
+            # any extras will contain the key "extraType". I am not sure what types there are as of yet.
+            my $isExtra = $data->{'Video'}->{$key}->{'extraType'};
+            if (defined($isExtra)) {
+                my $dmsg = "Excluding extra type: $isExtra";
+                &DebugLog($dmsg) if $dmsg;
+            } 
             # should we exclude the item? for now this is mainly related to non library content (channels)
-            if (!excludeContent($libraryKey)) {
+            elsif (!excludeContent($libraryKey,$isExtra)) {
                 $container->{$key} = $data->{'Video'}->{$key};
             } else {
                 my $dmsg = "Excluding non library content: $data->{'Video'}->{$key}->{'title'}";
@@ -3466,6 +3480,8 @@ sub GetPushTitles() {
 }
 
 sub BackupSQlite() {
+    my $forceBackup = shift;
+    my $skipFullUpdate = shift;
     ## this will Auto Backup the sql lite db to $data_dir/db_backups/...
     ## --backup will for a daily backup
 
@@ -3533,10 +3549,12 @@ sub BackupSQlite() {
 
 
     foreach my $type (keys %{$backups}) {
-        if ($type =~ /daily/ && $options{'backup'}) {
+        if ($type =~ /daily/ && defined($forceBackup)) {
+            print "\n** Forcing a daily backups now\n";
+            $options{'backup'} = 1;
+        } elsif ($type =~ /daily/ && $options{'backup'}) {
             print "\n** Daily Backups are not enabled -- but you called --backup, forcing backup now..\n";
-        }
-        else {
+        } else {
             next if !$backups->{$type}->{'enabled'};
         }
 
@@ -3586,20 +3604,21 @@ sub BackupSQlite() {
                 }
                 ## Should we clean up older files if they change the keep count to something lower? I think not... (unlink no)
             }
-            print "\t* Backup file: $file ... " if $debug || $options{'backup'};
+            print "\t* Creating backup file now: $file ... " if $debug || $options{'backup'};
             $dbh->sqlite_backup_to_file($file);
             print "DONE\n\n" if $debug || $options{'backup'};
         }
 
     }
 
-    if ($did_backup) {
+    if ($did_backup && undef($skipFullUpdate)) {
         ## TODO - this won't work if someone disabled backups. ( why disable backups though!)
+        print "\n* Updating the grouped table... (this may take a few minutes)\n";
         &UpdateGroupedTable(2); # force a rebuild of the grouped table (daily)
     }
 
-    ## exit if --backup was called..
-    exit if $options{'backup'};
+    ## exit if --backup was called.. DO NOT exit if we force the backup
+    exit if $options{'backup'} && undef($forceBackup);
 }
 
 sub myPlexToken() {
@@ -4056,6 +4075,32 @@ sub checkVersion() {
     my $total=0;
     return $row->{'version'} if $row->{'version'};
     return 0;
+}
+
+sub extrasCleaner() {
+    #randomly we might need to clean items. This will be needed to help assist. As of now, we need to clean any "extraType" logged to the processed table.
+    my $count = $dbh->prepare("select count(*) as extras from processed where xml like ?");
+    $count->execute('%extraType=%') or die("Unable to execute query: $dbh->errstr\n");
+    my $row = $count->fetchrow_hashref;
+    if ($row->{extras} == 0) {
+        print "\n* No \"Extras\" found in the database.\n\n";
+        return 0;
+    } else {
+        print "\n* Backing up DB before removing " . $row->{extras} . " trailers (extras) from plexWatch";
+        &BackupSQlite("true","true"); # force a backup
+
+        print "\n* Removing: " . $row->{extras} . " trailers (extras) from plexWatch";
+        my $sth = $dbh->prepare("delete from processed where xml like ?");
+        $dbh->begin_work;
+        $sth->execute('%extraType=%') or die("Unable to execute query: $dbh->errstr\n");
+        $dbh->commit;
+        if ($sth->rows > 0) {
+            print "\n* Removed: " . $sth->rows . " trailers (extras) from plexWatch";
+            print "\n* Updating the grouped table... (this may take a few minutes)\n";
+            &UpdateGroupedTable(2); # force a rebuild of the grouped table (daily)
+            print "\n* DONE!\n";
+        }
+    }
 }
 
 
