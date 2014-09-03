@@ -2523,6 +2523,70 @@ sub NotifyBoxcar_V2() {
     return 0;
 }
 
+sub NotifyPushalot() {
+    my $provider = 'pushalot';
+
+    #my $alert = shift;
+    my $info = shift;
+    my ($alert) = &formatAlert($info,$provider);
+
+    my $alert_options = shift;
+
+    if ($provider_452->{$provider}) {
+	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
+	return 0;
+    }
+
+    my %pa = %{$notify->{pushalot}};
+    my $ua = LWP::UserAgent->new(  ssl_opts => {
+	verify_hostname => 0,
+	SSL_verify_mode => "SSL_VERIFY_NONE",
+				   });
+    $ua->timeout(20);
+    $pa{'message'} = $alert;
+
+    ## allow formatting of appname
+    $pa{'title'} = '{user}' if $pa{'title'} eq $appname; ## force {user} if people still use $appname in config -- forcing update with the need to modify config.
+    my $format = $pa{'title'};
+
+
+    if ($format =~ /\{.*\}/) {
+	my $regex = join "|", keys %{$alert_options};
+	$regex = qr/$regex/;
+	$pa{'title'} =~ s/{($regex)}/$alert_options->{$1}/g;
+	$pa{'title'} =~ s/{\w+}//g; ## remove any {word} - templates that failed
+	$pa{'title'} = $appname if !$pa{'title'}; ## replace appname if empty
+    }
+    $pa{'title'} .= ': ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};
+    $pa{'title'} .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};
+
+    my $response = $ua->post("https://pushalot.com/api/sendmessage", [
+        "AuthorizationToken" => $pa{'token'},
+        "Title" => $pa{'title'},
+        "Body" => $pa{'message'},
+        "IsImportant" => $pa{'isimportant'},
+        "IsSilent" => $pa{'issilent'},
+        "TimeToLive" => $pa{'timetolive'},
+        "Source" => "plexWatch",
+    ]);
+
+    my $content  = $response->decoded_content();
+
+
+    if ($content !~ /\"created\":/) {
+	print STDERR "Failed to post Pushalot notification -- $pa{'message'} result:$content\n";
+	$provider_452->{$provider} = 1;
+	my $msg452 = uc($provider) . " failed: $alert -  setting $provider to back off additional notifications\n";
+	&ConsoleLog($msg452,,1);
+
+	return 0;
+    }
+
+    my $dmsg = uc($provider) . " Notification successfully posted.\n" if $debug;
+    &DebugLog($dmsg) if $dmsg && $debug;
+    return 1;     ## success
+}
+
 sub NotifyPushbullet() {
     my $provider = 'pushbullet';
 
