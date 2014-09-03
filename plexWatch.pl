@@ -2574,7 +2574,7 @@ sub NotifyPushalot() {
     my $content  = $response->decoded_content();
 
 
-    if ($content !~ /\"created\":/) {
+    if ($content !~ /\"Success\":true/) {
 	print STDERR "Failed to post Pushalot notification -- $pa{'message'} result:$content\n";
 	$provider_452->{$provider} = 1;
 	my $msg452 = uc($provider) . " failed: $alert -  setting $provider to back off additional notifications\n";
