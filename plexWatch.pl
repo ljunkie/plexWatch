@@ -242,7 +242,7 @@ if ($DBversion ne $version) {
 if ($options{'clean_extras'}) {
     &extrasCleaner();
     exit;
-} 
+}
 
 if (&getLastGroupedTime() == 0) {    &UpdateGroupedTable;} ## update DB table if first run.
 
@@ -898,10 +898,10 @@ sub NotifyExternal() {
     my $provider = 'external';
 
     # This is just a pretty basic routine to call external scripts.
-    
+
     my $info = shift;
     my $alert_options = shift;
-    
+
     my ($success,$error);
     foreach my $k (keys %{$notify->{$provider}}) {
         my ($command) = &formatAlert($info,$provider,$k);
@@ -914,11 +914,11 @@ sub NotifyExternal() {
             print "$provider key:$k NOT enabled for this $alert_options->{'push_type'} - skipping\n" if $debug;
             next;
         }
-        
+
         &DebugLog($provider . '-' . $k . ': ' . $push_type . ' enabled -> run cmd: ' . $command);
         system($command)
     }
-    
+
     return 1; # for now... success!
 }
 
@@ -1372,7 +1372,7 @@ sub GetSessions() {
             if (defined($isExtra)) {
                 my $dmsg = "Excluding extra type: $isExtra";
                 &DebugLog($dmsg) if $dmsg;
-            } 
+            }
             # should we exclude the item? for now this is mainly related to non library content (channels)
             elsif (!excludeContent($libraryKey,$isExtra)) {
                 $container->{$key} = $data->{'Video'}->{$key};

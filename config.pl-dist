@@ -224,7 +224,7 @@ $notify = {
             'push_watching' => 1, #start
             'push_paused'   => 1, #pause
             'push_resumed'  => 1, #resume
-            
+
             'script_format' => {
                 'start'   =>  '/usr/local/bin/start.pl {user} {state}',
                 'paused'  =>  '/usr/local/bin/paused.pl {user} {state}',
@@ -232,8 +232,8 @@ $notify = {
                 'stop'    =>  '/usr/local/bin/stop.pl {user} {state}',
             },
         },
-        
-        
+
+
         'homeAutomation' => 	{
             'enabled'       => 0, ## 0 or 1 - set to 1 to enable homeAutomation script
             'push_watched'  => 1, #stop
