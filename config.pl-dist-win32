@@ -44,12 +44,12 @@ $alert_format = {'start'    =>  '{title} [{streamtype}] [{year}] [{rating}] on {
 
 ## Notification Options
 $notify = {
-    
+
     'file' => {
         'enabled' => 1,  ## 0 or 1 - set to 1 to enable File Logging
         'filename' => "$data_dir/plexWatch.log", ## default is plexWatch.log
     },
-    
+
     'prowl' => {
         'enabled' => 0, ## 0 or 1 - set to 1 to enable PROWL
         'push_recentlyadded'  => 0,
@@ -62,7 +62,7 @@ $notify = {
         'priority' => 0,
         'url' => '',
     },
-    
+
     'pushover' => {
         'enabled' => 0, ## set to 1 to enable Pushover
         'push_recentlyadded'  => 0,
@@ -75,7 +75,7 @@ $notify = {
         'title' => '{user}',
         'sound' => 'intermission',
     },
-    
+
     'growl' => {
         'enabled' => 0, ## set to 1 to enable local growl (You should probably used GNTP - growl supported for multiple platforms - below)
         'push_recentlyadded'  => 0,
@@ -87,8 +87,8 @@ $notify = {
         'script' => '/usr/local/bin/growlnotify',
         'icon' => '/Applications/Plex Media Server.app/Contents/Resources/MyPlex.icns',
     },
-    
-    
+
+
     'twitter' => {
         'enabled'             => 0, ## set to 1 to enable local growl
         'push_recentlyadded'  => 0,
@@ -108,7 +108,7 @@ $notify = {
             'stop'     =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} for {duration} [{percent_complete}%]',
         },
     },
-    
+
     'boxcar' => {
         'enabled' => 0, ## set to 1 to enable local growl
         'push_recentlyadded'  => 0,
@@ -133,9 +133,21 @@ $notify = {
         'access_token'        => '', # Access token from your Device
         'from' => '{user}',          ## From Name displayed on boxcar
     },
-    
-    ## GNTP (GROWL) -- multiple destinations are supported 
-    'GNTP' => { 
+
+    'pushbullet' => {
+        'enabled' => 0,
+        'push_recentlyadded'  => 0,
+        'push_watched'        => 0,
+        'push_watching'       => 0,
+        'push_paused'         => 0,
+        'push_resumed'        => 0,
+        'title'               => '{user}',
+        'apikey'              => 'API KEY', # Pushbullet API key https://www.pushbullet.com/account
+        'device'              => 'DEVICE IDEN', # https://api.pushbullet.com/api/devices put yor API key as username and password empty
+    },
+
+    ## GNTP (GROWL) -- multiple destinations are supported
+    'GNTP' => {
         '1' => 	{
             'enabled' => 0, ## set to 1 to enable local growl
             'push_recentlyadded'  => 0,
@@ -151,7 +163,7 @@ $notify = {
             'icon_url' => 'https://rarforge.com/images/plexWatch.57x57.png',
             'sticky' => 1,
         },
-        
+
         '2' => 	{
             'enabled' => 0, ## set to 1 to enable local growl
             'push_recentlyadded'  => 0,
@@ -167,11 +179,11 @@ $notify = {
             'sticky' => 0,
         },
     },
-    
-    
-    ## EMAIL -- multiple destinations are supported 
-    'EMAIL' => { 
-        
+
+
+    ## EMAIL -- multiple destinations are supported
+    'EMAIL' => {
+
         '1' => 	{
             'enabled' => 0, ## set to 1 to enable local EMAIL
             'push_recentlyadded'  => 0,
@@ -194,14 +206,16 @@ $notify = {
                 'stop'     =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} for {duration} [{percent_complete}%] {ip_address} {all_details}',
             },
         },
-        
+
         '2' => 	{
             'enabled' => 0, ## set to 1 to enable EMAIL
             ## fill in the rest if you need more then 1 email notification
         },
-        
+
+
     },
-    
+
+
 };
 
 $push_titles = {
@@ -218,3 +232,4 @@ $watched_show_completed = 1;  ## advanced config -- always show completed show/m
 $watched_grouping_maxhr = 2;  ## advanced config -- do not group shows together if start/restart is > X hours
 $count_paused = 0;            ## included paused time in time watched ( probably do not want this )
 $inc_non_library_content = 0; ## non library content (channels) are excluded. Set to 1 to include them
+#@exclude_library_ids = (999, 998); ## exclude this library section (by id) -- full exclusion
