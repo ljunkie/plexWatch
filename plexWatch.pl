@@ -48,8 +48,8 @@ if (!-e $dirname .'/config.pl') {
     &DebugLog($msg,1) if $msg;
     exit;
 }
-our ($data_dir, $server, $port, $appname, $user_display, $alert_format, $notify, $push_titles, $backup_opts, $myPlex_user, $myPlex_pass, $server_log, $log_client_ip, $debug_logging, $watched_show_completed, $watched_grouping_maxhr, $count_paused, $inc_non_library_content);
-my @config_vars = ("data_dir", "server", "port", "appname", "user_display", "alert_format", "notify", "push_titles", "backup_opts", "myPlex_user", "myPlex_pass", "server_log", "log_client_ip", "debug_logging", "watched_show_completed", "watched_grouping_maxhr", "count_paused");
+our ($data_dir, $server, $port, $appname, $user_display, $alert_format, $notify, $push_titles, $backup_opts, $myPlex_user, $myPlex_pass, $server_log, $log_client_ip, $debug_logging, $watched_show_completed, $watched_grouping_maxhr, $count_paused, $inc_non_library_content, @exclude_library_ids);
+my @config_vars = ("data_dir", "server", "port", "appname", "user_display", "alert_format", "notify", "push_titles", "backup_opts", "myPlex_user", "myPlex_pass", "server_log", "log_client_ip", "debug_logging", "watched_show_completed", "watched_grouping_maxhr", "count_paused", "exclude_library_ids");
 do $dirname.'/config.pl';
 
 if (!$data_dir || !$server || !$port || !$appname || !$alert_format || !$notify) {
@@ -151,6 +151,7 @@ GetOptions(\%options,
            'stats',
            'user:s',
            'exclude_user:s@',
+           'exclude_library_id:s@',
            'watching',
            'notify',
            'debug:s',
@@ -1362,6 +1363,9 @@ sub GetSessions() {
         # verify xml results/remove invalid and unwanted items
         my $container = {};
         foreach my $key (keys %{$data->{'Video'}}) {
+            my $librarySectionId = $data->{'Video'}->{$key}->{'librarySectionID'};
+            next if ( grep { $_ =~ /^$librarySectionId$/i } @{$options{'exclude_library_id'}});
+            next if ( grep { $_ =~ /^$librarySectionId$/i } @exclude_library_ids);
             my $libraryKey = $data->{'Video'}->{$key}->{'key'};
             # any extras will contain the key "extraType". I am not sure what types there are as of yet.
             my $isExtra = $data->{'Video'}->{$key}->{'extraType'};
@@ -3233,6 +3237,8 @@ sub GetSectionsIDs() {
         }
         my $data = XMLin(encode('utf8',$content));
         foreach  my $k (keys %{$data->{'Directory'}}) {
+            next if ( grep { $_ =~ /^$k$/i } @{$options{'exclude_library_id'}});
+            next if ( grep { $_ =~ /^$k$/i } @exclude_library_ids);
             $sections->{'raw'}->{$k} = $data->{'Directory'}->{$k};
             push @{$sections->{'types'}->{$data->{'Directory'}->{$k}->{'type'}}}, $k;
         }
@@ -4147,6 +4153,10 @@ plexWatch.pl [options]
 
    --backup                       Force a daily backup of the database.
                                   * automatic backups are done daily,weekly,monthly - refer to backups section below
+
+   --clean_extras                 Remove any trailers or extras from the plexWatch DB
+
+   --exclude_library_id=...       Full exclusion for a library section id. It will not log or notify.
 
    #############################################################################################
 
