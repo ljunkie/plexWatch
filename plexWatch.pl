@@ -3267,9 +3267,17 @@ sub ParseDataItem() {
     if ($data->{'type'} =~ /show/ || $data->{'type'} =~ /episode/) {
         $info->{'episode'} = $data->{index};
         $info->{'season'} = $data->{parentIndex};
-        if ($info->{'episode'} < 10) { $info->{'episode'} = 0 . $info->{'episode'};}
-        if ($info->{'season'} < 10) { $info->{'season'} = 0 . $info->{'season'}; }
-        $info->{'title'} = $data->{'grandparentTitle'} . ': '.  $data->{'title'} . ' s'.$info->{'season'} .'e'. $info->{'episode'};
+        my $episodeString = "";
+        my $seasonString = "";
+        if ($info->{'episode'}) {
+            if ($info->{'episode'} < 10) { $info->{'episode'} = 0 . $info->{'episode'};}
+            $episodeString = "e" . $info->{'episode'};
+        }
+        if ($info->{'season'}) {
+            if ($info->{'season'} < 10) { $info->{'season'} = 0 . $info->{'season'}; }
+            $seasonString = "s" . $info->{'season'};
+        }
+        $info->{'title'} = $data->{'grandparentTitle'} . ': '.  $data->{'title'} . ' ' . $seasonString . $episodeString;
         $info->{'imdb_title'} = $data->{'grandparentTitle'} . ': '.  $data->{'title'};
 
     }
