@@ -1400,6 +1400,7 @@ sub GetSessions() {
 }
 
 sub PMSToken() {
+    my $token = &getDbToken();
     my $proto = 'http';
     $proto = 'https' if $port == 32443;
     my $url = "$proto://$server:$port";
@@ -1414,14 +1415,15 @@ sub PMSToken() {
     $userAgent->agent($appname);
     $userAgent->env_proxy();
     $request = HTTP::Request->new(GET => $url);
+    $request->header('X-Plex-Token' => $token) if $token;
     $response = $userAgent->request($request);
 
-
     if ($response->code == 401) {
-        my $token = &myPlexToken();
+        $token = &myPlexToken();
+        &updateToken($token);
         return $token;
     }
-    return 0;
+    return $token;
 }
 
 
@@ -1752,6 +1754,7 @@ sub initDB() {
     &DB_ra_table($dbh);       ## verify/create RecentlyAdded table
     &DB_grouped_table($dbh);  ## verify/create grouped
     &DB_config_table($dbh);   ## verify/create config table
+    &DB_auth_table($dbh);   ## verify/create config table
 
     return $dbh;
 }
@@ -1972,6 +1975,72 @@ sub DB_config_table() {
         { 'name' => 'json', 'definition' => 'text', },
         { 'name' => 'json_pretty', 'definition' => 'text', },
         { 'name' => 'hash_ref', 'definition' => 'text', },
+        );
+
+    &initDBtable($dbh,$dbtable,\@dbcol); ## this will just add the columns if needed ( already created the dbtable)
+
+    ## check definitions
+    my %dbcol_exists = ();
+
+    for ( @{ $dbh->selectall_arrayref( "PRAGMA TABLE_INFO($dbtable)") } ) {
+        $dbcol_exists{$_->[1]} = $_->[2];
+    };
+
+    ## alter table defintions if needed
+    my $alter_def = 0;
+    for my $col ( @dbcol ) {
+        if ($dbcol_exists{$col->{'name'}} && $dbcol_exists{$col->{'name'}} ne $col->{'definition'}) {       $alter_def =1;  }
+    }
+
+    if ($alter_def) {
+        my $dmsg = "New Table definitions.. upgrading DB";
+        &DebugLog($dmsg,1) if $dmsg;
+
+        $dbh->begin_work;
+
+        eval {
+            local $dbh->{RaiseError} = 1;
+            my $tmp_table = 'tmp_update_table';
+            &initDBtable($dbh,$tmp_table,\@dbcol); ## create DB table with new sturction
+            $dbh->do("INSERT INTO $tmp_table SELECT * FROM $dbtable");
+            $dbh->do("DROP TABLE $dbtable");
+            $dbh->do("ALTER TABLE $tmp_table RENAME TO $dbtable");
+            $dbh->commit;
+        };
+        if ($@) {
+            $dmsg = "Could not upgrade table definitions - Transaction aborted because $@";
+            &DebugLog($dmsg,1) if $dmsg;
+            eval { $dbh->rollback };
+        }
+        $dmsg = "DB update DONE";
+        &DebugLog($dmsg,1) if $dmsg;
+    }
+
+    return $dbh;
+}
+
+sub DB_auth_table() {
+    ## verify Recnetly Added table
+    my $dbh = shift;
+    my $dbtable = 'auth';
+    my $sth = $dbh->prepare("SELECT name FROM SQLITE_MASTER");
+    $sth->execute or die("Unable to execute query: $dbh->errstr\n");
+    my $created = 0;
+    #ALTER TABLE Name ADD COLUMN new_column INTEGER DEFAULT 0
+    my %tables;
+    while (my @tmp = $sth->fetchrow_array) {    foreach (@tmp) {        $tables{$_} = $_;    }}
+    if ($tables{$dbtable}) { }
+    else {
+        my $cmd = "CREATE TABLE $dbtable (id INTEGER PRIMARY KEY );";
+        my $result_code = $dbh->do($cmd) or die("Unable to prepare execute $cmd: $dbh->errstr\n");
+        $created = 1;
+    }
+
+    ## Add new columns/indexes on the fly  -- and change definitions
+    my @dbcol = (
+        { 'name' => 'token', 'definition' => 'text', },
+        { 'name' => 'user', 'definition' => 'text', },
+        { 'name' => 'password', 'definition' => 'text', },
         );
 
     &initDBtable($dbh,$dbtable,\@dbcol); ## this will just add the columns if needed ( already created the dbtable)
@@ -3651,7 +3720,6 @@ sub myPlexToken() {
     $req->authorization_basic($myPlex_user, $myPlex_pass);
     my $response = $ua->request($req);
 
-
     #print $response->as_string;
 
     if ($response->is_success) {
@@ -4081,6 +4149,28 @@ sub checkVersion() {
     my $total=0;
     return $row->{'version'} if $row->{'version'};
     return 0;
+}
+
+sub getDbToken() {
+    my $cmd = "select token from auth";
+    my $sth = $dbh->prepare($cmd);
+    $sth->execute or die("Unable to execute query: $dbh->errstr\n");
+    my $row = $sth->fetchrow_hashref;
+    my $total=0;
+    return $row->{'token'} if $row->{'token'};
+    return 0;
+}
+
+sub updateToken() {
+    my $token = shift;
+    my $insert = $dbh->prepare("insert into auth (token) values (?)");
+    my $delete = $dbh->prepare("DELETE FROM auth");
+
+    $dbh->begin_work;
+    $delete->execute;
+    $insert->execute($token) or die("Unable to execute query: $dbh->errstr\n");
+    # commit changes
+    $dbh->commit;
 }
 
 sub extrasCleaner() {
