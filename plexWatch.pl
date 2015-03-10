@@ -2560,8 +2560,9 @@ sub NotifyPushbullet() {
     $po{'title'} .= ': ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};
     $po{'title'} .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};
 
-    my $response = $ua->post( "https://$po{'apikey'}\@api.pushbullet.com/api/pushes", [
+    my $response = $ua->post( "https://$po{'apikey'}\@api.pushbullet.com/v2/pushes", [
 				  "device_iden" => $po{'device'},
+				  "channel_tag" => $po{'channel'},
 				  "type" => 'note',
 				  "title" => $po{'title'},
 				  "body" => $po{'message'},
