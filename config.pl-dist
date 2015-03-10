@@ -143,7 +143,8 @@ $notify = {
         'push_resumed'        => 0,
         'title'               => '{user}',
         'apikey'              => 'API KEY', # Pushbullet API key https://www.pushbullet.com/account
-        'device'              => 'DEVICE IDEN', # https://api.pushbullet.com/api/devices put yor API key as username and password empty
+        'device'              => 'DEVICE IDEN', # https://api.pushbullet.com/v2/devices put yor API key as username and password empty - Leave blank to use all or channel
+        'channel'             => 'CHANNEL_TAG', # Channel tag from https://www.pushbullet.com/my-channels - Leave blank if unused
     },
 
     'pushalot' => {
