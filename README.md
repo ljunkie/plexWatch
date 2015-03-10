@@ -55,7 +55,7 @@ plexWatch - 0.3.2 (2014-11-19)
 * Time::ParseDate;
 * JSON
 
-#### These should be part of the bast Perl install
+#### These should be part of the base Perl install
 
 * Pod::Usage;        (Perl base on rhel/centos)
 * Fcntl qw(:flock);  (Perl base)
@@ -402,8 +402,6 @@ user: Stans's total duration 3 hours and 56 seconds
 ```
 
 
-
-<br/>g
 ### Notification format
 
 * You can edit the format of your alerts and cli output or --watching --watched. This can be done  in the config.pl or on the cli
@@ -421,13 +419,8 @@ user: Stans's total duration 3 hours and 56 seconds
  --format_watching=".."  : modify cli output for --watching :: --format_watching='{user} watching {title} on {platform}'
 ```
 
-```
-
-
-<br/>
 ### Advanced --recently_added options
-
-
+```
 * All Movie Sections : ```./plexWatch.pl --recently_added=movie```
 
 * All Movie / TV Sections : ```./plexWatch.pl --recently_added=movie,show```
@@ -435,6 +428,7 @@ user: Stans's total duration 3 hours and 56 seconds
 * Specific Section(s) : ```./plexWatch.pl --recently_added --id=# --id=#```
 
 ```
+
 ./plexWatch.exe --recently_added
 
         * Available Sections:
