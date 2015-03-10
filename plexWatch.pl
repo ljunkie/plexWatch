@@ -2567,10 +2567,9 @@ sub NotifyPushbullet() {
 				  "title" => $po{'title'},
 				  "body" => $po{'message'},
 			      ]);
-    my $content  = $response->decoded_content();
 
-
-    if ($content !~ /\"created\":/) {
+    if (!$response->is_success) {
+	my $content  = $response->decoded_content();
 	print STDERR "Failed to post Pushbullet notification -- $po{'message'} result:$content\n";
 	$provider_452->{$provider} = 1;
 	my $msg452 = uc($provider) . " failed: $alert -  setting $provider to back off additional notifications\n";
