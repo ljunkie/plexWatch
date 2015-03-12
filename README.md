@@ -162,19 +162,7 @@ $debug_logging = 1; ## logs to $data_dir/debug.log ( only really helps debug IP 
     * Debian/Ubuntu - apt-get
 
     ```bash
-    sudo apt-get install libwww-perl
-
-    sudo apt-get install libxml-simple-perl
-
-    sudo apt-get install libtime-duration-perl
-
-    sudo apt-get install libtime-modules-perl
-
-    sudo apt-get install libdbd-sqlite3-perl
-
-    sudo apt-get install perl-doc
-
-    sudo apt-get install libjson-perl
+    sudo apt-get install -y libwww-perl libxml-simple-perl libtime-duration-perl libtime-modules-perl libdbd-sqlite3-perl perl-doc libjson-perl
     ```
     * RHEL/Centos - yum
 
