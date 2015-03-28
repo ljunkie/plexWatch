@@ -130,8 +130,10 @@ $notify = {
         'push_watching'       => 0,
         'push_paused'         => 0,
         'push_resumed'        => 0,
-        'access_token'        => '', # Access token from your Device
-        'from' => '{user}',          ## From Name displayed on boxcar
+        'access_token'        => '', ## Access token from your Device
+        'from'                => '{user}', ## From Name displayed on boxcar
+        'sound'               => 'bird-1',
+        'icon_url'            => 'https://rarforge.com/images/plexWatch.57x57.png',
     },
 
     'pushbullet' => {

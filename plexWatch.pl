@@ -2509,7 +2509,9 @@ sub NotifyBoxcar_V2() {
                                       "user_credentials" => $bc{'access_token'},
                                       "notification[title]"=> $bc{'from'},
                                       "notification[long_message]" => $bc{'message'},
-                                      "notification[sound]" => "bird-1",  ]);
+                                      "notification[sound]" => $bc{'sound'},
+                                      "notification[source_name]" => "plexWatch",
+                                      "notification[icon_url]" => $bc{'icon_url'},  ]);
 
         if ($response->is_success) {
             print uc($provider) . " Notification successfully posted.\n" if $debug;
