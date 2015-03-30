@@ -1116,9 +1116,9 @@ sub LocateIP() {
                 my $match;
 
                 my $ipRegex = '\[[f:]*([\d\.\:a-f]*?)\:\d+\]'; # works with 0.9.9.3
-                                                               # ipv4    [192.168.1.5:60847]
-                                                               # ipv4v6  [ffff::192.168.1.5:60847]
-                                                               # ipv6    [2001:0db8:0000:0000:0000:ff00:0042:8329:60847]
+                # ipv4    [192.168.1.5:60847]
+                # ipv4v6  [ffff::192.168.1.5:60847]
+                # ipv6    [2001:0db8:0000:0000:0000:ff00:0042:8329:60847]
                 my $bw = File::ReadBackwards->new( $log ) or die "can't read 'log_file' $!" ;
 
                 my $ip;
@@ -1554,7 +1554,7 @@ sub GetTestNotify() {
 
 sub GetStarted() {
     my $info = ();
-#    my $cmd = "select * from processed where notified = 1 and stopped is null";
+    #    my $cmd = "select * from processed where notified = 1 and stopped is null";
     my $cmd = "select * from processed where time is not null and stopped is null";
     my $sth = $dbh->prepare($cmd);
     $sth->execute or die("Unable to execute query: $dbh->errstr\n");
@@ -1784,7 +1784,7 @@ sub DB_ra_table() {
         { 'name' => 'GNTP', 'definition' => 'INTEGER',},
         { 'name' => 'EMAIL', 'definition' => 'INTEGER',},
         { 'name' => 'pushover', 'definition' => 'INTEGER',},
-	    { 'name' => 'pushbullet', 'definition' => 'INTEGER',},
+        { 'name' => 'pushbullet', 'definition' => 'INTEGER',},
         { 'name' => 'pushalot', 'definition' => 'INTEGER',},
         { 'name' => 'boxcar', 'definition' => 'INTEGER',},
         { 'name' => 'boxcar_v2', 'definition' => 'INTEGER',},
@@ -2285,7 +2285,7 @@ sub NotifyProwl() {
     $prowl{'notification'} =~ s/([^A-Za-z0-9])/sprintf("%%%02X", ord($1))/seg;
 
     # allow line breaks in message/notification
-        $prowl{'notification'} =~ s/\%5Cn/\%0d\%0a/g;
+    $prowl{'notification'} =~ s/\%5Cn/\%0d\%0a/g;
 
     my $providerKeyString = '';
 
@@ -2536,15 +2536,15 @@ sub NotifyPushalot() {
     my $alert_options = shift;
 
     if ($provider_452->{$provider}) {
-	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
-	return 0;
+        if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
+        return 0;
     }
 
     my %pa = %{$notify->{pushalot}};
     my $ua = LWP::UserAgent->new(  ssl_opts => {
-	verify_hostname => 0,
-	SSL_verify_mode => "SSL_VERIFY_NONE",
-				   });
+        verify_hostname => 0,
+        SSL_verify_mode => "SSL_VERIFY_NONE",
+                                   });
     $ua->timeout(20);
     $pa{'message'} = $alert;
 
@@ -2554,35 +2554,35 @@ sub NotifyPushalot() {
 
 
     if ($format =~ /\{.*\}/) {
-	my $regex = join "|", keys %{$alert_options};
-	$regex = qr/$regex/;
-	$pa{'title'} =~ s/{($regex)}/$alert_options->{$1}/g;
-	$pa{'title'} =~ s/{\w+}//g; ## remove any {word} - templates that failed
-	$pa{'title'} = $appname if !$pa{'title'}; ## replace appname if empty
+        my $regex = join "|", keys %{$alert_options};
+        $regex = qr/$regex/;
+        $pa{'title'} =~ s/{($regex)}/$alert_options->{$1}/g;
+        $pa{'title'} =~ s/{\w+}//g; ## remove any {word} - templates that failed
+        $pa{'title'} = $appname if !$pa{'title'}; ## replace appname if empty
     }
     $pa{'title'} .= ': ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};
     $pa{'title'} .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};
 
     my $response = $ua->post("https://pushalot.com/api/sendmessage", [
-        "AuthorizationToken" => $pa{'token'},
-        "Title" => $pa{'title'},
-        "Body" => $pa{'message'},
-        "IsImportant" => $pa{'isimportant'},
-        "IsSilent" => $pa{'issilent'},
-        "TimeToLive" => $pa{'timetolive'},
-        "Source" => "plexWatch",
-    ]);
+                                 "AuthorizationToken" => $pa{'token'},
+                                 "Title" => $pa{'title'},
+                                 "Body" => $pa{'message'},
+                                 "IsImportant" => $pa{'isimportant'},
+                                 "IsSilent" => $pa{'issilent'},
+                                 "TimeToLive" => $pa{'timetolive'},
+                                 "Source" => "plexWatch",
+                             ]);
 
     my $content  = $response->decoded_content();
 
 
     if ($content !~ /\"Success\":true/) {
-	print STDERR "Failed to post Pushalot notification -- $pa{'message'} result:$content\n";
-	$provider_452->{$provider} = 1;
-	my $msg452 = uc($provider) . " failed: $alert -  setting $provider to back off additional notifications\n";
-	&ConsoleLog($msg452,,1);
+        print STDERR "Failed to post Pushalot notification -- $pa{'message'} result:$content\n";
+        $provider_452->{$provider} = 1;
+        my $msg452 = uc($provider) . " failed: $alert -  setting $provider to back off additional notifications\n";
+        &ConsoleLog($msg452,,1);
 
-	return 0;
+        return 0;
     }
 
     my $dmsg = uc($provider) . " Notification successfully posted.\n" if $debug;
@@ -2600,15 +2600,15 @@ sub NotifyPushbullet() {
     my $alert_options = shift;
 
     if ($provider_452->{$provider}) {
-	if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
-	return 0;
+        if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
+        return 0;
     }
 
     my %po = %{$notify->{pushbullet}};
     my $ua = LWP::UserAgent->new(  ssl_opts => {
-	verify_hostname => 0,
-	SSL_verify_mode => "SSL_VERIFY_NONE",
-				   });
+        verify_hostname => 0,
+        SSL_verify_mode => "SSL_VERIFY_NONE",
+                                   });
     $ua->timeout(20);
     $po{'message'} = $alert;
 
@@ -2618,31 +2618,31 @@ sub NotifyPushbullet() {
 
 
     if ($format =~ /\{.*\}/) {
-	my $regex = join "|", keys %{$alert_options};
-	$regex = qr/$regex/;
-	$po{'title'} =~ s/{($regex)}/$alert_options->{$1}/g;
-	$po{'title'} =~ s/{\w+}//g; ## remove any {word} - templates that failed
-	$po{'title'} = $appname if !$po{'title'}; ## replace appname if empty
+        my $regex = join "|", keys %{$alert_options};
+        $regex = qr/$regex/;
+        $po{'title'} =~ s/{($regex)}/$alert_options->{$1}/g;
+        $po{'title'} =~ s/{\w+}//g; ## remove any {word} - templates that failed
+        $po{'title'} = $appname if !$po{'title'}; ## replace appname if empty
     }
     $po{'title'} .= ': ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};
     $po{'title'} .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};
 
     my $response = $ua->post( "https://$po{'apikey'}\@api.pushbullet.com/v2/pushes", [
-				  "device_iden" => $po{'device'},
-				  "channel_tag" => $po{'channel'},
-				  "type" => 'note',
-				  "title" => $po{'title'},
-				  "body" => $po{'message'},
-			      ]);
+                                  "device_iden" => $po{'device'},
+                                  "channel_tag" => $po{'channel'},
+                                  "type" => 'note',
+                                  "title" => $po{'title'},
+                                  "body" => $po{'message'},
+                              ]);
 
     if (!$response->is_success) {
-	my $content  = $response->decoded_content();
-	print STDERR "Failed to post Pushbullet notification -- $po{'message'} result:$content\n";
-	$provider_452->{$provider} = 1;
-	my $msg452 = uc($provider) . " failed: $alert -  setting $provider to back off additional notifications\n";
-	&ConsoleLog($msg452,,1);
+        my $content  = $response->decoded_content();
+        print STDERR "Failed to post Pushbullet notification -- $po{'message'} result:$content\n";
+        $provider_452->{$provider} = 1;
+        my $msg452 = uc($provider) . " failed: $alert -  setting $provider to back off additional notifications\n";
+        &ConsoleLog($msg452,,1);
 
-	return 0;
+        return 0;
     }
 
     my $dmsg = uc($provider) . " Notification successfully posted.\n" if $debug;
@@ -2817,9 +2817,9 @@ sub NotifyEMAIL() {
 
         # do not send message if body is empty or too small
         if (length($alert) < 5) {
-        my $msg452 = uc($provider) . " 452: body of message is empty? body: $alert";
-        &DebugLog($msg452,0);
-        return 0;
+            my $msg452 = uc($provider) . " 452: body of message is empty? body: $alert";
+            &DebugLog($msg452,0);
+            return 0;
         }
 
         my %email = %{$notify->{EMAIL}->{$k}};
@@ -3597,7 +3597,7 @@ sub GetNotifyfuncs() {
         twitter => \&NotifyTwitter,
         boxcar => \&NotifyBoxcar,
         boxcar_v2 => \&NotifyBoxcar_V2,
-	    pushbullet => \&NotifyPushbullet,
+        pushbullet => \&NotifyPushbullet,
         pushalot => \&NotifyPushalot,
         file => \&NotifyFile,
         GNTP => \&NotifyGNTP,
@@ -4474,5 +4474,3 @@ This program will Notify and Log 'Now Playing' content from a Plex Media Server
 nothing to see here.
 
 =cut
-
-
