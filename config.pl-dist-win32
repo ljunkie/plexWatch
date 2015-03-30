@@ -147,6 +147,20 @@ $notify = {
         'channel'             => 'CHANNEL_TAG', # Channel tag from https://www.pushbullet.com/my-channels - Leave blank if unused
     },
 
+    'pushalot' => {
+        'enabled' => 0,
+        'push_recentlyadded'  => 0,
+        'push_watched'        => 0,
+        'push_watching'       => 0,
+        'push_paused'         => 0,
+        'push_resumed'        => 0,
+        'title'               => '{user}',
+        'token'               => 'AUTHORIZATION TOKEN', # Pushalot API authorization token from https://pushalot.com/manager/authorizations
+        'isimportant'         => 'False', # True or False, Indicator whether the message should be visually marked as important within client app. Does not have any other implication on message delivery.
+        'issilent'            => 'False', # True or False, If set to True will prevent sending toast notifications to connected devices, resulting in silent delivery, as only badge icon will indicate new message.
+        'timetolive'          => '0', # Time in minutes after which message automatically gets purged.
+    },
+
     ## GNTP (GROWL) -- multiple destinations are supported
     'GNTP' => {
         '1' => 	{
