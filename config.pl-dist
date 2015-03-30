@@ -90,7 +90,7 @@ $notify = {
 
 
     'twitter' => {
-        'enabled'             => 0, ## set to 1 to enable local growl
+        'enabled'             => 0, ## set to 1 to enable local twitter
         'push_recentlyadded'  => 0,
         'push_watched'        => 0,
         'push_watching'       => 0,

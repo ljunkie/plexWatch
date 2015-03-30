@@ -90,7 +90,7 @@ $notify = {
 
 
     'twitter' => {
-        'enabled'             => 0, ## set to 1 to enable local growl
+        'enabled'             => 0, ## set to 1 to enable local twitter
         'push_recentlyadded'  => 0,
         'push_watched'        => 0,
         'push_watching'       => 0,
@@ -110,7 +110,7 @@ $notify = {
     },
 
     'boxcar' => {
-        'enabled' => 0, ## set to 1 to enable local growl
+        'enabled' => 0, ## set to 1 to enable local boxcar
         'push_recentlyadded'  => 0,
         'push_watched'        => 0,
         'push_watching'       => 0,
@@ -130,8 +130,10 @@ $notify = {
         'push_watching'       => 0,
         'push_paused'         => 0,
         'push_resumed'        => 0,
-        'access_token'        => '', # Access token from your Device
-        'from' => '{user}',          ## From Name displayed on boxcar
+        'access_token'        => '', ## Access token from your Device
+        'from'                => '{user}', ## From Name displayed on boxcar
+        'sound'               => 'bird-1',
+        'icon_url'            => 'https://rarforge.com/images/plexWatch.57x57.png',
     },
 
     'pushbullet' => {
