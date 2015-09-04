@@ -2347,11 +2347,24 @@ sub NotifySlack() {
         SSL_verify_mode => "SSL_VERIFY_NONE",
                                    });
     $ua->timeout(20);
-    $sk{'message'} = '*{user}';
+    
+    ## allow formatting of appname
+    $sk{'message'} = '{user}' if $sk{'message'} eq $appname; ## force {user} if people still use $appname in config -- forcing update with the need to modify config.
+    my $format = $sk{'message'};
+
+
+    if ($format =~ /\{.*\}/) {
+        my $regex = join "|", keys %{$alert_options};
+        $regex = qr/$regex/;
+        $sk{'message'} =~ s/{($regex)}/$alert_options->{$1}/g;
+        $sk{'message'} =~ s/{\w+}//g; ## remove any {word} - templates that failed
+        $sk{'message'} = $appname if !$sk{'message'}; ## replace appname if empty
+    }
+
+
     $sk{'message'} .= ': ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};
     $sk{'message'} .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};
-    $sk{'message'} .= '*\n';
-    $sk{'message'} .= $alert;
+    $sk{'message'} .= ' ' . $alert;
 
     my %post = ('text' => $sk{'message'});
     my $json = encode_json \%post;
