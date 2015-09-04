@@ -2349,8 +2349,11 @@ sub NotifySlack() {
     $ua->timeout(20);
     $sk{'message'} = $alert;
 
+    my %post = ('text' => $sk{'message'});
+    my $json = encode_json \%post;
+
     my $response = $ua->post( sk{'webhook_url'}, [
-                                  "payload" => '{"text": "' . $po{'message'} . '"}',
+                                  "payload" => $json,
                               ]);
     my $content  = $response->decoded_content();
 
