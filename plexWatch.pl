@@ -2347,7 +2347,11 @@ sub NotifySlack() {
         SSL_verify_mode => "SSL_VERIFY_NONE",
                                    });
     $ua->timeout(20);
-    $sk{'message'} = $alert;
+    $sk{'message'} = '*{user}';
+    $sk{'message'} .= ': ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};
+    $sk{'message'} .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};
+    $sk{'message'} .= '*\n';
+    $sk{'message'} .= $alert;
 
     my %post = ('text' => $sk{'message'});
     my $json = encode_json \%post;
