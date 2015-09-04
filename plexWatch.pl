@@ -1788,6 +1788,7 @@ sub DB_ra_table() {
         { 'name' => 'pushalot', 'definition' => 'INTEGER',},
         { 'name' => 'boxcar', 'definition' => 'INTEGER',},
         { 'name' => 'boxcar_v2', 'definition' => 'INTEGER',},
+        { 'name' => 'slack', 'definition' => 'INTEGER',},
 
         );
 
