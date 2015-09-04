@@ -240,13 +240,8 @@ $notify = {
         'push_watching'       => 0,
         'push_paused'         => 0,
         'push_resumed'        => 0,
-        'webhook_url'         => 'https://hooks.slack.com/services/XXXXXXXXXXX/XXXXXXXXXX/XXXXXXXXXXXXXXXXX', #your webhook url
-        'alert_format' => {
-            'start'    =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in]',
-            'paused'   =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in] [{percent_complete}%]',
-            'resumed'  =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} [{progress} in] [{percent_complete}%]',
-            'stop'     =>  '{title} [{streamtype}] [{year}] [{rating}] on {platform} for {duration} [{percent_complete}%]',
-        },
+        'webhook_url'         => 'https://hooks.slack.com/services/XXXXXXXXXXX/XXXXXXXXXX/XXXXXXXXXXXXXXXXX', #webhook url
+        'message'             => '{user}',
     },
 
 
