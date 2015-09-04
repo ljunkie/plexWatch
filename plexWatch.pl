@@ -2359,7 +2359,7 @@ sub NotifySlack() {
     my $content  = $response->decoded_content();
 
 
-    if ($content !~ /\"status\":1/) {
+    if ($content !~ /ok/) {
         print STDERR "Failed to post Slack notification -- $sk{'message'} result:$content\n";
         $provider_452->{$provider} = 1;
         my $msg452 = uc($provider) . " failed: $alert -  setting $provider to back off additional notifications\n";
