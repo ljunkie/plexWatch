@@ -2326,6 +2326,48 @@ sub NotifyProwl() {
     return 0; # failed
 }
 
+sub NotifySlack() {
+    my $provider = 'slack';
+
+     #my $alert = shift;
+    my $info = shift;
+    my ($alert) = &formatAlert($info,$provider);
+
+    my $alert_options = shift;
+
+    if ($provider_452->{$provider}) {
+        if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
+        return 0;
+    }
+
+    my %sk = %{$notify->{slack}};
+    my $ua = LWP::UserAgent->new(  ssl_opts => {
+        verify_hostname => 0,
+        SSL_verify_mode => "SSL_VERIFY_NONE",
+                                   });
+    $ua->timeout(20);
+    $sk{'message'} = $alert;
+
+    my $response = $ua->post( sk{'webhook_url'}, [
+                                  "payload" => '{"text": "' . $po{'message'} . '"}',
+                              ]);
+    my $content  = $response->decoded_content();
+
+
+    if ($content !~ /\"status\":1/) {
+        print STDERR "Failed to post Slack notification -- $sk{'message'} result:$content\n";
+        $provider_452->{$provider} = 1;
+        my $msg452 = uc($provider) . " failed: $alert -  setting $provider to back off additional notifications\n";
+        &ConsoleLog($msg452,,1);
+
+        return 0;
+    }
+
+    my $dmsg = uc($provider) . " Notification successfully posted.\n" if $debug;
+    &DebugLog($dmsg) if $dmsg && $debug;
+    return 1;     ## success
+}
+
 sub NotifyPushOver() {
     my $provider = 'pushover';
 
@@ -3603,6 +3645,7 @@ sub GetNotifyfuncs() {
         GNTP => \&NotifyGNTP,
         EMAIL => \&NotifyEMAIL,
         external => \&NotifyExternal,
+        slack => \&NotifySlack,
         );
     my $error;
     ## this SHOULD never happen if the code is released -- this is just a reminder for whomever is adding a new provider in config.pl
