@@ -169,6 +169,7 @@ GetOptions(\%options,
            'backup',
            'clean_extras',
            'show_xml',
+           'slack_channel:s',
            'help|?'
     ) or pod2usage(2);
 pod2usage(-verbose => 2) if (exists($options{'help'}));
@@ -2367,6 +2368,7 @@ sub NotifySlack() {
     $sk{'message'} .= ' ' . $alert;
 
     my $channel = $sk{'channel'};
+    if ($options{'slack_channel'}) { $channel = $options{'slack_channel'}; }
     my %post = ('text' => $sk{'message'}, 'channel' => $channel);
     my $json = encode_json \%post;
     my $url = $sk{'webhook_url'};
@@ -4389,6 +4391,8 @@ plexWatch.pl [options]
    --clean_extras                 Remove any trailers or extras from the plexWatch DB
 
    --exclude_library_id=...       Full exclusion for a library section id. It will not log or notify.
+
+   --slack_channel                Slack channel or user override to notify. '--slack_channel=#notifications', '--slack_channel=@myuser'
 
    #############################################################################################
 
