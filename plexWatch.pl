@@ -169,6 +169,7 @@ GetOptions(\%options,
            'backup',
            'clean_extras',
            'show_xml',
+           'slack_channel:s',
            'help|?'
     ) or pod2usage(2);
 pod2usage(-verbose => 2) if (exists($options{'help'}));
@@ -1788,6 +1789,7 @@ sub DB_ra_table() {
         { 'name' => 'pushalot', 'definition' => 'INTEGER',},
         { 'name' => 'boxcar', 'definition' => 'INTEGER',},
         { 'name' => 'boxcar_v2', 'definition' => 'INTEGER',},
+        { 'name' => 'slack', 'definition' => 'INTEGER',},
 
         );
 
@@ -2324,6 +2326,71 @@ sub NotifyProwl() {
     my $msg452 = uc($provider) . " failed: $alert - setting $provider to back off additional notifications\n";
     &ConsoleLog($msg452,,1);
     return 0; # failed
+}
+
+sub NotifySlack() {
+    my $provider = 'slack';
+
+     #my $alert = shift;
+    my $info = shift;
+    my ($alert) = &formatAlert($info,$provider);
+
+    my $alert_options = shift;
+
+    if ($provider_452->{$provider}) {
+        if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
+        return 0;
+    }
+
+    my %sk = %{$notify->{slack}};
+    my $ua = LWP::UserAgent->new(  ssl_opts => {
+        verify_hostname => 0,
+        SSL_verify_mode => "SSL_VERIFY_NONE",
+                                   });
+    $ua->timeout(20);
+    
+    ## allow formatting of appname
+    $sk{'message'} = '{user}' if $sk{'message'} eq $appname; ## force {user} if people still use $appname in config -- forcing update with the need to modify config.
+    my $format = $sk{'message'};
+
+
+    if ($format =~ /\{.*\}/) {
+        my $regex = join "|", keys %{$alert_options};
+        $regex = qr/$regex/;
+        $sk{'message'} =~ s/{($regex)}/$alert_options->{$1}/g;
+        $sk{'message'} =~ s/{\w+}//g; ## remove any {word} - templates that failed
+        $sk{'message'} = $appname if !$sk{'message'}; ## replace appname if empty
+    }
+
+
+    $sk{'message'} .= ': ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};
+    $sk{'message'} .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};
+    $sk{'message'} .= ' ' . $alert;
+
+    my $channel = $sk{'channel'};
+    if ($options{'slack_channel'}) { $channel = $options{'slack_channel'}; }
+    my %post = ('text' => $sk{'message'}, 'channel' => $channel);
+    my $json = encode_json \%post;
+    my $url = $sk{'webhook_url'};
+    
+    my $response = $ua->post( $url, [
+                                  "payload" => $json,
+                              ]);
+    my $content  = $response->decoded_content();
+
+
+    if ($content !~ /ok/) {
+        print STDERR "Failed to post Slack notification -- $sk{'message'} result:$content\n";
+        $provider_452->{$provider} = 1;
+        my $msg452 = uc($provider) . " failed: $alert -  setting $provider to back off additional notifications\n";
+        &ConsoleLog($msg452,,1);
+
+        return 0;
+    }
+
+    my $dmsg = uc($provider) . " Notification successfully posted.\n" if $debug;
+    &DebugLog($dmsg) if $dmsg && $debug;
+    return 1;     ## success
 }
 
 sub NotifyPushOver() {
@@ -3603,6 +3670,7 @@ sub GetNotifyfuncs() {
         GNTP => \&NotifyGNTP,
         EMAIL => \&NotifyEMAIL,
         external => \&NotifyExternal,
+        slack => \&NotifySlack,
         );
     my $error;
     ## this SHOULD never happen if the code is released -- this is just a reminder for whomever is adding a new provider in config.pl
@@ -4323,6 +4391,8 @@ plexWatch.pl [options]
    --clean_extras                 Remove any trailers or extras from the plexWatch DB
 
    --exclude_library_id=...       Full exclusion for a library section id. It will not log or notify.
+
+   --slack_channel                Slack channel or user override to notify. '--slack_channel=#notifications', '--slack_channel=@myuser'
 
    #############################################################################################
 
