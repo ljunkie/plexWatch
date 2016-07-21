@@ -241,6 +241,7 @@ $notify = {
         'push_paused'         => 0,
         'push_resumed'        => 0,
         'webhook_url'         => 'https://hooks.slack.com/services/XXXXXXXXXXX/XXXXXXXXXX/XXXXXXXXXXXXXXXXX', #webhook url
+        'channel'             => '', # '@myuser', '#notifications', etc. '' uses default channel configured in the Slack webhook
         'message'             => '{user}',
     },
 

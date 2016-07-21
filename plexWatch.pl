@@ -2366,7 +2366,8 @@ sub NotifySlack() {
     $sk{'message'} .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};
     $sk{'message'} .= ' ' . $alert;
 
-    my %post = ('text' => $sk{'message'});
+    my $channel = $sk{'channel'};
+    my %post = ('text' => $sk{'message'}, 'channel' => $channel);
     my $json = encode_json \%post;
     my $url = $sk{'webhook_url'};
     
