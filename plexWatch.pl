@@ -753,16 +753,16 @@ sub formatAlert() {
         }
     }
 
-    $format =~ s/{{($regex)}}/$info->{$1}/g; ## regex replace variables
+    $format =~ s/{\{($regex)\}}/$info->{$1}/g; ## regex replace variables
     $format =~ s/\[\]//g;                 ## trim any empty variable encapsulated in []
     $format =~ s/\s+/ /g;                 ## remove double spaces
     $format =~ s/\\n/\n/g;                ## allow \n to be an actual new line
-    $format =~ s/{{newline}}/\n/g;        ## allow \n to be an actual new line
+    $format =~ s/{\{newline\}}/\n/g;        ## allow \n to be an actual new line
 
     ## special for now.. might make this more useful -- just thrown together since email can include a ton of info
 
-    if ($format =~ /{{all_details}}/i) {
-        $format =~ s/\s*{{all_details}}\s*//i;
+    if ($format =~ /{\{all_details\}}/i) {
+        $format =~ s/\s*{\{all_details\}}\s*//i;
         $format .= sprintf("\n\n%10s %s\n","","-----All Details-----");
         my $f_extra;
         foreach my $key (keys %{$info} ) {
