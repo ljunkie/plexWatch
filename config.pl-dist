@@ -1,16 +1,16 @@
 $data_dir = '/opt/plexWatch/'; ## to store the DB, logfile - can be the same as this script
 
-$server_log = '/var/lib/plexmediaserver/Library/Application Support/Plex Media Server/Logs/Plex Media Server.log'; ## used to log IP address of user (alpha)
+$server_log = '/share/CACHEDEV1_DATA/.qpkg/PlexMediaServer/Library/Plex Media Server/Logs/Plex Media Server.log'; ## used to log IP address of user (alpha)
 $log_client_ip = 0; ## requires $server_log to be available too. (requires File::ReadBackwards)
 ## also required DEBUG log to be turned on in the PMS
 
 $debug_logging = 1; ## logs to $data_dir/debug.log ( not verbose enough yet.. still todo )
 
 ## myplex user/pass ONLY required if you have set the PMS to 'Require authentication on local networks' and $server is not set to localhost
-$myPlex_user = '';
-$myPlex_pass = '';
+$myPlex_user = 'mstrchris';
+$myPlex_pass = '2jF3$4be13';
 
-$server = 'localhost'; ## IP of PMS - or localhost
+$server = '192.168.1.107'; ## IP of PMS - or localhost
 $port = 32400;         ## port of PMS
 
 $notify_started = 1;   # !deprecated -- does nothing anymore (use push_watched, push_watching in $notify)
@@ -20,8 +20,8 @@ $appname = 'plexWatch';
 
 ## Give a user a more friendly name. I.E. REAL_USER will now be Frank
 ## you may also specify the platform with user+platform
-$user_display = {'REAL_USER1' => 'Frank',
-                 'REAL_USER2' => 'Rob & Carrie',
+$user_display = {'mstrchris' => 'Chris',
+                 'hollywoodpunk' => 'Bobby',
                  'REAL_USER2+Roku 3' => 'Family Room',
                  'REAL_USER2+Roku' => 'Family Room',
                  'REAL_USER2+iOS' => 'Rob',
