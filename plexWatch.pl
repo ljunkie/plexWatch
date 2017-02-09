@@ -1784,6 +1784,7 @@ sub DB_ra_table() {
         { 'name' => 'GNTP', 'definition' => 'INTEGER',},
         { 'name' => 'EMAIL', 'definition' => 'INTEGER',},
         { 'name' => 'pushover', 'definition' => 'INTEGER',},
+		{ 'name' => 'pushsafer', 'definition' => 'INTEGER',},
         { 'name' => 'pushbullet', 'definition' => 'INTEGER',},
         { 'name' => 'pushalot', 'definition' => 'INTEGER',},
         { 'name' => 'boxcar', 'definition' => 'INTEGER',},
@@ -2377,6 +2378,70 @@ sub NotifyPushOver() {
 
     if ($content !~ /\"status\":1/) {
         print STDERR "Failed to post Pushover notification -- $po{'message'} result:$content\n";
+        $provider_452->{$provider} = 1;
+        my $msg452 = uc($provider) . " failed: $alert -  setting $provider to back off additional notifications\n";
+        &ConsoleLog($msg452,,1);
+
+        return 0;
+    }
+
+    my $dmsg = uc($provider) . " Notification successfully posted.\n" if $debug;
+    &DebugLog($dmsg) if $dmsg && $debug;
+    return 1;     ## success
+}
+
+sub NotifyPushsafer() {
+    my $provider = 'pushsafer';
+
+    #my $alert = shift;
+    my $info = shift;
+    my ($alert) = &formatAlert($info,$provider);
+
+    my $alert_options = shift;
+
+    if ($provider_452->{$provider}) {
+        if ($options{'debug'}) { print uc($provider) . " 452: backing off\n"; }
+        return 0;
+    }
+
+    my %po = %{$notify->{pushsafer}};
+    my $ua = LWP::UserAgent->new(  ssl_opts => {
+        verify_hostname => 0,
+        SSL_verify_mode => SSL_VERIFY_NONE,
+                                   });
+    $ua->timeout(20);
+    $po{'message'} = $alert;
+
+    ## Pushsafer title is AppName by default. If there is a real title for push type, It's 'AppName: push_type'
+
+    ## allow formatting of appname
+    $po{'title'} = '{user}' if $po{'title'} eq $appname; ## force {user} if people still use $appname in config -- forcing update with the need to modify config.
+    my $format = $po{'title'};
+
+
+    if ($format =~ /\{.*\}/) {
+        my $regex = join "|", keys %{$alert_options};
+        $regex = qr/$regex/;
+        $po{'title'} =~ s/{($regex)}/$alert_options->{$1}/g;
+        $po{'title'} =~ s/{\w+}//g; ## remove any {word} - templates that failed
+        $po{'title'} = $appname if !$po{'title'}; ## replace appname if empty
+    }
+    $po{'title'} .= ': ' . $push_type_titles->{$alert_options->{'push_type'}} if $alert_options->{'push_type'};
+    $po{'title'} .= ' ' . ucfirst($alert_options->{'item_type'}) if $alert_options->{'item_type'};
+
+    my $response = $ua->post( "https://www.pushsafer.com/api", [
+                                  "k" => $po{'privatekey'},
+                                  "t" => $po{'title'},
+                                  "m" => $po{'message'},
+								  'd' => $po{'device'},
+								  's' => $po{'sound'},
+								  'v' => $po{'vibration'},
+                              ]);
+    my $content  = $response->decoded_content();
+
+
+    if ($content !~ /\"status\":1/) {
+        print STDERR "Failed to post Pushsafer notification -- $po{'message'} result:$content\n";
         $provider_452->{$provider} = 1;
         my $msg452 = uc($provider) . " failed: $alert -  setting $provider to back off additional notifications\n";
         &ConsoleLog($msg452,,1);
@@ -3594,6 +3659,7 @@ sub GetNotifyfuncs() {
         prowl => \&NotifyProwl,
         growl => \&NotifyGrowl,
         pushover => \&NotifyPushOver,
+		pushsafer => \&NotifyPushsafer,
         twitter => \&NotifyTwitter,
         boxcar => \&NotifyBoxcar,
         boxcar_v2 => \&NotifyBoxcar_V2,
@@ -4350,7 +4416,7 @@ plexWatch.pl [options]
 
 =item B<--notify>
 
-This will send you a notification through prowl, pushover, boxcar, growl and/or twitter. It will also log the event to a file and to the database.
+This will send you a notification through prowl, pushover, pushsafer, boxcar, growl and/or twitter. It will also log the event to a file and to the database.
 This is the default if no options are given.
 
 =item B<--watched>
