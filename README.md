@@ -24,6 +24,7 @@ plexWatch - 0.3.2 (2014-11-19)
 **Supported Push Notifications**
 * Email
 * https://pushover.net
+* https://www.pushsafer.com
 * https://prowlapp.com
 * http://growl.info/ (via GrowlNotify @ http://growl.info/downloads#generaldownloads)
 * https://twitter.com/ (create a new app @ https://dev.twitter.com/apps)
@@ -38,7 +39,7 @@ plexWatch - 0.3.2 (2014-11-19)
 * notify when a user pauses watching a video
 * notify when a user resumes watching a video
 * notify on recently added content to a PMS server
-* notifies via email, prowl, pushover, growl, twitter, boxcar, pushbullet, GNTP and/or a log file
+* notifies via email, prowl, pushover, pushsafer, growl, twitter, boxcar, pushbullet, GNTP and/or a log file
 * enable/disable notifications per provider & per notification type (start, stop, paush, resume, recently added)
 * backed by a SQLite DB (for state and history)
 * CLI to query watched videos, videos being watched and stats on time watched per user
@@ -147,10 +148,11 @@ $debug_logging = 1; ## logs to $data_dir/debug.log ( only really helps debug IP 
 
     ```bash
     $notify = {...
-    * to enable a provider, i.e. file, prowl, pushover
+    * to enable a provider, i.e. file, prowl, pushover, pushsafer
     set 'enabled' => 1, under selected provider
     * Prowl     : 'apikey' required
     * Pushover  : 'token' and 'user' required
+	* Pushsafer : 'privatekey' required
     * Growl     : 'script' required :: GrowlNotify from http://growl.info/downloads (GNTP replaces this)
     * twitter   : 'consumer_key', 'consumer_secret', 'access_token', 'access_token_secret' required
     * boxcar    : 'email' required
@@ -581,7 +583,7 @@ $backup_opts = {
           --debug                    hit and miss - not very useful
 
  OPTIONS
-       --notify       This will send you a notification through prowl, pushover, boxcar, pushbullet, growl and/or twitter. It will also log the event to a file and to the database.  This is the default if no
+       --notify       This will send you a notification through prowl, pushover, pushsafer, boxcar, pushbullet, growl and/or twitter. It will also log the event to a file and to the database.  This is the default if no
                       options are given.
 
        --watched      Print a list of watched content from all users.
