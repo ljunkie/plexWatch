@@ -75,6 +75,20 @@ $notify = {
         'title' => '{user}',
         'sound' => 'intermission',
     },
+	
+    'pushsafer' => {
+        'enabled' => 0, ## set to 1 to enable Pushover
+        'push_recentlyadded'  => 0,
+        'push_watched'        => 0,
+        'push_watching'       => 0,
+        'push_paused'         => 0,
+        'push_resumed'        => 0,
+        'privatekey'          => 'Private or Alias Key', ## your Private or Alias Key
+        'title' => '{user}',
+		    'device' => '',
+		    'sound' => '',
+		    'vibration' => '',
+    },	
 
     'growl' => {
         'enabled' => 0, ## set to 1 to enable local growl (You should probably used GNTP - growl supported for multiple platforms - below)
