@@ -4282,7 +4282,7 @@ __END__
 
 =head1 NAME
 
-plexWatch.p - Notify and Log 'Now Playing' and 'Watched' content from a Plex Media Server + 'Recently Added'
+plexWatch.pl - Notify and Log 'Now Playing' and 'Watched' content from a Plex Media Server + 'Recently Added'
 
 =head1 SYNOPSIS
 
