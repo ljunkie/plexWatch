@@ -753,16 +753,16 @@ sub formatAlert() {
         }
     }
 
-    $format =~ s/{{($regex)}}/$info->{$1}/g; ## regex replace variables
+    $format =~ s/\{\{($regex)\}\}/$info->{$1}/g; ## regex replace variables
     $format =~ s/\[\]//g;                 ## trim any empty variable encapsulated in []
     $format =~ s/\s+/ /g;                 ## remove double spaces
     $format =~ s/\\n/\n/g;                ## allow \n to be an actual new line
-    $format =~ s/{{newline}}/\n/g;        ## allow \n to be an actual new line
+    $format =~ s/\{\{newline\}\}/\n/g;        ## allow \n to be an actual new line
 
     ## special for now.. might make this more useful -- just thrown together since email can include a ton of info
 
-    if ($format =~ /{{all_details}}/i) {
-        $format =~ s/\s*{{all_details}}\s*//i;
+    if ($format =~ /\{\{all_details\}\}/i) {
+        $format =~ s/\s*\{\{all_details\}\}\s*//i;
         $format .= sprintf("\n\n%10s %s\n","","-----All Details-----");
         my $f_extra;
         foreach my $key (keys %{$info} ) {
@@ -3790,7 +3790,7 @@ sub myPlexToken() {
     $ua->default_header('X-Plex-Client-Identifier' => $appname);
     $ua->default_header('Content-Length' => 0);
 
-    my $url = 'https://my.plexapp.com/users/sign_in.xml';
+    my $url = 'https://plex.tv/users/sign_in.json';
 
     my $req = HTTP::Request->new(POST => $url);
     $req->authorization_basic($myPlex_user, $myPlex_pass);
@@ -3800,15 +3800,20 @@ sub myPlexToken() {
 
     if ($response->is_success) {
         my $content = $response->decoded_content();
+
         if ($debug_xml) {
             print "URL: $url\n";
             print "===================================XML CUT=================================================\n";
             print $content;
             print "===================================XML END=================================================\n";
         }
-        my $data = XMLin(encode('utf8',$content));
-        return $data->{'authenticationToken'} if $data->{'authenticationToken'};
-        return $data->{'authentication-token'} if $data->{'authentication-token'};
+
+        my $json = JSON->new->allow_nonref
+                ->utf8->relaxed;
+        my $data = $json->decode( $content );
+
+        return $data->{user}->{authToken} if $data->{user}->{authToken};
+        return $data->{user}->{'authentication-token'} if $data->{user}->{'authentication-token'};
     } else {
         print $response->as_string;
         die;
