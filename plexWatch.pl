@@ -3800,7 +3800,7 @@ sub myPlexToken() {
 
     if ($response->is_success) {
         my $content = $response->decoded_content();
-	#print $content;
+
         if ($debug_xml) {
             print "URL: $url\n";
             print "===================================XML CUT=================================================\n";
@@ -3808,13 +3808,12 @@ sub myPlexToken() {
             print "===================================XML END=================================================\n";
         }
 
-	my $json = JSON->new->allow_nonref
-    		->utf8->relaxed;
-	my $data = $json->decode( $content );
+        my $json = JSON->new->allow_nonref
+                ->utf8->relaxed;
+        my $data = $json->decode( $content );
 
-	return $data->{user}->{authToken} if $data->{user}->{authToken};
-	return $data->{user}->{'authentication-token'} if $data->{user}->{'authentication-token'};
-
+        return $data->{user}->{authToken} if $data->{user}->{authToken};
+        return $data->{user}->{'authentication-token'} if $data->{user}->{'authentication-token'};
     } else {
         print $response->as_string;
         die;
